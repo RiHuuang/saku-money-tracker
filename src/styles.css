@@ -1718,18 +1718,19 @@ main {
   margin-top: 8px;
 }
 .settings-form {
-  display: flex;
-  gap: 15px;
-  align-items: flex-end;
+  display: grid;
+  gap: 16px;
+  align-items: start;
   margin-top: 23px;
   max-width: 500px;
 }
 .settings-form .field {
-  flex: 1;
+  min-width: 0;
   margin-bottom: 0;
 }
 .settings-form .button {
   min-height: 43px;
+  justify-self: start;
 }
 .account-list {
   margin-top: 20px;
