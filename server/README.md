@@ -5,7 +5,7 @@ The API is a small Cloud Run service for Google registration/sign-in and opt-in 
 - `users/{googleSub}` in Firestore: public profile, Sheet IDs, revision, encrypted Google refresh token, and private object paths.
 - `sessions/{randomId}` in Firestore: hashes of short-lived access and rotating refresh secrets. Plain session secrets are never stored server-side.
 - `ledgers/{googleSub}/...json.gz` in a private Cloud Storage bucket: authoritative, revisioned Saku snapshots.
-- `avatars/{googleSub}.webp` in that bucket: the Google profile image resized to 256 x 256, metadata stripped, WebP quality 82.
+- `avatars/{googleSub}.webp` in that bucket: the current Google or custom profile image resized to 256 x 256, metadata stripped, WebP quality 82. A custom upload remains authoritative across later Google sign-ins.
 - `Saku/Saku Money Tracker` in the user's own Drive: a readable mirror with Transactions, Pockets, Accounts, Cards, Recurring, and Quick_entries tabs.
 
 Google passwords never enter Saku. The OAuth client secret and the AES-256 token encryption key are Secret Manager secrets. The Android app requests the non-sensitive `drive.file` scope, so it can access only files it creates or the user explicitly opens with it.

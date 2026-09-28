@@ -76,6 +76,7 @@ import {
 import Statements from "./Statements";
 import Plans from "./Plans";
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
+import { homeWidgetRevision } from "./homeWidget";
 import {
   loadAvatarUrl,
   loadCloudState,
@@ -118,6 +119,7 @@ export default function App() {
     [resolution, setResolution] = useState<{ local: Data; remote: Data } | null>(null),
     [avatarUrl, setAvatarUrl] = useState("");
   const saving = useRef(false);
+  const widgetRevision = useRef(0);
   useEffect(() => {
     void (async () => {
       try {
@@ -145,17 +147,46 @@ export default function App() {
   useEffect(() => {
     if (!cloud?.signedIn || !cloud.user?.hasAvatar) { setAvatarUrl(""); return; }
     let url = "";
-    void loadAvatarUrl().then((value) => { url = value; setAvatarUrl(value); });
-    return () => { if (url) URL.revokeObjectURL(url); };
-  }, [cloud?.signedIn, cloud?.user?.hasAvatar, cloud?.user?.name]);
+    let cancelled = false;
+    void loadAvatarUrl(cloud.user.avatarVersion).then((value) => {
+      if (cancelled) { if (value) URL.revokeObjectURL(value); return; }
+      url = value;
+      setAvatarUrl(value);
+    });
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
+  }, [cloud?.signedIn, cloud?.user?.hasAvatar, cloud?.user?.avatarVersion]);
   useEffect(() => {
     if (!data || !cloud?.signedIn || !cloud.dirty || !cloud.syncInterval) return;
-    const sync = () => void pushCloud(data).then(setCloud).catch((error) => setToast(error?.status === 409 ? "Google has newer data. Review before restoring or syncing again." : "Automatic sync will retry while Saku is open."));
+    const sync = async () => {
+      if (Capacitor.isNativePlatform() && await homeWidgetRevision() !== widgetRevision.current) return;
+      await pushCloud(data).then(setCloud).catch((error) => setToast(error?.status === 409 ? "Google has newer data. Review before restoring or syncing again." : "Automatic sync will retry while Saku is open."));
+    };
     const timer = window.setTimeout(sync, cloud.syncInterval * 60_000);
-    let handle: { remove: () => Promise<void> } | undefined;
-    if (Capacitor.isNativePlatform()) void NativeApp.addListener("appStateChange", ({ isActive }) => { if (isActive) sync(); }).then((value) => { handle = value; });
-    return () => { clearTimeout(timer); void handle?.remove(); };
+    return () => clearTimeout(timer);
   }, [data, cloud?.signedIn, cloud?.dirty, cloud?.syncInterval]);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !cloud?.user?.id || !data) return;
+    let active = true;
+    void homeWidgetRevision().then((revision) => { widgetRevision.current = revision; });
+    const listener = NativeApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) return;
+      void (async () => {
+        const revision = await homeWidgetRevision();
+        if (!active) return;
+        const changedByWidget = revision !== widgetRevision.current;
+        const nextData = changedByWidget ? await loadData(cloud.user!.id) : data;
+        const nextCloud = await loadCloudState();
+        widgetRevision.current = revision;
+        if (active) { setData(nextData); setCloud(nextCloud); }
+        if (active && nextCloud.signedIn && nextCloud.dirty && nextCloud.syncInterval) {
+          await pushCloud(nextData).then((value) => { if (active) setCloud(value); }).catch((error) => {
+            if (active) setToast(error?.status === 409 ? "Google has newer data. Review before restoring or syncing again." : "Automatic sync will retry while Saku is open.");
+          });
+        }
+      })();
+    });
+    return () => { active = false; void listener.then((handle) => handle.remove()); };
+  }, [cloud?.user?.id, data]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);

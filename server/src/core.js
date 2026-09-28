@@ -12,6 +12,17 @@ export function timingSafeEqual(a, b) {
   const right = Buffer.from(String(b));
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
+export function avatarAfterSignIn(existing, googleAvatarPath, nextVersion) {
+  if (existing?.avatarSource === "custom" && existing.avatarPath) {
+    return { avatarPath: existing.avatarPath, avatarSource: "custom", avatarVersion: existing.avatarVersion || "legacy" };
+  }
+  const avatarPath = googleAvatarPath || existing?.avatarPath || null;
+  return {
+    avatarPath,
+    avatarSource: avatarPath ? "google" : null,
+    avatarVersion: googleAvatarPath ? nextVersion : existing?.avatarVersion || "legacy",
+  };
+}
 export function encryptionKey(value) {
   const key = Buffer.from(String(value || ""), "base64");
   if (key.length !== 32) throw new Error("TOKEN_ENCRYPTION_KEY must be 32 bytes encoded as base64");

@@ -19,6 +19,7 @@ The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a conne
 ## Included
 
 - Transaction create, edit, delete, search, filters, monthly CSV export and full-history CSV export. Saved quick entries prefill frequent transactions; Android also offers a Quick add launcher shortcut.
+- Three native Android home-screen widgets: four one-tap favorites with exact Undo, a compact Expense/Income/Transfer entry window, and a cash/spending/pocket snapshot. Favorites and snapshots support per-widget privacy mode.
 - Custom pocket names, icons and colors, with a recurring base budget and explicit monthly overrides. Expenses subtract from their pocket; income increases recorded cash.
 - Monthly income, expenses, account balances, category breakdown, weekly cash flow, remaining budgets, and overspending warnings.
 - CSV and Android-only PDF statement reconciliation for multiple banks/accounts, with explicit review, conservative duplicate handling, and opt-in import of missing transactions.
@@ -28,6 +29,12 @@ The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a conne
 - Shared-bill entry records the full bank/card payment and the user's own share, with later friend reimbursements. Android receipt OCR can suggest a total and merchant for review without storing the photo.
 
 The production Android build starts with a short plain-language agreement and requires Google sign-in before setup. New users choose their own accounts, opening balances, pockets, cards, and optional existing installments from editable suggestions; Saku does not save sample financial data. A signed-in user can reopen their own workspace offline. Browser development preview data is isolated from the Android workspace.
+
+## Android widgets
+
+After signing in and saving the initial ledger, long-press an empty area of the Android home screen, choose **Widgets**, then find **Saku**. **Quick Favorites** records one of up to four saved quick entries immediately, even while Saku is closed; its inline Undo removes only that exact widget-created transaction. **Quick Entry** opens a small floating Expense, Income, or Transfer form with live rupiah separators. **Money Snapshot** shows total cash, today, the last seven days, and current pocket budget remaining.
+
+Long-press a Favorites or Snapshot widget and choose its configuration action to change selected favorites or hide amounts. Each widget instance keeps its own choices. Widget writes stay offline, mark the active user's cloud state dirty, and join the next normal foreground sync. Signing out removes all financial values and direct-add actions from the widgets.
 
 ## Budget semantics
 

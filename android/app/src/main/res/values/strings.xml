@@ -6,4 +6,7 @@
     <string name="custom_url_scheme">id.saku.money</string>
     <string name="shortcut_quick_add">Quick add</string>
     <string name="shortcut_quick_add_long">Add a Saku transaction</string>
+    <string name="widget_favorites_name">Saku Quick Favorites</string>
+    <string name="widget_quick_entry_name">Saku Quick Entry</string>
+    <string name="widget_snapshot_name">Saku Money Snapshot</string>
 </resources>

@@ -4,4 +4,11 @@
     <color name="colorPrimaryDark">#12665E</color>
     <color name="colorAccent">#529E83</color>
     <color name="saku_background">#F6F8F9</color>
+    <color name="widget_surface">#F8FBFA</color>
+    <color name="widget_text">#243B38</color>
+    <color name="widget_muted">#667673</color>
+    <color name="widget_teal">#177F72</color>
+    <color name="widget_teal_soft">#E3F1ED</color>
+    <color name="widget_lilac_soft">#EEEAF7</color>
+    <color name="widget_peach_soft">#FAECDD</color>
 </resources>

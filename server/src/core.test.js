@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decrypt, encrypt, encryptionKey, sheetCell, splitSessionToken, validateSnapshot } from "./core.js";
+import { avatarAfterSignIn, decrypt, encrypt, encryptionKey, sheetCell, splitSessionToken, validateSnapshot } from "./core.js";
 
 test("encrypts tokens with authenticated encryption", () => {
   const key = encryptionKey(Buffer.alloc(32, 7).toString("base64"));
@@ -18,4 +18,15 @@ test("rejects malformed session tokens and oversized collections", () => {
 test("neutralizes spreadsheet formulas", () => {
   assert.equal(sheetCell("=IMPORTXML(1)"), "'=IMPORTXML(1)");
   assert.equal(sheetCell("Coffee"), "Coffee");
+});
+
+test("preserves custom avatars across later Google sign-ins", () => {
+  assert.deepEqual(
+    avatarAfterSignIn({ avatarPath: "avatars/user.webp", avatarSource: "custom", avatarVersion: "custom-v1" }, "avatars/google.webp", "google-v2"),
+    { avatarPath: "avatars/user.webp", avatarSource: "custom", avatarVersion: "custom-v1" },
+  );
+  assert.deepEqual(
+    avatarAfterSignIn({ avatarPath: "avatars/old.webp", avatarSource: "google", avatarVersion: "old" }, "avatars/new.webp", "new"),
+    { avatarPath: "avatars/new.webp", avatarSource: "google", avatarVersion: "new" },
+  );
 });

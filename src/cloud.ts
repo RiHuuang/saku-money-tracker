@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { validateData, type Data } from "./domain";
+import { refreshHomeWidgets } from "./homeWidget";
 
 type NativeSession = { signedIn: boolean; accessToken?: string; refreshToken?: string };
 type Authorization = { code: string };
@@ -20,7 +21,14 @@ export type CloudState = {
   spreadsheetUrl?: string;
   sheetPending?: boolean;
   syncInterval: 0 | 5 | 15 | 60;
-  user?: { id: string; name: string; email: string; hasAvatar: boolean };
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    hasAvatar: boolean;
+    avatarVersion?: string;
+    avatarSource?: "google" | "custom";
+  };
 };
 type AuthResponse = {
   accessToken: string;
@@ -120,6 +128,7 @@ export async function signOutGoogle() {
   try { await request("/v1/auth/logout", { method: "POST", body: "{}" }, false); } catch { /* Local sign-out still wins. */ }
   await plugin.clearSession();
   await Preferences.remove({ key: stateKey });
+  await refreshHomeWidgets();
 }
 export async function setSyncInterval(syncInterval: CloudState["syncInterval"]) {
   const local = await publicState();
@@ -132,9 +141,12 @@ export async function updateProfile(name: string, image?: string) {
   await savePublic({ ...local, user });
   return { ...local, signedIn: true, configured: true, user } as CloudState;
 }
-export async function loadAvatarUrl() {
+export async function loadAvatarUrl(version?: string) {
   const session = await plugin.getSession();
   if (!session.accessToken || !apiUrl) return "";
-  const response = await fetch(`${apiUrl}/v1/me/avatar`, { headers: { authorization: `Bearer ${session.accessToken}` } });
+  const response = await fetch(`${apiUrl}/v1/me/avatar?v=${encodeURIComponent(version || "legacy")}`, {
+    cache: "no-store",
+    headers: { authorization: `Bearer ${session.accessToken}` },
+  });
   return response.ok ? URL.createObjectURL(await response.blob()) : "";
 }

@@ -6,7 +6,7 @@ import { Firestore, FieldValue } from "@google-cloud/firestore";
 import { Storage } from "@google-cloud/storage";
 import { OAuth2Client } from "google-auth-library";
 import sharp from "sharp";
-import { decrypt, encrypt, encryptionKey, hashToken, sessionToken, sheetTables, splitSessionToken, timingSafeEqual, tokenPart, validateSnapshot } from "./core.js";
+import { avatarAfterSignIn, decrypt, encrypt, encryptionKey, hashToken, sessionToken, sheetTables, splitSessionToken, timingSafeEqual, tokenPart, validateSnapshot } from "./core.js";
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
@@ -134,9 +134,11 @@ async function handle(req, res) {
     const ref = db.collection("users").doc(profile.sub);
     const existing = (await ref.get()).data();
     let drive = existing?.spreadsheetId ? existing : await provisionSheet(tokens.access_token);
-    const avatarPath = await storeAvatar(profile.sub, profile.picture).catch(() => existing?.avatarPath || null);
+    const keepCustomAvatar = existing?.avatarSource === "custom" && existing?.avatarPath;
+    const googleAvatarPath = keepCustomAvatar ? null : await storeAvatar(profile.sub, profile.picture).catch(() => null);
+    const { avatarPath, avatarSource, avatarVersion } = avatarAfterSignIn(existing, googleAvatarPath, Date.now().toString(36));
     const user = {
-      email: profile.email, name: profile.name || profile.email.split("@")[0], avatarPath,
+      email: profile.email, name: profile.name || profile.email.split("@")[0], avatarPath, avatarSource, avatarVersion,
       folderId: drive.folderId, spreadsheetId: drive.spreadsheetId, spreadsheetUrl: drive.spreadsheetUrl,
       googleRefreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token, tokenKey) : existing?.googleRefreshToken,
       revision: existing?.revision || 0, snapshotPath: existing?.snapshotPath || null,
@@ -146,7 +148,7 @@ async function handle(req, res) {
     if (!user.googleRefreshToken) throw Object.assign(new Error("Google did not return offline access; remove Saku access from your Google Account and try again"), { status: 409 });
     await ref.set(user, { merge: true });
     const session = await issueSession(profile.sub);
-    return send(res, 200, { ...session, user: { id: profile.sub, name: user.name, email: user.email, hasAvatar: Boolean(avatarPath) }, sync: { revision: user.revision, spreadsheetUrl: user.spreadsheetUrl } }, origin);
+    return send(res, 200, { ...session, user: { id: profile.sub, name: user.name, email: user.email, hasAvatar: Boolean(avatarPath), avatarSource, avatarVersion }, sync: { revision: user.revision, spreadsheetUrl: user.spreadsheetUrl } }, origin);
   }
   if (req.method === "POST" && req.url === "/v1/auth/refresh") {
     const input = await body(req);
@@ -167,25 +169,29 @@ async function handle(req, res) {
     await db.collection("sessions").doc(auth.sessionId).delete();
     return send(res, 200, { ok: true }, origin);
   }
-  if (req.method === "GET" && req.url === "/v1/me") return send(res, 200, { user: { id: auth.uid, name: user.name, email: user.email, hasAvatar: Boolean(user.avatarPath) }, sync: { revision: user.revision || 0, spreadsheetUrl: user.spreadsheetUrl } }, origin);
+  if (req.method === "GET" && req.url === "/v1/me") return send(res, 200, { user: { id: auth.uid, name: user.name, email: user.email, hasAvatar: Boolean(user.avatarPath), avatarSource: user.avatarSource || "google", avatarVersion: user.avatarVersion || "legacy" }, sync: { revision: user.revision || 0, spreadsheetUrl: user.spreadsheetUrl } }, origin);
   if (req.method === "PUT" && req.url === "/v1/me") {
     const input = await body(req);
     const name = typeof input.name === "string" ? input.name.trim() : "";
     if (!name || name.length > 40) throw Object.assign(new Error("Enter a profile name up to 40 characters"), { status: 400 });
     let avatarPath = user.avatarPath || null;
+    let avatarSource = user.avatarSource || (avatarPath ? "google" : null);
+    let avatarVersion = user.avatarVersion || "legacy";
     if (input.image !== undefined) {
-      if (input.image === "") { if (avatarPath) await bucket.file(avatarPath).delete({ ignoreNotFound: true }); avatarPath = null; }
+      if (input.image === "") { if (avatarPath) await bucket.file(avatarPath).delete({ ignoreNotFound: true }); avatarPath = null; avatarSource = null; avatarVersion = Date.now().toString(36); }
       else if (typeof input.image === "string" && /^data:image\/(?:jpeg|png|webp);base64,/.test(input.image) && input.image.length < 4_000_000) {
         const bytes = Buffer.from(input.image.slice(input.image.indexOf(",") + 1), "base64");
         const image = await sharp(bytes).rotate().resize(256, 256, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
         avatarPath = `avatars/${auth.uid}.webp`;
         await bucket.file(avatarPath).save(image, { resumable: false, contentType: "image/webp", metadata: { cacheControl: "private,max-age=86400" } });
+        avatarSource = "custom";
+        avatarVersion = Date.now().toString(36);
       } else throw Object.assign(new Error("Choose a valid profile image"), { status: 400 });
     }
-    await userRef.update({ name, avatarPath, updatedAt: FieldValue.serverTimestamp() });
-    return send(res, 200, { user: { id: auth.uid, name, email: user.email, hasAvatar: Boolean(avatarPath) } }, origin);
+    await userRef.update({ name, avatarPath, avatarSource, avatarVersion, updatedAt: FieldValue.serverTimestamp() });
+    return send(res, 200, { user: { id: auth.uid, name, email: user.email, hasAvatar: Boolean(avatarPath), avatarSource, avatarVersion } }, origin);
   }
-  if (req.method === "GET" && req.url === "/v1/me/avatar") {
+  if (req.method === "GET" && (req.url === "/v1/me/avatar" || req.url.startsWith("/v1/me/avatar?"))) {
     if (!user.avatarPath) return send(res, 404, { error: "No profile image" }, origin);
     const [image] = await bucket.file(user.avatarPath).download();
     const headers = { "content-type": "image/webp", "cache-control": "private,max-age=86400", "x-content-type-options": "nosniff" };

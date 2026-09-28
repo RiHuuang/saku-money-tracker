@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/snapshot_root"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
+    android:padding="12dp" android:background="@drawable/widget_background">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Money snapshot"
+        android:textColor="@color/widget_text" android:textSize="15sp" android:textStyle="bold" />
+    <LinearLayout android:id="@+id/snapshot_values" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+            <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center_vertical" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Cash" android:textColor="@color/widget_muted" android:textSize="10sp" /><TextView android:id="@+id/snapshot_cash" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/widget_text" android:textSize="14sp" android:textStyle="bold" /></LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center_vertical" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Spent today" android:textColor="@color/widget_muted" android:textSize="10sp" /><TextView android:id="@+id/snapshot_today" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#B16A38" android:textSize="14sp" android:textStyle="bold" /></LinearLayout>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+            <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center_vertical" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Last 7 days" android:textColor="@color/widget_muted" android:textSize="10sp" /><TextView android:id="@+id/snapshot_week" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/widget_text" android:textSize="14sp" android:textStyle="bold" /></LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center_vertical" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Pocket left" android:textColor="@color/widget_muted" android:textSize="10sp" /><TextView android:id="@+id/snapshot_pockets" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/widget_teal" android:textSize="14sp" android:textStyle="bold" /></LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+    <TextView android:id="@+id/snapshot_sign_in" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:text="Open Saku to sign in" android:textColor="@color/widget_muted" android:textSize="12sp" />
+</LinearLayout>
