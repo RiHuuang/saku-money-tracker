@@ -4,8 +4,11 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.graphics.Typeface
+import android.view.Gravity
 import android.view.ViewGroup
 import android.view.Window
+import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -29,9 +32,16 @@ class QuickEntryActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(spacing * 2, spacing * 2, spacing * 2, spacing * 2)
-            setBackgroundColor(0xfff8fbfa.toInt())
+            setBackgroundResource(R.drawable.quick_entry_dialog_background)
+            clipToOutline = true
+            elevation = spacing.toFloat()
         }
-        root.addView(TextView(this).apply { text = when (mode) { "income" -> "Quick income"; "transfer" -> "Quick transfer"; else -> "Quick expense" }; textSize = 22f; setTextColor(0xff243b38.toInt()) })
+        root.addView(TextView(this).apply {
+            text = when (mode) { "income" -> "Quick income"; "transfer" -> "Quick transfer"; else -> "Quick expense" }
+            textSize = 21f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(0xff243b38.toInt())
+        })
         val amount = field("Amount (Rp)", true).also { root.addView(it) }
         val description = if (mode == "transfer") null else field("Description (optional)").also { root.addView(it) }
         val error = TextView(this).apply { setTextColor(0xffb13e51.toInt()); visibility = TextView.GONE }.also { root.addView(it) }
@@ -46,9 +56,14 @@ class QuickEntryActivity : AppCompatActivity() {
         if (secondary != null) select(secondary, accountIds, prefs.getString("lastTo:${data.userId}", null) ?: accountIds.getOrNull(1))
         if (pocket != null) select(pocket, pocketIds, prefs.getString("lastPocket:${data.userId}", null))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, spacing, 0, 0) }
-        actions.addView(Button(this).apply { text = "Cancel"; setOnClickListener { finish() } }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         actions.addView(Button(this).apply {
-            text = "Save"
+            text = "Cancel"; isAllCaps = false; setTextColor(0xff177f72.toInt())
+            setBackgroundResource(R.drawable.quick_entry_secondary_button)
+            setOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = spacing / 2 })
+        actions.addView(Button(this).apply {
+            text = "Save"; isAllCaps = false; setTextColor(0xffffffff.toInt())
+            setBackgroundResource(R.drawable.quick_entry_primary_button)
             setOnClickListener {
                 val value = amount.text.toString().replace(",", "").toLongOrNull()
                 if (value == null) { showError(error, "Enter a whole rupiah amount greater than zero"); return@setOnClickListener }
@@ -62,9 +77,13 @@ class QuickEntryActivity : AppCompatActivity() {
                     finish()
                 }.onFailure { showError(error, it.message ?: "Could not save transaction") }
             }
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = spacing / 2 })
         root.addView(actions)
         setContentView(root)
+        setFinishOnTouchOutside(true)
+        window.setBackgroundDrawableResource(android.R.color.transparent)
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.attributes = window.attributes.apply { dimAmount = .24f; gravity = Gravity.CENTER }
         window.setLayout((resources.displayMetrics.widthPixels * .92).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 

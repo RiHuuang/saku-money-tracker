@@ -36,7 +36,13 @@
         </activity>
 
         <activity android:name=".GoogleAuthorizationActivity" android:exported="false" />
-        <activity android:name=".QuickEntryActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@style/WidgetQuickEntryTheme" />
+        <activity
+            android:name=".QuickEntryActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="id.saku.money.widget"
+            android:theme="@style/WidgetQuickEntryTheme" />
         <activity android:name=".WidgetConfigActivity" android:exported="true" android:excludeFromRecents="true" android:theme="@style/WidgetQuickEntryTheme">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
         </activity>

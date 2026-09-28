@@ -73,6 +73,7 @@ object SakuWidgets {
         if (available) {
             listOf(R.id.quick_expense to "expense", R.id.quick_income to "income", R.id.quick_transfer to "transfer").forEachIndexed { index, (viewId, mode) ->
                 val intent = Intent(context, QuickEntryActivity::class.java).putExtra(EXTRA_MODE, mode)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                     .setData(Uri.parse("saku://widget/quick/$widgetId/$mode"))
                 views.setOnClickPendingIntent(viewId, PendingIntent.getActivity(context, widgetId * 10 + index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             }
