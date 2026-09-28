@@ -74,7 +74,7 @@ The checked-in backend, deployment script, OAuth checklist, and build settings a
 
 ## Device verification
 
-The debug build has been installed and smoke-tested on a Xiaomi 15 running Android 16 at `1200x2670`. Google session persistence, the installed 497,516,544-byte model, the combined transfer editor, profile-photo trigger, and the swipe review deck were verified on-device. The supplied BCA credit-card statement produced 78 distinct candidates with page/source evidence and no validation flags. This is a development smoke test, not bank certification. Before a public release, broaden testing across other banks, scans, protected PDFs, interrupted downloads, low storage, cancellation, airplane mode, and sustained memory/latency on multiple 6 GB devices.
+The debug build has been installed and smoke-tested on a Xiaomi 15 running Android 16 at `1200x2670`. Google session persistence, the installed 497,516,544-byte model, the combined transfer editor, profile-photo trigger, and the swipe review deck were verified on-device. All three launcher widgets were bound and rendered together; Quick Entry formatted `1000000` as `1,000,000`, and all seven Android instrumentation tests passed. The supplied BCA credit-card statement produced 78 distinct candidates with page/source evidence and no validation flags. This is a development smoke test, not bank certification. Before a public release, broaden testing across other banks, scans, protected PDFs, interrupted downloads, low storage, cancellation, airplane mode, and sustained memory/latency on multiple 6 GB devices.
 
 References checked during development:
 
