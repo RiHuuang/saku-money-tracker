@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#15786E</color>
+    <color name="colorPrimaryDark">#12665E</color>
+    <color name="colorAccent">#529E83</color>
+    <color name="saku_background">#F6F8F9</color>
+</resources>

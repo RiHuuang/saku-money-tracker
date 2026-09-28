@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="quick_add" android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_quick_add"
+        android:shortcutLongLabel="@string/shortcut_quick_add_long">
+        <intent android:action="android.intent.action.VIEW"
+            android:targetPackage="id.saku.money"
+            android:targetClass="id.saku.money.MainActivity"
+            android:data="saku://quick-add" />
+    </shortcut>
+</shortcuts>
