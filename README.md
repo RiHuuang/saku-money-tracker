@@ -12,7 +12,7 @@ npm run android:sync
 npm run android:open
 ```
 
-Android requires JDK 21 and Android SDK 36. Build a debug APK in Android Studio, or run `gradlew.bat assembleDebug` from `android` with `JAVA_HOME` and `ANDROID_HOME` set to your installed toolchains. A release for Google Play needs your signing key and release testing.
+Android requires JDK 21 and Android SDK 36. Build a debug APK in Android Studio, or run `gradlew.bat assembleDebug` from `android` with `JAVA_HOME` and `ANDROID_HOME` set to your installed toolchains. Google Play releases use an AAB and environment-provided signing credentials; see [`RELEASE.md`](RELEASE.md).
 
 The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a connected Android 12+ arm64 phone, install it with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`, or open the APK on the phone and permit installation from that source. Saku appears in the app drawer and can be placed on the home screen like any other app. It does not need the computer or dev server after installation. On a fresh install, open **Monthly check** and download the model once while online; afterward PDFs can be processed in airplane mode. The browser preview at the Vite URL is for development and has no native PDF AI.
 
@@ -86,4 +86,4 @@ References checked during development:
 
 ## Current limits
 
-Single-currency; no automatic recurring posting, OS-level background sync worker, account deletion flow, or app lock yet. Cloud restore replaces the device workspace after confirmation; concurrent cloud writes are blocked by revision, but field-level multi-device merge is not implemented. Manually editing the mirrored Sheet does not write back into Saku. Device storage is application-private, while exported JSON backups are plaintext. Android backup remains disabled. Preferences rewrites the local ledger as one document; migrate to SQLite before large histories or a durable background sync queue. Public release still requires release signing, Play policy completion, legal review of the agreement, and broader hardware/bank compatibility testing.
+Single-currency; no automatic recurring posting, OS-level background sync worker, or app lock yet. Cloud restore replaces the device workspace after confirmation; concurrent cloud writes are blocked by revision, but field-level multi-device merge is not implemented. Manually editing the mirrored Sheet does not write back into Saku. Device storage is application-private, while exported JSON backups are plaintext. Android backup remains disabled. Preferences rewrites the local ledger as one document; migrate to SQLite before large histories or a durable background sync queue. Public release still requires Play App Signing, Play policy completion, legal review of the agreement, Google OAuth production review, and broader hardware/bank compatibility testing.

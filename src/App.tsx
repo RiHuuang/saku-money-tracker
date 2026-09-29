@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -58,7 +58,7 @@ import {
   type RecurringRule,
   type Transaction,
 } from "./domain";
-import { download, hasUserData, loadData, loadLegacyData, replaceData, saveData } from "./storage";
+import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
 import {
   DirectionIcon,
   Empty,
@@ -73,13 +73,16 @@ import {
   SpendingRing,
   TransactionList,
 } from "./components";
-import Statements from "./Statements";
-import Plans from "./Plans";
+const Statements = lazy(() => import("./Statements"));
+const Plans = lazy(() => import("./Plans"));
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import {
   loadAvatarUrl,
   loadCloudState,
+  AGREEMENT_VERSION,
+  deleteCloudAccount,
+  legalUrl,
   pullCloud,
   pushCloud,
   setSyncInterval,
@@ -830,15 +833,17 @@ export default function App() {
             </>
           )}
           {view === "check" && (
-            <Statements
-              data={data}
-              month={month}
-              commit={commit}
-              busy={busy}
-              notify={setToast}
-            />
+            <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>
+              <Statements
+                data={data}
+                month={month}
+                commit={commit}
+                busy={busy}
+                notify={setToast}
+              />
+            </Suspense>
           )}
-          {view === "plans" && <Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} />}
+          {view === "plans" && <Suspense fallback={<p className="loading-view">Loading plans...</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} /></Suspense>}
           {view === "settings" && (
             <SettingsView
               data={data}
@@ -1673,8 +1678,8 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
     <section className="login-panel">
       <span className="brand-mark"><Wallet /></span><h1>Saku</h1>
       <p>Know where your money lives, what it is for, and what is safe to spend.</p>
-      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your ledger privately on this device, in Saku Cloud, and in a spreadsheet owned by your Google account. Bank statements and local AI prompts stay on this device. You control exports and can sign out at any time. This draft must receive legal review before public release.</p></details>
-      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version 2026-09-28.</label>
+      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your ledger privately on this device, in Saku Cloud, and in a spreadsheet owned by your Google account. Bank statements and local AI prompts stay on this device. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
+      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
       <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? "Connecting..." : "Continue with Google"}</button>
       {!configured && <p className="form-error">Google sign-in is not configured in this build.</p>}{error && <p className="form-error" role="alert">{error}</p>}
     </section>
@@ -1757,7 +1762,9 @@ function SettingsView({
     [profileImage, setProfileImage] = useState<string | undefined>(),
     [restore, setRestore] = useState<Data | null>(null),
     [cloudBusy, setCloudBusy] = useState(false),
-    [pullConfirm, setPullConfirm] = useState(false);
+    [pullConfirm, setPullConfirm] = useState(false),
+    [deleteConfirm, setDeleteConfirm] = useState(false),
+    [deleteText, setDeleteText] = useState("");
   const profileFile = useRef<HTMLInputElement>(null);
   async function cloudAction(action: () => Promise<void>) {
     setCloudBusy(true);
@@ -1965,6 +1972,8 @@ function SettingsView({
             />
           </label>
         </div>
+        <p className="legal-links"><a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a><span>·</span><a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a><span>·</span><a href={legalUrl("account-deletion")} target="_blank" rel="noreferrer">Account deletion</a></p>
+        {cloud?.signedIn && <div className="danger-zone"><div><strong>Delete Saku account</strong><p>Permanently remove Saku Cloud data and this phone's local workspace, revoke access, and ask Drive to trash the Saku-created folder.</p></div><button className="button danger-button" disabled={cloudBusy} onClick={() => setDeleteConfirm(true)}><Trash2 size={16} />Delete account</button></div>}
       </section>
       <section className="connection-section">
         <span className="connection-icon"><CheckCheck size={25} /></span>
@@ -2025,6 +2034,25 @@ function SettingsView({
                 setPullConfirm(false);
               }
             })}>Restore cloud copy</button>
+          </div>
+        </Modal>
+      )}
+      {deleteConfirm && (
+        <Modal title="Delete your Saku account?" subtitle="This permanently deletes your Saku Cloud data and local workspace. Export a backup first if you need one." onClose={() => { setDeleteConfirm(false); setDeleteText(""); }}>
+          <label className="field">Type DELETE to confirm<input autoCapitalize="characters" autoComplete="off" value={deleteText} onChange={(e) => setDeleteText(e.target.value)} /></label>
+          <div className="form-footer">
+            <button className="button secondary" disabled={cloudBusy} onClick={() => { setDeleteConfirm(false); setDeleteText(""); }}>Cancel</button>
+            <button className="button danger-button" disabled={cloudBusy || deleteText !== "DELETE"} onClick={() => void cloudAction(async () => {
+              const userId = cloud?.user?.id;
+              if (!userId) return;
+              await deleteCloudAccount();
+              await removeUserData(userId);
+              setData(emptyData());
+              setCloud(await loadCloudState());
+              setDeleteConfirm(false);
+              setDeleteText("");
+              notify("Saku account deleted");
+            })}><Trash2 size={16} />Delete permanently</button>
           </div>
         </Modal>
       )}

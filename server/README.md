@@ -26,7 +26,7 @@ Install and authenticate the Google Cloud CLI, then from this directory run:
 
 ```powershell
 $secret = Read-Host "OAuth web client secret" -AsSecureString
-.\deploy.ps1 -OAuthClientId "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com" -OAuthClientSecret $secret
+.\deploy.ps1 -OAuthClientId "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com" -OAuthClientSecret $secret -SupportEmail "support@YOUR_VERIFIED_DOMAIN"
 ```
 
 The script enables only the required APIs, creates the private US-region bucket and Native-mode Firestore database if absent, creates a least-privilege Cloud Run service account, writes secrets without checking them into source control, and deploys with scale-to-zero. It prints the Cloud Run URL.
@@ -45,7 +45,9 @@ Create or update `android/gradle.properties` (the OAuth client ID is public conf
 SAKU_GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 ```
 
-Then run `npm run android:sync` and build the signed APK/AAB. Set a billing budget alert and conservative quotas before production. Free Tier is quota-limited, not a hard spending cap.
+Then run `npm run android:sync` and build the signed AAB. Release signing is read from `SAKU_RELEASE_KEYSTORE`, `SAKU_RELEASE_KEY_ALIAS`, `SAKU_RELEASE_STORE_PASSWORD`, and `SAKU_RELEASE_KEY_PASSWORD`; none of these values belong in Git. Set `SAKU_VERSION_CODE` and `SAKU_VERSION_NAME` in your user Gradle properties for each release. Set a billing budget alert and conservative quotas before production. Free Tier is quota-limited, not a hard spending cap.
+
+The deployed service publishes `/privacy`, `/terms`, and `/account-deletion`. Use URLs on a verified custom domain in Google Auth Platform and Play Console. The authenticated `DELETE /v1/me` endpoint removes Saku's cloud copy and sessions, revokes Google access, and trashes the Saku-created Drive folder.
 
 ## Checks
 

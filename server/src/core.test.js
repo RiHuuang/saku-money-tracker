@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { avatarAfterSignIn, decrypt, encrypt, encryptionKey, sheetCell, splitSessionToken, validateSnapshot } from "./core.js";
+import { avatarAfterSignIn, decrypt, encrypt, encryptionKey, isGoogleAvatarUrl, sheetCell, splitSessionToken, validateSnapshot } from "./core.js";
 
 test("encrypts tokens with authenticated encryption", () => {
   const key = encryptionKey(Buffer.alloc(32, 7).toString("base64"));
@@ -29,4 +29,11 @@ test("preserves custom avatars across later Google sign-ins", () => {
     avatarAfterSignIn({ avatarPath: "avatars/old.webp", avatarSource: "google", avatarVersion: "old" }, "avatars/new.webp", "new"),
     { avatarPath: "avatars/new.webp", avatarSource: "google", avatarVersion: "new" },
   );
+});
+
+test("accepts only HTTPS Google-hosted profile images", () => {
+  assert.equal(isGoogleAvatarUrl("https://lh3.googleusercontent.com/photo"), true);
+  assert.equal(isGoogleAvatarUrl("http://lh3.googleusercontent.com/photo"), false);
+  assert.equal(isGoogleAvatarUrl("https://evilgoogleusercontent.com/photo"), false);
+  assert.equal(isGoogleAvatarUrl("not a URL"), false);
 });

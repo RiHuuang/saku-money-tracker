@@ -6,7 +6,7 @@ import { Firestore, FieldValue } from "@google-cloud/firestore";
 import { Storage } from "@google-cloud/storage";
 import { OAuth2Client } from "google-auth-library";
 import sharp from "sharp";
-import { avatarAfterSignIn, decrypt, encrypt, encryptionKey, hashToken, sessionToken, sheetTables, splitSessionToken, timingSafeEqual, tokenPart, validateSnapshot } from "./core.js";
+import { avatarAfterSignIn, decrypt, encrypt, encryptionKey, hashToken, isGoogleAvatarUrl, sessionToken, sheetTables, splitSessionToken, timingSafeEqual, tokenPart, validateSnapshot } from "./core.js";
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
@@ -15,11 +15,13 @@ const clientId = required("GOOGLE_OAUTH_CLIENT_ID");
 const clientSecret = required("GOOGLE_OAUTH_CLIENT_SECRET");
 const bucketName = required("SAKU_BUCKET");
 const tokenKey = encryptionKey(required("TOKEN_ENCRYPTION_KEY"));
+const supportEmail = required("SUPPORT_EMAIL");
 const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || "https://localhost").split(",").map((x) => x.trim()).filter(Boolean));
 const db = new Firestore({ projectId });
 const bucket = new Storage({ projectId }).bucket(bucketName);
 const verifier = new OAuth2Client(clientId);
 const port = Number(process.env.PORT || 8080);
+const agreementVersion = "2026-09-29";
 
 function required(name) {
   const value = process.env[name];
@@ -27,9 +29,17 @@ function required(name) {
   return value;
 }
 function send(res, status, body, origin) {
-  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" };
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "strict-transport-security": "max-age=31536000; includeSubDomains" };
   if (origin && allowedOrigins.has(origin)) Object.assign(headers, { "access-control-allow-origin": origin, vary: "Origin" });
   res.writeHead(status, headers).end(JSON.stringify(body));
+}
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+}
+function sendLegal(res, title, body) {
+  const email = escapeHtml(supportEmail);
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} - Saku</title><style>body{margin:0;background:#f5f7f8;color:#173e40;font:16px/1.65 system-ui,sans-serif}main{max-width:760px;margin:auto;padding:48px 22px 80px}h1,h2{line-height:1.2}h1{font-size:2rem}h2{margin-top:2rem;font-size:1.2rem}a{color:#176e67}small{color:#687875}</style></head><body><main><a href="/">Saku</a><h1>${title}</h1><small>Effective ${agreementVersion}</small>${body(email)}<h2>Contact</h2><p>Questions or privacy requests: <a href="mailto:${email}">${email}</a>.</p></main></body></html>`;
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "public,max-age=3600", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'", "strict-transport-security": "max-age=31536000; includeSubDomains" }).end(html);
 }
 async function body(req) {
   const chunks = [];
@@ -89,13 +99,12 @@ async function mirrorSheet(user, data) {
 }
 async function storeAvatar(sub, url) {
   if (!url) return null;
-  const parsed = new URL(url);
-  if (parsed.protocol !== "https:" || !parsed.hostname.endsWith("googleusercontent.com")) return null;
-  const response = await fetch(url);
+  if (!isGoogleAvatarUrl(url)) return null;
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok || Number(response.headers.get("content-length") || 0) > 5_000_000) return null;
   const input = Buffer.from(await response.arrayBuffer());
   if (input.length > 5_000_000) return null;
-  const image = await sharp(input).rotate().resize(256, 256, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
+  const image = await sharp(input, { limitInputPixels: 16_777_216 }).rotate().resize(256, 256, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
   const path = `avatars/${sub}.webp`;
   await bucket.file(path).save(image, { resumable: false, contentType: "image/webp", metadata: { cacheControl: "private,max-age=86400" } });
   return path;
@@ -106,6 +115,40 @@ async function issueSession(uid, existingId) {
   const refreshSecret = tokenPart();
   await db.collection("sessions").doc(id).set({ uid, accessHash: hashToken(accessSecret), refreshHash: hashToken(refreshSecret), accessExpiresAt: Date.now() + 15 * 60_000, refreshExpiresAt: Date.now() + 30 * 86400_000, updatedAt: FieldValue.serverTimestamp() });
   return { accessToken: sessionToken(id, accessSecret), refreshToken: sessionToken(id, refreshSecret) };
+}
+async function deleteAccount(uid, user) {
+  let refreshToken = null;
+  try { refreshToken = user.googleRefreshToken ? decrypt(user.googleRefreshToken, tokenKey) : null; }
+  catch (error) { console.error("Could not decrypt token during account deletion", { uid, message: error.message }); }
+  if (refreshToken) {
+    try {
+      const accessToken = await refreshGoogle(refreshToken);
+      const fileId = user.folderId || user.spreadsheetId;
+      if (fileId) await googleJson(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,trashed`, accessToken, { method: "PATCH", body: JSON.stringify({ trashed: true }) });
+    } catch (error) { console.error("Could not trash Drive data during account deletion", { uid, message: error.message }); }
+    await fetch("https://oauth2.googleapis.com/revoke", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: refreshToken }) }).catch(() => {});
+  }
+  const removals = [
+    bucket.deleteFiles({ prefix: `ledgers/${uid}/` }),
+    bucket.file(`avatars/${uid}.webp`).delete({ ignoreNotFound: true }),
+  ];
+  const results = await Promise.allSettled(removals);
+  const failedRemoval = results.find((result) => result.status === "rejected");
+  if (failedRemoval) {
+    console.error("Cloud file deletion failed", { uid, message: failedRemoval.reason?.message });
+    throw Object.assign(new Error("Account deletion could not finish; try again"), { status: 503 });
+  }
+  const sessions = await db.collection("sessions").where("uid", "==", uid).get();
+  const documents = [...sessions.docs];
+  while (documents.length > 499) {
+    const batch = db.batch();
+    documents.splice(0, 499).forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
+  const finalBatch = db.batch();
+  documents.forEach((doc) => finalBatch.delete(doc.ref));
+  finalBatch.delete(db.collection("users").doc(uid));
+  await finalBatch.commit();
 }
 async function authenticate(req) {
   const parsed = splitSessionToken((req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
@@ -123,10 +166,14 @@ async function handle(req, res) {
     return;
   }
   if (req.method === "GET" && req.url === "/health") return send(res, 200, { ok: true }, origin);
+  if (req.method === "GET" && req.url === "/") return sendLegal(res, "Saku", () => `<p>Saku is an offline-first Android money tracker for accounts, pockets, cards, transfers, recurring payments, and on-device statement checks.</p><p><a href="/privacy">Privacy Notice</a> · <a href="/terms">User Agreement</a> · <a href="/account-deletion">Account deletion</a></p><h2>Google integration</h2><p>Signing in creates a private cloud backup and a readable Saku spreadsheet in the user's own Google Drive. Saku uses the narrow <code>drive.file</code> permission and cannot browse unrelated Drive files.</p>`);
+  if (req.method === "GET" && req.url === "/privacy") return sendLegal(res, "Privacy Notice", (email) => `<p>Saku is an offline-first money tracker. This notice explains what Saku processes when you sign in and use optional cloud sync.</p><h2>Data we process</h2><p>We process your Google account identifier, email address, display name, optional profile image, acceptance record, Saku ledger and settings, sync revision, and authentication tokens. Transaction descriptions and financial amounts are included when you choose cloud sync.</p><h2>Google data</h2><p>Saku requests basic identity and <code>drive.file</code> access. It uses that access only to create and update the Saku folder and spreadsheet in your Drive. Saku cannot browse unrelated Drive files. Google passwords are never received.</p><h2>On-device processing</h2><p>Imported statements, extracted statement text, OCR images, and local AI prompts stay on your device and are discarded after the review session. They are not uploaded by Saku.</p><h2>Storage and sharing</h2><p>Your current cloud ledger and compressed profile image are stored privately in Google Cloud. A readable mirror is stored in the Saku spreadsheet owned by your Google account. We use Google Cloud solely to operate Saku and do not sell data, run advertising, or share financial data for marketing.</p><h2>Security and retention</h2><p>Google refresh tokens are encrypted at rest, Saku sessions are stored as hashes, and cloud storage is private. Data is kept while your account is active. You can delete your account in Saku Settings; deletion removes active Saku Cloud records, revokes Google access, and asks Google Drive to place the Saku-created folder in trash. Deleted storage objects can remain recoverable for up to seven days under the configured disaster-recovery policy before permanent removal.</p><h2>Your choices</h2><p>You can export your ledger, sign out, revoke Saku in your Google Account, or request deletion at <a href="mailto:${email}">${email}</a>.</p>`);
+  if (req.method === "GET" && req.url === "/terms") return sendLegal(res, "User Agreement", () => `<p>By using Saku, you agree to this agreement and the Privacy Notice.</p><h2>Personal finance tool</h2><p>Saku helps you record and review information you provide. It is not a bank, accounting service, or financial adviser. You remain responsible for checking entries, statement matches, budgets, taxes, and payment decisions.</p><h2>Your account</h2><p>You must use an account you are authorized to control and keep your device secure. Do not use Saku where doing so would violate law or another person's rights.</p><h2>Your data</h2><p>You retain ownership of your ledger. You authorize Saku to process it only to provide the app, cloud backup, profile image, and Google Sheets mirror. You can export or delete it from Settings.</p><h2>Availability</h2><p>Offline features can continue without the cloud, but sync, Google sign-in, and Drive mirroring depend on third-party services. Keep your own exports of important records. Features may change to maintain security, compatibility, or legal compliance.</p><h2>Acceptable use</h2><p>Do not attempt unauthorized access, disrupt the service, automate abusive traffic, or use Saku to harm others.</p><h2>Warranty and liability</h2><p>Saku is provided as available. To the extent permitted by law, no guarantee is made that inferred statement data or financial calculations are error-free. Nothing in this agreement limits rights that cannot legally be limited.</p>`);
+  if (req.method === "GET" && req.url === "/account-deletion") return sendLegal(res, "Delete your Saku account", (email) => `<p>In the Android app, open <strong>Settings</strong>, find <strong>Your data stays with you</strong>, choose <strong>Delete account</strong>, and type DELETE. This removes your Saku Cloud identity, sessions, ledger snapshots, and profile image, revokes Saku's Google access, asks Google Drive to place the Saku-created folder in trash, and clears the workspace from that phone.</p><p>If you cannot access the app, email <a href="mailto:${email}">${email}</a> from the Google address used for Saku. We will verify the request before deleting data.</p><p>You can separately empty Google Drive trash or remove Saku under your Google Account's third-party connections.</p>`);
   if (req.method === "POST" && req.url === "/v1/auth/google") {
     const input = await body(req);
     if (typeof input.code !== "string" || input.code.length < 10) throw Object.assign(new Error("Invalid authorization response"), { status: 400 });
-    if (input.agreementVersion !== "2026-09-28") throw Object.assign(new Error("Accept the current Saku agreement before signing in"), { status: 400 });
+    if (input.agreementVersion !== agreementVersion) throw Object.assign(new Error("Accept the current Saku agreement before signing in"), { status: 400 });
     const tokens = await exchangeCode(input.code);
     const ticket = await verifier.verifyIdToken({ idToken: tokens.id_token, audience: clientId });
     const profile = ticket.getPayload();
@@ -169,6 +216,10 @@ async function handle(req, res) {
     await db.collection("sessions").doc(auth.sessionId).delete();
     return send(res, 200, { ok: true }, origin);
   }
+  if (req.method === "DELETE" && req.url === "/v1/me") {
+    await deleteAccount(auth.uid, user);
+    return send(res, 200, { ok: true }, origin);
+  }
   if (req.method === "GET" && req.url === "/v1/me") return send(res, 200, { user: { id: auth.uid, name: user.name, email: user.email, hasAvatar: Boolean(user.avatarPath), avatarSource: user.avatarSource || "google", avatarVersion: user.avatarVersion || "legacy" }, sync: { revision: user.revision || 0, spreadsheetUrl: user.spreadsheetUrl } }, origin);
   if (req.method === "PUT" && req.url === "/v1/me") {
     const input = await body(req);
@@ -181,7 +232,7 @@ async function handle(req, res) {
       if (input.image === "") { if (avatarPath) await bucket.file(avatarPath).delete({ ignoreNotFound: true }); avatarPath = null; avatarSource = null; avatarVersion = Date.now().toString(36); }
       else if (typeof input.image === "string" && /^data:image\/(?:jpeg|png|webp);base64,/.test(input.image) && input.image.length < 4_000_000) {
         const bytes = Buffer.from(input.image.slice(input.image.indexOf(",") + 1), "base64");
-        const image = await sharp(bytes).rotate().resize(256, 256, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
+        const image = await sharp(bytes, { limitInputPixels: 16_777_216 }).rotate().resize(256, 256, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
         avatarPath = `avatars/${auth.uid}.webp`;
         await bucket.file(avatarPath).save(image, { resumable: false, contentType: "image/webp", metadata: { cacheControl: "private,max-age=86400" } });
         avatarSource = "custom";
@@ -207,7 +258,9 @@ async function handle(req, res) {
   if (req.method === "PUT" && req.url === "/v1/sync") {
     const input = await body(req);
     if (!Number.isSafeInteger(input.baseRevision) || input.baseRevision < 0) throw Object.assign(new Error("Invalid sync revision"), { status: 400 });
-    const json = validateSnapshot(input.data);
+    let json;
+    try { json = validateSnapshot(input.data); }
+    catch (error) { throw Object.assign(error, { status: 400 }); }
     const nextRevision = input.baseRevision + 1;
     const path = `ledgers/${auth.uid}/${nextRevision}-${crypto.randomUUID()}.json.gz`;
     await bucket.file(path).save(await gzip(json), { resumable: false, contentType: "application/gzip", metadata: { cacheControl: "private,no-store" } });

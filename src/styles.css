@@ -1820,6 +1820,14 @@ main {
 .sync-state.pending { color: #8a5c21; background: #f8eddc; }
 .cloud-signed-out .button { margin-top: 3px; }
 .cloud-signed-out .cloud-note { display: block; margin-top: 11px; }
+.legal-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 0; font-size: 12px; }
+.legal-links a { color: #176e67; }
+.danger-zone { margin-top: 20px; padding-top: 18px; border-top: 1px solid #ead9d6; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; }
+.danger-zone strong { color: #6f2924; font-size: 13px; }
+.danger-zone p { margin: 4px 0 0; color: #776967; font-size: 12px; line-height: 1.5; }
+.button.danger-button { color: #fff; background: #a33b32; border-color: #a33b32; }
+.button.danger-button:hover { background: #8c3029; border-color: #8c3029; }
+.loading-view { padding: 32px 0; color: #687875; }
 .connection-icon {
   color: #559b7a;
   background: #e7f1e9;

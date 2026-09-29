@@ -39,7 +39,9 @@ type AuthResponse = {
 
 const plugin = registerPlugin<GoogleAuthPlugin>("GoogleAuth");
 const stateKey = "saku-cloud-state-v1";
+export const AGREEMENT_VERSION = "2026-09-29";
 const apiUrl = (import.meta.env.VITE_SAKU_API_URL || "").replace(/\/$/, "");
+export const legalUrl = (page: "privacy" | "terms" | "account-deletion") => `${apiUrl}/${page}`;
 const identified = (user: CloudState["user"] | ({ id?: string; name: string; email: string; hasAvatar: boolean })) => user ? { ...user, id: user.id || user.email.toLowerCase() } : undefined;
 
 async function publicState(): Promise<Omit<CloudState, "signedIn" | "configured">> {
@@ -95,7 +97,7 @@ async function request(path: string, options: RequestInit = {}, retry = true): P
   if (!response.ok) throw Object.assign(new Error(result.error || "Cloud request failed"), { status: response.status, revision: result.revision });
   return result;
 }
-export async function signInGoogle(agreementVersion = "2026-09-28"): Promise<CloudState> {
+export async function signInGoogle(agreementVersion = AGREEMENT_VERSION): Promise<CloudState> {
   if (!Capacitor.isNativePlatform()) throw new Error("Google sign-in is available in the Android app");
   const config = await plugin.isConfigured();
   if (!config.deviceSecure) throw new Error("Set a screen lock before signing in so Saku can protect your session");
@@ -126,6 +128,12 @@ export async function pullCloud(): Promise<{ data: Data | null; state: CloudStat
 }
 export async function signOutGoogle() {
   try { await request("/v1/auth/logout", { method: "POST", body: "{}" }, false); } catch { /* Local sign-out still wins. */ }
+  await plugin.clearSession();
+  await Preferences.remove({ key: stateKey });
+  await refreshHomeWidgets();
+}
+export async function deleteCloudAccount() {
+  await request("/v1/me", { method: "DELETE", body: "{}" });
   await plugin.clearSession();
   await Preferences.remove({ key: stateKey });
   await refreshHomeWidgets();

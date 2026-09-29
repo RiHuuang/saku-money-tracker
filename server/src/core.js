@@ -23,6 +23,12 @@ export function avatarAfterSignIn(existing, googleAvatarPath, nextVersion) {
     avatarVersion: googleAvatarPath ? nextVersion : existing?.avatarVersion || "legacy",
   };
 }
+export function isGoogleAvatarUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && (url.hostname === "googleusercontent.com" || url.hostname.endsWith(".googleusercontent.com"));
+  } catch { return false; }
+}
 export function encryptionKey(value) {
   const key = Buffer.from(String(value || ""), "base64");
   if (key.length !== 32) throw new Error("TOKEN_ENCRYPTION_KEY must be 32 bytes encoded as base64");

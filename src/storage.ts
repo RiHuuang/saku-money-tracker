@@ -29,6 +29,11 @@ export async function loadLegacyData() {
 export async function hasUserData(userId: string) {
   return Boolean((await Preferences.get({ key: userKey(userId) })).value);
 }
+export async function removeUserData(userId: string) {
+  await Preferences.remove({ key: userKey(userId) });
+  if (activeUserId === userId) activeUserId = "";
+  await refreshHomeWidgets();
+}
 export async function download(name: string, content: string, type: string) {
   if (Capacitor.isNativePlatform()) {
     const file = await Filesystem.writeFile({
