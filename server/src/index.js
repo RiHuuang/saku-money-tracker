@@ -22,6 +22,7 @@ const bucket = new Storage({ projectId }).bucket(bucketName);
 const verifier = new OAuth2Client(clientId);
 const port = Number(process.env.PORT || 8080);
 const agreementVersion = "2026-09-29";
+const acceptedAgreementVersions = new Set(["2026-09-28", agreementVersion]);
 
 function required(name) {
   const value = process.env[name];
@@ -173,7 +174,7 @@ async function handle(req, res) {
   if (req.method === "POST" && req.url === "/v1/auth/google") {
     const input = await body(req);
     if (typeof input.code !== "string" || input.code.length < 10) throw Object.assign(new Error("Invalid authorization response"), { status: 400 });
-    if (input.agreementVersion !== agreementVersion) throw Object.assign(new Error("Accept the current Saku agreement before signing in"), { status: 400 });
+    if (!acceptedAgreementVersions.has(input.agreementVersion)) throw Object.assign(new Error("Accept the current Saku agreement before signing in"), { status: 400 });
     const tokens = await exchangeCode(input.code);
     const ticket = await verifier.verifyIdToken({ idToken: tokens.id_token, audience: clientId });
     const profile = ticket.getPayload();
