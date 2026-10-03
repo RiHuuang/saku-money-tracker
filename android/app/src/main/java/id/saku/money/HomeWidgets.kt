@@ -127,9 +127,11 @@ class FavoritesWidgetProvider : AppWidgetProvider() {
             SakuWidgets.ACTION_ADD_FAVORITE -> {
                 val favoriteId = intent.getStringExtra("favoriteId") ?: return
                 val name = WidgetLedger.favorites(context).find { it.id == favoriteId }?.name ?: "transaction"
-                WidgetLedger.addFavorite(context, favoriteId).onSuccess {
-                    prefs.edit().putString("lastId:$widgetId", it).putString("lastName:$widgetId", name).apply()
-                    Toast.makeText(context, "$name added", Toast.LENGTH_SHORT).show()
+                WidgetLedger.addFavorite(context, favoriteId).onSuccess { result ->
+                    if (result.created) {
+                        prefs.edit().putString("lastId:$widgetId", result.transactionId).putString("lastName:$widgetId", name).apply()
+                        Toast.makeText(context, "$name added", Toast.LENGTH_SHORT).show()
+                    }
                 }.onFailure { Toast.makeText(context, it.message ?: "Could not add transaction", Toast.LENGTH_LONG).show() }
             }
             SakuWidgets.ACTION_UNDO -> {

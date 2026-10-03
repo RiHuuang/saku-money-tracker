@@ -1,6 +1,7 @@
 package id.saku.money
 
 import android.content.Context
+import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -8,6 +9,7 @@ import java.time.YearMonth
 import java.util.UUID
 
 data class WidgetFavorite(val id: String, val name: String, val amount: Long)
+data class WidgetFavoriteAdd(val transactionId: String, val created: Boolean)
 data class WidgetSnapshot(val totalCash: Long, val spentToday: Long, val spentWeek: Long, val pocketRemaining: Long)
 data class WidgetChoice(val id: String, val name: String)
 data class WidgetData(
@@ -24,6 +26,7 @@ object WidgetLedger {
     const val WIDGET_STORAGE = "SakuWidgets"
     const val REVISION_KEY = "ledgerRevision"
     private const val MAX_AMOUNT = 1_000_000_000_000L
+    private const val FAVORITE_TAP_GUARD_MS = 1_500L
 
     private fun capacitor(context: Context) = context.getSharedPreferences(CAPACITOR_STORAGE, Context.MODE_PRIVATE)
     fun widgetPreferences(context: Context) = context.getSharedPreferences(WIDGET_STORAGE, Context.MODE_PRIVATE)
@@ -60,9 +63,16 @@ object WidgetLedger {
     }
 
     @Synchronized
-    fun addFavorite(context: Context, favoriteId: String): Result<String> = runCatching {
+    fun addFavorite(context: Context, favoriteId: String, nowMs: Long = SystemClock.elapsedRealtime()): Result<WidgetFavoriteAdd> = runCatching {
         val data = load(context) ?: error("Open Saku to sign in")
         val favorite = find(data.ledger.optJSONArray("favorites"), favoriteId) ?: error("Favorite is no longer available")
+        val guardKey = "${data.userId}:$favoriteId"
+        val widgetPrefs = widgetPreferences(context)
+        val previousAt = widgetPrefs.getLong("favoriteAt:$guardKey", Long.MIN_VALUE)
+        val previousId = widgetPrefs.getString("favoriteId:$guardKey", "").orEmpty()
+        if (previousAt >= 0 && nowMs >= previousAt && nowMs - previousAt < FAVORITE_TAP_GUARD_MS && find(data.ledger.optJSONArray("transactions"), previousId) != null) {
+            return@runCatching WidgetFavoriteAdd(previousId, false)
+        }
         val amount = wholeAmount(favorite.opt("amount")) ?: error("Favorite amount is invalid")
         require(amount > 0) { "Favorite amount is invalid" }
         val name = favorite.optString("name").trim()
@@ -88,7 +98,8 @@ object WidgetLedger {
                 .put("firstDueMonth", YearMonth.now().plusMonths(1).toString())
         }
         appendAndSave(context, data, listOf(transaction))
-        id
+        check(widgetPrefs.edit().putLong("favoriteAt:$guardKey", nowMs).putString("favoriteId:$guardKey", id).commit())
+        WidgetFavoriteAdd(id, true)
     }
 
     @Synchronized
@@ -209,7 +220,7 @@ object WidgetLedger {
     private fun save(context: Context, data: WidgetData) {
         val prefs = capacitor(context)
         val cloud = prefs.getString(CLOUD_KEY, null)?.let(::JSONObject) ?: error("Open Saku to sign in")
-        cloud.put("dirty", true)
+        cloud.put("dirty", true).put("changeVersion", cloud.optLong("changeVersion", 0) + 1)
         check(prefs.edit().putString("saku-ledger-v3-${data.userId}", data.ledger.toString()).putString(CLOUD_KEY, cloud.toString()).commit())
         val widgetPrefs = widgetPreferences(context)
         widgetPrefs.edit().putLong(REVISION_KEY, widgetPrefs.getLong(REVISION_KEY, 0L) + 1).apply()

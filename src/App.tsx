@@ -83,9 +83,9 @@ import {
   AGREEMENT_VERSION,
   deleteCloudAccount,
   legalUrl,
+  markCloudDirty,
   pullCloud,
   pushCloud,
-  setSyncInterval,
   signInGoogle,
   signOutGoogle,
   updateProfile,
@@ -123,6 +123,9 @@ export default function App() {
     [avatarUrl, setAvatarUrl] = useState("");
   const saving = useRef(false);
   const widgetRevision = useRef(0);
+  const pendingSync = useRef<Data | null>(null);
+  const activeSync = useRef<Data | null>(null);
+  const syncRunning = useRef(false);
   useEffect(() => {
     void (async () => {
       try {
@@ -159,14 +162,9 @@ export default function App() {
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
   }, [cloud?.signedIn, cloud?.user?.hasAvatar, cloud?.user?.avatarVersion]);
   useEffect(() => {
-    if (!data || !cloud?.signedIn || !cloud.dirty || !cloud.syncInterval) return;
-    const sync = async () => {
-      if (Capacitor.isNativePlatform() && await homeWidgetRevision() !== widgetRevision.current) return;
-      await pushCloud(data).then(setCloud).catch((error) => setToast(error?.status === 409 ? "Google has newer data. Review before restoring or syncing again." : "Automatic sync will retry while Saku is open."));
-    };
-    const timer = window.setTimeout(sync, cloud.syncInterval * 60_000);
-    return () => clearTimeout(timer);
-  }, [data, cloud?.signedIn, cloud?.dirty, cloud?.syncInterval]);
+    if (!data || !cloud?.signedIn || !cloud.dirty) return;
+    void queueSync(data);
+  }, [data, cloud?.signedIn, cloud?.dirty]);
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !cloud?.user?.id || !data) return;
     let active = true;
@@ -181,11 +179,7 @@ export default function App() {
         const nextCloud = await loadCloudState();
         widgetRevision.current = revision;
         if (active) { setData(nextData); setCloud(nextCloud); }
-        if (active && nextCloud.signedIn && nextCloud.dirty && nextCloud.syncInterval) {
-          await pushCloud(nextData).then((value) => { if (active) setCloud(value); }).catch((error) => {
-            if (active) setToast(error?.status === 409 ? "Google has newer data. Review before restoring or syncing again." : "Automatic sync will retry while Saku is open.");
-          });
-        }
+        if (active && nextCloud.signedIn && nextCloud.dirty) await queueSync(nextData);
       })();
     });
     return () => { active = false; void listener.then((handle) => handle.remove()); };
@@ -221,6 +215,7 @@ export default function App() {
       await saveData(next);
       setData(next);
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
+      void queueSync(next);
       if (message) setToast(message);
       return true;
     } catch (e) {
@@ -233,6 +228,31 @@ export default function App() {
     } finally {
       saving.current = false;
       setBusy(false);
+    }
+  }
+  async function queueSync(next: Data, userInitiated = false) {
+    if (activeSync.current === next || pendingSync.current === next) return;
+    pendingSync.current = next;
+    if (syncRunning.current || !cloud?.signedIn) return;
+    syncRunning.current = true;
+    try {
+      while (pendingSync.current) {
+        const snapshot = pendingSync.current;
+        pendingSync.current = null;
+        activeSync.current = snapshot;
+        await markCloudDirty();
+        setCloud(await pushCloud(snapshot));
+        activeSync.current = null;
+      }
+      if (userInitiated) setToast("Backed up to Google Sheets");
+    } catch (error: unknown) {
+      pendingSync.current = null;
+      activeSync.current = null;
+      setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
+      const status = typeof error === "object" && error && "status" in error ? (error as { status?: number }).status : undefined;
+      setToast(status === 409 ? "Google has newer data. Review before syncing again." : "Saved offline. Automatic sync will retry when Saku is active.");
+    } finally {
+      syncRunning.current = false;
     }
   }
   async function recover(file: File | undefined) {
@@ -256,7 +276,7 @@ export default function App() {
     }} />;
   if (resolution)
     return <WorkspaceChoice local={resolution.local} remote={resolution.remote} onChoose={async (chosen, localWins) => {
-      if (localWins) { await saveData(chosen); setCloud((value) => value ? { ...value, dirty: true } : value); } else await replaceData(chosen); setData(chosen); setResolution(null);
+      if (localWins) { await saveData(chosen); setCloud((value) => value ? { ...value, dirty: true } : value); setData(chosen); void queueSync(chosen); } else await replaceData(chosen); setData(chosen); setResolution(null);
     }} onBackup={() => void download(`saku-local-backup-${today()}.json`, JSON.stringify(resolution.local, null, 2), "application/json")} />;
   if (!data)
     return (
@@ -854,6 +874,7 @@ export default function App() {
               avatarUrl={avatarUrl}
               setCloud={setCloud}
               setData={setData}
+              syncNow={() => queueSync(data, true)}
             />
           )}
         </main>
@@ -1747,6 +1768,7 @@ function SettingsView({
   avatarUrl,
   setCloud,
   setData,
+  syncNow,
 }: {
   data: Data;
   commit: (d: Data, m: string) => Promise<boolean>;
@@ -1756,6 +1778,7 @@ function SettingsView({
   avatarUrl: string;
   setCloud: (state: CloudState | null) => void;
   setData: (data: Data) => void;
+  syncNow: () => Promise<void>;
 }) {
   const [name, setName] = useState(data.name),
     [account, setAccount] = useState(""),
@@ -1925,14 +1948,10 @@ function SettingsView({
             <div className="cloud-user">
               <CircleUserRound size={21} />
               <span><strong>{cloud.user?.name}</strong><small>{cloud.user?.email}</small></span>
-              <span className={`sync-state ${cloud.dirty ? "pending" : ""}`}>{cloud.dirty ? "Changes waiting" : "Up to date"}</span>
+              <span className={`sync-state ${cloud.dirty || cloud.sheetPending ? "pending" : ""}`}>{cloud.dirty ? "Changes waiting" : cloud.sheetPending ? "Sheet pending" : "Up to date"}</span>
             </div>
             <div className="settings-actions">
-              <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(async () => {
-                const next = await pushCloud(data);
-                setCloud(next);
-                notify("Backed up to Google Sheets");
-              })}><Upload size={17} />{cloudBusy ? "Syncing..." : "Sync now"}</button>
+              {(cloud.dirty || cloud.sheetPending) && <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(syncNow)}><Upload size={17} />Retry sync</button>}
               <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(true)}><Download size={17} />Restore cloud copy</button>
               {cloud.spreadsheetUrl && <a className="button secondary" href={cloud.spreadsheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} />Open Sheet</a>}
               <button className="button text-button" disabled={cloudBusy} onClick={() => void cloudAction(async () => {
@@ -1941,9 +1960,8 @@ function SettingsView({
                 notify("Signed out on this device");
               })}><LogOut size={16} />Sign out</button>
             </div>
-            <small className="cloud-note">{cloud.lastSyncedAt ? `Last synced ${new Date(cloud.lastSyncedAt).toLocaleString()}` : "Not backed up yet"}</small>
+            <small className="cloud-note">Changes sync automatically while Saku is active. {cloud.lastSyncedAt ? `Last synced ${new Date(cloud.lastSyncedAt).toLocaleString()}` : "Not backed up yet."}</small>
             {cloud.sheetPending && <p className="inline-warning">Your cloud snapshot is saved, but Google Sheets mirroring is still pending.</p>}
-            <label className="field">Sync while Saku is open<ChoicePicker value={cloud.syncInterval} onChange={(e) => { const value = Number(e.target.value) as CloudState["syncInterval"]; void setSyncInterval(value).then(() => setCloud({ ...cloud, syncInterval: value })); }}><option value={5}>Every 5 minutes</option><option value={15}>Every 15 minutes</option><option value={60}>Every hour</option><option value={0}>Manual only</option></ChoicePicker></label>
           </div>
         )}
       </section>

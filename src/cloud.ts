@@ -20,6 +20,7 @@ export type CloudState = {
   lastSyncedAt?: string;
   spreadsheetUrl?: string;
   sheetPending?: boolean;
+  changeVersion?: number;
   syncInterval: 0 | 5 | 15 | 60;
   user?: {
     id: string;
@@ -53,6 +54,7 @@ async function publicState(): Promise<Omit<CloudState, "signedIn" | "configured"
       dirty: Boolean(state.dirty), revision: Number.isSafeInteger(state.revision) ? state.revision : 0,
       lastSyncedAt: state.lastSyncedAt, spreadsheetUrl: state.spreadsheetUrl,
       sheetPending: Boolean(state.sheetPending), syncInterval: [0, 5, 15, 60].includes(state.syncInterval) ? state.syncInterval : 15,
+      changeVersion: Number.isSafeInteger(state.changeVersion) ? state.changeVersion : 0,
       user: state.user && typeof state.user.email === "string" ? identified(state.user) : undefined,
     };
   } catch { return { dirty: false, revision: 0, syncInterval: 15 }; }
@@ -62,7 +64,7 @@ async function savePublic(state: Omit<CloudState, "signedIn" | "configured">) {
 }
 export async function markCloudDirty() {
   const state = await publicState();
-  if (state.user) await savePublic({ ...state, dirty: true });
+  if (state.user) await savePublic({ ...state, dirty: true, changeVersion: (state.changeVersion || 0) + 1 });
 }
 export async function loadCloudState(): Promise<CloudState> {
   const local = await publicState();
@@ -115,7 +117,8 @@ export async function signInGoogle(agreementVersion = AGREEMENT_VERSION): Promis
 export async function pushCloud(data: Data): Promise<CloudState> {
   const local = await publicState();
   const result = await request("/v1/sync", { method: "PUT", body: JSON.stringify({ baseRevision: local.revision, data: validateData(data) }) });
-  const next = { ...local, signedIn: true, configured: true, dirty: false, revision: result.revision, lastSyncedAt: new Date().toISOString(), spreadsheetUrl: result.spreadsheetUrl, sheetPending: Boolean(result.sheetPending) };
+  const current = await publicState();
+  const next = { ...current, signedIn: true, configured: true, dirty: current.changeVersion !== local.changeVersion, revision: result.revision, lastSyncedAt: new Date().toISOString(), spreadsheetUrl: result.spreadsheetUrl, sheetPending: Boolean(result.sheetPending) };
   await savePublic(next);
   return next;
 }

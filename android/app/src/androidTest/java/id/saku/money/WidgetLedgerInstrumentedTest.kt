@@ -36,16 +36,39 @@ class WidgetLedgerInstrumentedTest {
 
     @Test
     fun favoriteAddMarksDirtyAndExactUndoRestoresLedger() {
-        val id = WidgetLedger.addFavorite(context, "coffee").getOrThrow()
+        val id = WidgetLedger.addFavorite(context, "coffee").getOrThrow().transactionId
         val data = WidgetLedger.load(context)!!
         assertEquals(2, data.ledger.getJSONArray("transactions").length())
         assertEquals("Coffee", data.ledger.getJSONArray("transactions").getJSONObject(1).getString("name"))
         val cloud = JSONObject(context.getSharedPreferences("CapacitorStorage", 0).getString("saku-cloud-state-v1", null)!!)
         assertTrue(cloud.getBoolean("dirty"))
+        assertEquals(1, cloud.getInt("changeVersion"))
         assertTrue(WidgetLedger.revision(context) > 0)
         assertTrue(WidgetLedger.undo(context, id))
         assertFalse(WidgetLedger.undo(context, id))
         assertEquals(1, WidgetLedger.load(context)!!.ledger.getJSONArray("transactions").length())
+    }
+
+    @Test
+    fun rapidFavoriteTapsCreateOneTransactionAndKeepExactUndo() {
+        val first = WidgetLedger.addFavorite(context, "coffee", 1_000).getOrThrow()
+        val duplicate = WidgetLedger.addFavorite(context, "coffee", 1_200).getOrThrow()
+        assertTrue(first.created)
+        assertFalse(duplicate.created)
+        assertEquals(first.transactionId, duplicate.transactionId)
+        assertEquals(2, WidgetLedger.load(context)!!.ledger.getJSONArray("transactions").length())
+        assertTrue(WidgetLedger.undo(context, first.transactionId))
+        assertEquals(1, WidgetLedger.load(context)!!.ledger.getJSONArray("transactions").length())
+    }
+
+    @Test
+    fun favoriteCanBeAddedAgainAfterTapGuard() {
+        val first = WidgetLedger.addFavorite(context, "coffee", 1_000).getOrThrow()
+        val later = WidgetLedger.addFavorite(context, "coffee", 2_500).getOrThrow()
+        assertTrue(first.created)
+        assertTrue(later.created)
+        assertFalse(first.transactionId == later.transactionId)
+        assertEquals(3, WidgetLedger.load(context)!!.ledger.getJSONArray("transactions").length())
     }
 
     @Test
