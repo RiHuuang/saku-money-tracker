@@ -8,7 +8,7 @@
 4. In Play Console, complete App access, Ads, Content rating, Target audience, Data safety, Financial features, and account-deletion declarations. Answers must match the final reviewed Privacy Notice.
 5. Enable Play App Signing and keep the upload keystore outside this repository and backed up securely.
 
-Deploy the backend before distributing the new Android build. The API temporarily accepts agreement versions `2026-09-28` and `2026-09-29` so existing installations can sign in during the rollout; remove the older version after the minimum supported app version has moved to the current agreement.
+Deploy the backend before distributing the new Android build. The API temporarily accepts agreement versions `2026-09-28`, `2026-09-29`, and `2026-10-03` so existing installations can sign in during the rollout; remove older versions after the minimum supported app version has moved to the current agreement.
 
 ## Build configuration
 

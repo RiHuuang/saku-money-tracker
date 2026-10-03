@@ -1699,7 +1699,7 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
     <section className="login-panel">
       <span className="brand-mark"><Wallet /></span><h1>Saku</h1>
       <p>Know where your money lives, what it is for, and what is safe to spend.</p>
-      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your ledger privately on this device, in Saku Cloud, and in a spreadsheet owned by your Google account. Bank statements and local AI prompts stay on this device. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
+      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. Bank statements and on-device AI prompts stay on this device. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
       <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
       <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? "Connecting..." : "Continue with Google"}</button>
       {!configured && <p className="form-error">Google sign-in is not configured in this build.</p>}{error && <p className="form-error" role="alert">{error}</p>}
@@ -1960,7 +1960,7 @@ function SettingsView({
                 notify("Signed out on this device");
               })}><LogOut size={16} />Sign out</button>
             </div>
-            <small className="cloud-note">Changes sync automatically while Saku is active. {cloud.lastSyncedAt ? `Last synced ${new Date(cloud.lastSyncedAt).toLocaleString()}` : "Not backed up yet."}</small>
+            <small className="cloud-note">Changes sync automatically, including widget entries while Saku is closed. {cloud.lastSyncedAt ? `Last synced ${new Date(cloud.lastSyncedAt).toLocaleString()}` : "Not backed up yet."}</small>
             {cloud.sheetPending && <p className="inline-warning">Your cloud snapshot is saved, but Google Sheets mirroring is still pending.</p>}
           </div>
         )}

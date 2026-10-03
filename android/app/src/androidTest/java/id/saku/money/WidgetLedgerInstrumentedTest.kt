@@ -72,6 +72,12 @@ class WidgetLedgerInstrumentedTest {
     }
 
     @Test
+    fun cloudConflictComparisonIgnoresJsonKeyOrder() {
+        assertTrue(WidgetCloudSync.sameLedger("{\"version\":3,\"transactions\":[{\"id\":\"one\",\"amount\":5000}]}", JSONObject("{\"transactions\":[{\"amount\":5000,\"id\":\"one\"}],\"version\":3}")))
+        assertFalse(WidgetCloudSync.sameLedger("{\"version\":3,\"transactions\":[]}", JSONObject("{\"version\":3,\"transactions\":[{\"id\":\"one\"}]}")))
+    }
+
+    @Test
     fun cardAndUnassignedQuickExpensesKeepVersionThreeShape() {
         WidgetLedger.addTransaction(context, "expense", 25_000, "Lunch", "card-1", "").getOrThrow()
         WidgetLedger.addTransaction(context, "expense", 5_000, "Snack", "Cash", "").getOrThrow()

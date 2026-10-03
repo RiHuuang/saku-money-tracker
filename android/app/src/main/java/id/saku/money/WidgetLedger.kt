@@ -224,6 +224,7 @@ object WidgetLedger {
         check(prefs.edit().putString("saku-ledger-v3-${data.userId}", data.ledger.toString()).putString(CLOUD_KEY, cloud.toString()).commit())
         val widgetPrefs = widgetPreferences(context)
         widgetPrefs.edit().putLong(REVISION_KEY, widgetPrefs.getLong(REVISION_KEY, 0L) + 1).apply()
+        WidgetCloudSync.schedule(context)
     }
 
     private fun accountBalance(ledger: JSONObject, account: String): Long {

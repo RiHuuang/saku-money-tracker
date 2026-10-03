@@ -6,6 +6,10 @@ def releaseKeyAlias = System.getenv('SAKU_RELEASE_KEY_ALIAS')
 def releaseStorePassword = System.getenv('SAKU_RELEASE_STORE_PASSWORD')
 def releaseKeyPassword = System.getenv('SAKU_RELEASE_KEY_PASSWORD')
 def releaseSigningConfigured = releaseKeystore && releaseKeyAlias && releaseStorePassword && releaseKeyPassword
+def productionEnv = new Properties()
+def productionEnvFile = rootProject.file('../.env.production')
+if (productionEnvFile.exists()) productionEnvFile.withInputStream { productionEnv.load(it) }
+def sakuApiUrl = project.findProperty('SAKU_API_URL') ?: System.getenv('SAKU_API_URL') ?: productionEnv.getProperty('VITE_SAKU_API_URL', '')
 
 android {
     namespace = "id.saku.money"
@@ -19,6 +23,7 @@ android {
         ndk { abiFilters 'arm64-v8a' }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "SAKU_GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty('SAKU_GOOGLE_WEB_CLIENT_ID') ?: ''}\""
+        buildConfigField "String", "SAKU_API_URL", "\"${sakuApiUrl.replace('\\', '\\\\').replace('\"', '\\\"')}\""
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61

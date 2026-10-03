@@ -21,7 +21,6 @@ export type CloudState = {
   spreadsheetUrl?: string;
   sheetPending?: boolean;
   changeVersion?: number;
-  syncInterval: 0 | 5 | 15 | 60;
   user?: {
     id: string;
     name: string;
@@ -40,24 +39,24 @@ type AuthResponse = {
 
 const plugin = registerPlugin<GoogleAuthPlugin>("GoogleAuth");
 const stateKey = "saku-cloud-state-v1";
-export const AGREEMENT_VERSION = "2026-09-29";
+export const AGREEMENT_VERSION = "2026-10-03";
 const apiUrl = (import.meta.env.VITE_SAKU_API_URL || "").replace(/\/$/, "");
 export const legalUrl = (page: "privacy" | "terms" | "account-deletion") => `${apiUrl}/${page}`;
 const identified = (user: CloudState["user"] | ({ id?: string; name: string; email: string; hasAvatar: boolean })) => user ? { ...user, id: user.id || user.email.toLowerCase() } : undefined;
 
 async function publicState(): Promise<Omit<CloudState, "signedIn" | "configured">> {
   const { value } = await Preferences.get({ key: stateKey });
-  if (!value) return { dirty: false, revision: 0, syncInterval: 15 };
+  if (!value) return { dirty: false, revision: 0 };
   try {
     const state = JSON.parse(value);
     return {
       dirty: Boolean(state.dirty), revision: Number.isSafeInteger(state.revision) ? state.revision : 0,
       lastSyncedAt: state.lastSyncedAt, spreadsheetUrl: state.spreadsheetUrl,
-      sheetPending: Boolean(state.sheetPending), syncInterval: [0, 5, 15, 60].includes(state.syncInterval) ? state.syncInterval : 15,
+      sheetPending: Boolean(state.sheetPending),
       changeVersion: Number.isSafeInteger(state.changeVersion) ? state.changeVersion : 0,
       user: state.user && typeof state.user.email === "string" ? identified(state.user) : undefined,
     };
-  } catch { return { dirty: false, revision: 0, syncInterval: 15 }; }
+  } catch { return { dirty: false, revision: 0 }; }
 }
 async function savePublic(state: Omit<CloudState, "signedIn" | "configured">) {
   await Preferences.set({ key: stateKey, value: JSON.stringify(state) });
@@ -140,10 +139,6 @@ export async function deleteCloudAccount() {
   await plugin.clearSession();
   await Preferences.remove({ key: stateKey });
   await refreshHomeWidgets();
-}
-export async function setSyncInterval(syncInterval: CloudState["syncInterval"]) {
-  const local = await publicState();
-  await savePublic({ ...local, syncInterval });
 }
 export async function updateProfile(name: string, image?: string) {
   const result = await request("/v1/me", { method: "PUT", body: JSON.stringify({ name, image }) });

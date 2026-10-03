@@ -4,7 +4,7 @@ import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { type Data, emptyData, validateData } from "./domain";
 import { markCloudDirty } from "./cloud";
-import { refreshHomeWidgets } from "./homeWidget";
+import { refreshHomeWidgets, scheduleCloudSync } from "./homeWidget";
 const key = "saku-ledger-v1";
 const userKey = (userId?: string) => userId ? `saku-ledger-v3-${userId}` : "saku-ledger-browser-v3";
 let activeUserId = "";
@@ -17,6 +17,7 @@ export async function saveData(data: Data) {
   await Preferences.set({ key: userKey(activeUserId), value: JSON.stringify(validateData(data)) });
   await markCloudDirty();
   await refreshHomeWidgets();
+  await scheduleCloudSync();
 }
 export async function replaceData(data: Data) {
   await Preferences.set({ key: userKey(activeUserId), value: JSON.stringify(validateData(data)) });

@@ -18,4 +18,10 @@ class HomeWidgetPlugin : Plugin() {
     fun getRevision(call: PluginCall) {
         call.resolve(JSObject().put("revision", WidgetLedger.revision(context)))
     }
+
+    @PluginMethod
+    fun scheduleSync(call: PluginCall) {
+        WidgetCloudSync.schedule(context)
+        call.resolve()
+    }
 }
