@@ -749,7 +749,7 @@ export default function App() {
             </>
           )}
           {view === "insights" && (
-            <>
+            <div className="insights-view">
               <div className="insights-summary">
                 <div>
                   <span className="eyebrow">THIS MONTH'S BIGGEST CATEGORY</span>
@@ -870,7 +870,7 @@ export default function App() {
                     </button>
                   ))}
               </section>
-            </>
+            </div>
           )}
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>

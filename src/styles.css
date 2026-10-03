@@ -3527,3 +3527,42 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 :root[data-theme="dark"] .card-purchases summary { color: var(--teal); }
 :root[data-theme="dark"] .new-pocket { border-color: var(--line); color: var(--muted); }
 :root[data-theme="dark"] .new-pocket strong { color: var(--ink); }
+
+/* Give Insights the same calm reading rhythm as the rest of Saku. */
+.insights-view { display: grid; gap: 24px; }
+.insights-view .insights-summary { border: 0; border-radius: 20px; padding: 30px 32px; background: var(--accent-soft); color: var(--teal); }
+.insights-view .insights-summary h2 { color: var(--ink); font-weight: 700; line-height: 1.16; }
+.insights-view .insights-summary p, .insights-view .eyebrow { color: var(--muted); line-height: 1.55; }
+.insights-view .insight-stats { margin: 0; gap: 16px; }
+.insights-view .insight-stats > div { border: 1px solid var(--line); padding: 22px 24px; min-width: 0; }
+.insights-view .insight-stats svg { color: var(--teal); margin-bottom: 15px; }
+.insights-view .insight-stats span { color: var(--muted); font-size: 12px; }
+.insights-view .insight-stats strong { color: var(--ink); font-weight: 700; margin: 9px 0; font-variant-numeric: tabular-nums; }
+.insights-view .insight-stats small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.insights-view .charts-grid { margin: 0; gap: 16px; }
+.insights-view .chart-panel { padding: 24px; }
+.insights-view .chart-panel h2 { color: var(--ink); font-size: 17px; }
+.insights-view .chart-legend { color: var(--muted); font-size: 11px; }
+.insights-view .budget-breakdown { margin: 0; padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
+.insights-view .budget-breakdown > h2 { margin: 0 0 14px; color: var(--ink); }
+.insights-view .breakdown-header { color: var(--muted); }
+.insights-view .breakdown-row { color: var(--ink); }
+.insights-view .breakdown-row:hover { background: var(--surface-muted); }
+@media (max-width: 760px) {
+  .insights-view { gap: 16px; }
+  .insights-view .insights-summary { padding: 23px 22px; }
+  .insights-view .insight-stats { gap: 10px; }
+  .insights-view .insight-stats > div { grid-template-columns: 27px minmax(0, 1fr) auto; column-gap: 10px; padding: 18px; }
+  .insights-view .insight-stats svg { margin: 0; }
+  .insights-view .insight-stats span { font-size: 12px; }
+  .insights-view .insight-stats strong { font-size: 19px; margin: 0; }
+  .insights-view .insight-stats small { font-size: 10px; }
+  .insights-view .chart-panel { padding: 21px 19px; }
+  .insights-view .budget-breakdown { padding: 20px 17px; }
+}
+@media (max-width: 370px) {
+  .insights-view .insight-stats > div { grid-template-columns: 23px minmax(0, 1fr); }
+  .insights-view .insight-stats strong { grid-column: 2; grid-row: auto; text-align: left; }
+  .insights-view .insight-stats small { grid-column: 2; }
+  .insights-view .chart-panel .section-heading { flex-wrap: wrap; gap: 9px; }
+}
