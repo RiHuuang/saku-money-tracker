@@ -148,9 +148,13 @@ export default function App() {
     const scoped = await hasUserData(state.user.id);
     const local = scoped ? await loadData(state.user.id) : await loadLegacyData();
     if (!scoped) await loadData(state.user.id);
-    let remote: Data | null = null;
-    try { const result = await pullCloud(); remote = result.data; setCloud(result.state); } catch { /* Cached login remains usable offline. */ }
     const useful = (value: Data | null) => Boolean(value && !value.demo && (value.transactions.length || value.pockets.length || value.creditCards.length || value.name !== "My"));
+    let remote: Data | null = null;
+    try { const result = await pullCloud(); remote = result.data; setCloud(result.state); }
+    catch {
+      if (!useful(local)) throw new Error("Could not reach Saku Cloud. Connect to the internet and retry before setting up a workspace. Your cloud data has not changed.");
+      // A saved local ledger remains available offline.
+    }
     if (useful(local) && useful(remote) && JSON.stringify(local) !== JSON.stringify(remote)) { setResolution({ local: local!, remote: remote! }); return; }
     const chosen = useful(local) ? local! : useful(remote) ? remote! : emptyData();
     await replaceData(chosen);
@@ -352,6 +356,7 @@ export default function App() {
   };
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <aside className="sidebar">
         <a
           className="brand"
@@ -445,7 +450,7 @@ export default function App() {
             </button>
           </div>
         </header>
-        <main>
+        <main id="main-content" tabIndex={-1}>
           <section className="page-heading">
             <div>
               {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={() => go("more")}><ChevronLeft size={17} /> More</button>}
@@ -1381,38 +1386,6 @@ function TransactionEditor({
               {data.creditCards.map((c) => <option key={c.id} value={`card:${c.id}`}>{c.name}</option>)}
             </ChoicePicker>
           </label>}
-          {cardId && type === "expense" && !special && <div className="form-columns">
-            <label className="field">Payment plan
-              <select value={installments === "1" ? "one" : "installments"} onChange={(e) => setInstallments(e.target.value === "one" ? "1" : "3")}>
-                <option value="one">One payment</option><option value="installments">Installments</option>
-              </select>
-            </label>
-            {installments !== "1" && <label className="field">Number of payments<input type="number" min={2} max={60} value={installments} onChange={(e) => setInstallments(e.target.value)} /></label>}
-            <label className="field">First due month<input type="month" value={firstDueMonth} onChange={(e) => setFirstDueMonth(e.target.value)} /></label>
-          </div>}
-          <div className="form-columns">
-            <label className="field">
-              Date
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                max={today()}
-                required
-              />
-            </label>
-            {(!cardId || special || type === "income") && <label className="field">
-              Account
-              <ChoicePicker
-                value={account}
-                onChange={(e) => setAccount(e.target.value)}
-              >
-                {data.accounts.map((a) => (
-                  <option key={a}>{a}</option>
-                ))}
-              </ChoicePicker>
-            </label>}
-          </div>
           {type === "expense" && (
             transaction?.kind !== "card_payment" &&
             <label className="field">
@@ -1431,6 +1404,38 @@ function TransactionEditor({
               <small>{pocket ? "Counts against this pocket." : "You can categorize this later."}</small>
             </label>
           )}
+          <div className="form-columns">
+            <label className="field">
+              Date
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                max={today()}
+                required
+              />
+            </label>
+            {(special || type === "income") && <label className="field">
+              Account
+              <ChoicePicker
+                value={account}
+                onChange={(e) => setAccount(e.target.value)}
+              >
+                {data.accounts.map((a) => (
+                  <option key={a}>{a}</option>
+                ))}
+              </ChoicePicker>
+            </label>}
+          </div>
+          {cardId && type === "expense" && !special && <div className="form-columns">
+            <label className="field">Payment plan
+              <select value={installments === "1" ? "one" : "installments"} onChange={(e) => setInstallments(e.target.value === "one" ? "1" : "3")}>
+                <option value="one">One payment</option><option value="installments">Installments</option>
+              </select>
+            </label>
+            {installments !== "1" && <label className="field">Number of payments<input type="number" min={2} max={60} value={installments} onChange={(e) => setInstallments(e.target.value)} /></label>}
+            <label className="field">First due month<input type="month" value={firstDueMonth} onChange={(e) => setFirstDueMonth(e.target.value)} /></label>
+          </div>}
           <details className="editor-more" open={moreOpen || Boolean(error)} onToggle={(event) => setMoreOpen(event.currentTarget.open)}><summary>More details <span>Sharing, repeat, quick entry and note</span></summary>
           {type === "expense" && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} /> Shared with others</label>}
           {shared && type === "expense" && !special && <div className="form-columns"><label className="field">People including you<input type="number" min={2} max={30} value={people} onChange={(e) => setPeople(e.target.value)} /></label><label className="field">Your share (Rp)<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={setOwnAmount} /></label><p className="editor-help">The full payment stays on your bank or card statement. Only your share uses your pocket budget.</p></div>}

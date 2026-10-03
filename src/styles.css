@@ -3548,6 +3548,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .insights-view .breakdown-header { color: var(--muted); }
 .insights-view .breakdown-row { color: var(--ink); }
 .insights-view .breakdown-row:hover { background: var(--surface-muted); }
+.skip-link { position: fixed; z-index: 100; top: -60px; left: 16px; padding: 11px 15px; border-radius: 10px; background: var(--teal); color: var(--action-ink); font-weight: 700; }
+.skip-link:focus { top: 12px; }
 @media (max-width: 760px) {
   .insights-view { gap: 16px; }
   .insights-view .insights-summary { padding: 23px 22px; }
