@@ -316,6 +316,11 @@ export default function Statements({
   }
   return (
     <>
+      <div className="check-steps" aria-label="Monthly check progress">
+        <span className={!review && !Object.keys(decisions).length ? "active" : ""}>1 Import</span>
+        <span className={review && !Object.keys(decisions).length ? "active" : ""}>2 Review</span>
+        <span className={Object.keys(decisions).length ? "active" : ""}>3 Confirm</span>
+      </div>
       <div className="check-intro">
         <span className="check-intro-icon">
           <FileCheck2 size={28} />

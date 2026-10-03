@@ -32,8 +32,8 @@ $env:SAKU_RELEASE_KEY_PASSWORD = [Net.NetworkCredential]::new("", $keySecret).Pa
 Set monotonically increasing release values in `%USERPROFILE%\.gradle\gradle.properties`, not the repository:
 
 ```properties
-SAKU_VERSION_CODE=1
-SAKU_VERSION_NAME=1.0.0
+SAKU_VERSION_CODE=2
+SAKU_VERSION_NAME=2.0.0
 ```
 
 Build and inspect the release:

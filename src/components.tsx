@@ -237,11 +237,13 @@ export function TransactionList({
   pockets,
   onEdit,
   compactView = false,
+  groupDates = false,
 }: {
   transactions: Transaction[];
   pockets: Pocket[];
   onEdit: (t: Transaction) => void;
   compactView?: boolean;
+  groupDates?: boolean;
 }) {
   if (!transactions.length)
     return (
@@ -252,12 +254,13 @@ export function TransactionList({
     );
   return (
     <div className={`transaction-list ${compactView ? "compact" : ""}`}>
-      {transactions.map((t) => {
+      {transactions.map((t, index) => {
         const p = pockets.find((p) => p.id === t.pocketId);
         return (
+          <div className="transaction-group-entry" key={t.id}>
+          {groupDates && (index === 0 || transactions[index - 1].date !== t.date) && <h3 className="transaction-date-heading">{new Date(`${t.date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</h3>}
           <button
             className="transaction-row"
-            key={t.id}
             onClick={() => onEdit(t)}
             aria-label={`Edit ${t.name}`}
           >
@@ -302,6 +305,7 @@ export function TransactionList({
             </span>
             <ChevronRight className="row-chevron" size={15} />
           </button>
+          </div>
         );
       })}
     </div>

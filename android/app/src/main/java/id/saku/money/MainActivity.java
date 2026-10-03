@@ -2,6 +2,7 @@ package id.saku.money;
 
 import com.getcapacitor.BridgeActivity;
 import android.os.Bundle;
+import android.content.res.Configuration;
 
 public class MainActivity extends BridgeActivity {
     public static volatile boolean visible = false;
@@ -18,6 +19,14 @@ public class MainActivity extends BridgeActivity {
     public void onStart() {
         super.onStart();
         visible = true;
+        SakuAppearance.INSTANCE.applyChrome(this);
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        SakuAppearance.INSTANCE.applyChrome(this);
+        SakuWidgets.INSTANCE.refreshAll(this);
     }
 
     @Override

@@ -4,6 +4,6 @@ const config: CapacitorConfig = {
   appName: "Saku",
   webDir: "dist",
   loggingBehavior: "none",
-  android: { backgroundColor: "#f5f7f8" },
+  android: { backgroundColor: "#f7f6f0" },
 };
 export default config;

@@ -21,6 +21,10 @@ import java.util.Locale
 
 class QuickEntryActivity : AppCompatActivity() {
     private val spacing by lazy { (12 * resources.displayMetrics.density).toInt() }
+    private val dark by lazy { SakuAppearance.isDark(this) }
+    private val ink get() = if (dark) 0xffedf3ed.toInt() else 0xff203b33.toInt()
+    private val muted get() = if (dark) 0xffaec3b5.toInt() else 0xff60746a.toInt()
+    private val accent get() = if (dark) 0xff92d3b1.toInt() else 0xff176b55.toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,7 +36,7 @@ class QuickEntryActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(spacing * 2, spacing * 2, spacing * 2, spacing * 2)
-            setBackgroundResource(R.drawable.quick_entry_dialog_background)
+            setBackgroundResource(if (dark) R.drawable.quick_entry_dark_dialog_background else R.drawable.quick_entry_dialog_background)
             clipToOutline = true
             elevation = spacing.toFloat()
         }
@@ -40,11 +44,11 @@ class QuickEntryActivity : AppCompatActivity() {
             text = when (mode) { "income" -> "Quick income"; "transfer" -> "Quick transfer"; else -> "Quick expense" }
             textSize = 21f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(0xff243b38.toInt())
+            setTextColor(ink)
         })
         val amount = field("Amount (Rp)", true).also { root.addView(it) }
         val description = if (mode == "transfer") null else field("Description (optional)").also { root.addView(it) }
-        val error = TextView(this).apply { setTextColor(0xffb13e51.toInt()); visibility = TextView.GONE }.also { root.addView(it) }
+        val error = TextView(this).apply { setTextColor(if (dark) 0xfff1939c.toInt() else 0xffad4051.toInt()); visibility = TextView.GONE }.also { root.addView(it) }
         val accountIds = data.accounts
         val paymentIds = if (mode == "expense") data.accounts + data.cards.map { it.id } else accountIds
         val paymentLabels = if (mode == "expense") data.accounts + data.cards.map { "Card · ${it.name}" } else accountIds
@@ -57,13 +61,13 @@ class QuickEntryActivity : AppCompatActivity() {
         if (pocket != null) select(pocket, pocketIds, prefs.getString("lastPocket:${data.userId}", null))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, spacing, 0, 0) }
         actions.addView(Button(this).apply {
-            text = "Cancel"; isAllCaps = false; setTextColor(0xff177f72.toInt())
-            setBackgroundResource(R.drawable.quick_entry_secondary_button)
+            text = "Cancel"; isAllCaps = false; setTextColor(accent)
+            setBackgroundResource(if (dark) R.drawable.widget_dark_soft_background else R.drawable.quick_entry_secondary_button)
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = spacing / 2 })
         actions.addView(Button(this).apply {
-            text = "Save"; isAllCaps = false; setTextColor(0xffffffff.toInt())
-            setBackgroundResource(R.drawable.quick_entry_primary_button)
+            text = "Save"; isAllCaps = false; setTextColor(if (dark) 0xff10231a.toInt() else 0xffffffff.toInt())
+            setBackgroundResource(if (dark) R.drawable.widget_dark_action_background else R.drawable.quick_entry_primary_button)
             setOnClickListener {
                 val value = amount.text.toString().replace(",", "").toLongOrNull()
                 if (value == null) { showError(error, "Enter a whole rupiah amount greater than zero"); return@setOnClickListener }
@@ -89,7 +93,7 @@ class QuickEntryActivity : AppCompatActivity() {
 
     private fun field(hint: String, amount: Boolean = false) = EditText(this).apply {
         this.hint = hint
-        setTextColor(0xff243b38.toInt()); setHintTextColor(0xff71817e.toInt())
+        setTextColor(ink); setHintTextColor(muted)
         setPadding(spacing, spacing, spacing, spacing)
         if (amount) {
             inputType = InputType.TYPE_CLASS_NUMBER
@@ -109,7 +113,7 @@ class QuickEntryActivity : AppCompatActivity() {
     }
     private fun spinner(label: String, values: List<String>): Pair<LinearLayout, Spinner> {
         val spinner = Spinner(this).apply { adapter = ArrayAdapter(this@QuickEntryActivity, android.R.layout.simple_spinner_dropdown_item, values) }
-        return LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, spacing / 2, 0, 0); addView(TextView(this@QuickEntryActivity).apply { text = label; setTextColor(0xff667673.toInt()) }); addView(spinner) } to spinner
+        return LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, spacing / 2, 0, 0); addView(TextView(this@QuickEntryActivity).apply { text = label; setTextColor(muted) }); addView(spinner) } to spinner
     }
     private fun select(spinner: Spinner, values: List<String>, value: String?) { values.indexOf(value).takeIf { it >= 0 }?.let(spinner::setSelection) }
     private fun showError(view: TextView, message: String) { view.text = message; view.visibility = TextView.VISIBLE }

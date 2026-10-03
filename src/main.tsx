@@ -5,9 +5,12 @@ import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
 import "@fontsource/dm-sans/700.css";
 import App from "./App";
+import { loadTheme, paintTheme, watchSystemTheme } from "./appearance";
 import "./styles.css";
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+void loadTheme().catch(() => "system" as const).then((preference) => {
+  paintTheme(preference);
+  watchSystemTheme();
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode><App /></React.StrictMode>,
+  );
+});

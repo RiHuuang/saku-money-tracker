@@ -24,4 +24,13 @@ class HomeWidgetPlugin : Plugin() {
         WidgetCloudSync.schedule(context)
         call.resolve()
     }
+
+    @PluginMethod
+    fun applyAppearance(call: PluginCall) {
+        bridge.activity.runOnUiThread {
+            SakuAppearance.applyChrome(bridge.activity)
+            SakuWidgets.refreshAll(context)
+            call.resolve()
+        }
+    }
 }
