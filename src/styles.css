@@ -3586,7 +3586,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .transaction-filters select { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; min-height: 44px; padding: 8px 10px; max-width: none; font-size: 12px; }
 .donut svg circle:first-child { stroke: var(--surface-muted); }
 @media (max-width: 760px) {
+  body { min-width: 0; }
   body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--surface); z-index: 100; pointer-events: none; }
+  .heading-actions { flex-wrap: wrap; }
+  .balance-panel > p { font-size: 11px; line-height: 1.45; }
+  .balance-footer { font-size: 11px; line-height: 1.35; }
+  .balance-footer strong { font-size: 12px; font-weight: 600; }
+  .balance-panel .availability-explainer { font-size: 11px; }
   .check-intro { padding: 19px; gap: 13px; }
   .check-intro p { font-size: 12px; }
   .pdf-import { padding: 21px 19px; }
