@@ -3550,6 +3550,64 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .insights-view .breakdown-row:hover { background: var(--surface-muted); }
 .skip-link { position: fixed; z-index: 100; top: -60px; left: 16px; padding: 11px 15px; border-radius: 10px; background: var(--teal); color: var(--action-ink); font-weight: 700; }
 .skip-link:focus { top: 12px; }
+.unassigned-dot { background: var(--muted); }
+
+/* Shared page rhythm for review, planning, and transaction filters. */
+.check-intro { margin: 0 0 20px; padding: 23px 25px; background: var(--accent-soft); border-radius: 18px; align-items: flex-start; }
+.check-intro-icon { background: var(--surface); color: var(--teal); }
+.check-intro h2 { color: var(--ink); }
+.check-intro p { color: var(--muted); font-size: 13px; }
+.private-pill { color: var(--teal); }
+.subtle-badge { background: var(--surface-muted); color: var(--teal); }
+.pdf-import { margin: 0 0 20px; padding: 24px 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
+.pdf-import .section-heading { margin-bottom: 16px; }
+.pdf-import h2 { color: var(--ink); }
+.import-note, .model-controls p, .pdf-source span, .pdf-source-list { color: var(--muted); line-height: 1.6; }
+.import-note { font-size: 13px; }
+.model-controls strong, .pdf-source strong { color: var(--teal); }
+.pdf-candidate, .statement-file, .check-stats > div { background: var(--surface); border-color: var(--line); border-radius: 15px; }
+.file-heading, .file-heading svg { color: var(--teal); }
+.file-heading strong, .check-stats strong, .review-swipe-card h3, .review-deck-done h3 { color: var(--ink); }
+.file-heading small, .column-mapping, .column-mapping p, .check-stats span, .review-deck-hints, .review-swipe-card > p, .review-source span, .review-source p, .review-deck-done p { color: var(--muted); }
+.review-deck-launch { margin: 22px 0; padding: 19px 21px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.review-deck-launch strong { color: var(--ink); font-size: 14px; }
+.review-deck-launch span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.review-swipe-card { background: var(--surface); border-color: var(--line); border-radius: 17px; box-shadow: none; }
+.review-swipe-card h3 { font-size: 20px; }
+.review-source { border-color: var(--line); }
+.review-row select { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.import-zone { background: var(--surface-muted); border-color: var(--line); border-radius: 18px; padding: 34px 25px; }
+.import-zone h3 { color: var(--ink); }
+.import-zone p { color: var(--muted); font-size: 12px; }
+.budget-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 22px 25px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
+.budget-overview span { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.budget-overview strong { color: var(--ink); font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.plans-empty { margin: 0; padding: 25px; border: 1px dashed var(--line); border-radius: 15px; background: var(--surface); line-height: 1.6; }
+.transaction-filters select { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; min-height: 44px; padding: 8px 10px; max-width: none; font-size: 12px; }
+.donut svg circle:first-child { stroke: var(--surface-muted); }
+@media (max-width: 760px) {
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--surface); z-index: 100; pointer-events: none; }
+  .check-intro { padding: 19px; gap: 13px; }
+  .check-intro p { font-size: 12px; }
+  .pdf-import { padding: 21px 19px; }
+  .import-zone { padding: 30px 20px; }
+  .import-zone p, .import-note { font-size: 12px; }
+  .budget-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 20px; }
+  .budget-overview > div:last-child { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 15px; }
+  .budget-overview span { font-size: 11px; min-height: 0; max-width: none; }
+  .budget-overview strong { font-size: 21px; }
+  .appearance-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .appearance-options button { padding-inline: 8px; }
+  .button, .text-button, .segmented button, .export-menu summary, .export-menu > div button, .back-to-more, .editor-more summary { min-height: 48px; }
+  .segmented button { min-width: 48px; }
+  .icon-button, .month-picker .icon-button, .quick-remove { min-width: 48px; width: 48px; min-height: 48px; height: 48px; }
+  .month-picker { min-height: 48px; height: 48px; }
+  .month-picker label { min-height: 48px; }
+  .search-field input, .field input:not([type="checkbox"]), .field select, .inline-form input, .transaction-filters select { min-height: 48px; }
+  .color-swatches { flex-wrap: wrap; gap: 6px; }
+  .color-swatches button, .icon-choices button { min-width: 48px; min-height: 48px; }
+  .top-avatar { width: 48px; height: 48px; }
+}
 @media (max-width: 760px) {
   .insights-view { gap: 16px; }
   .insights-view .insights-summary { padding: 23px 22px; }

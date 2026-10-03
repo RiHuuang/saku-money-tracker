@@ -1862,7 +1862,7 @@ function SettingsView({
         <h2>Appearance</h2>
         <p>Choose how Saku looks on this device and its widgets.</p>
         <div className="appearance-options" role="group" aria-label="Appearance">
-          {(["system", "light", "dark"] as const).map((option) => <button key={option} type="button" aria-pressed={themePreference === option} className={themePreference === option ? "selected" : ""} onClick={() => onThemeChange(option)}>{option === "system" ? "Use device setting" : option === "light" ? "Light" : "Dark"}</button>)}
+          {(["system", "light", "dark"] as const).map((option) => <button key={option} type="button" aria-pressed={themePreference === option} className={themePreference === option ? "selected" : ""} onClick={() => onThemeChange(option)}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</button>)}
         </div>
       </section>
       <section>

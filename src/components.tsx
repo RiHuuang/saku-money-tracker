@@ -393,6 +393,7 @@ export function SpendingRing({
   const parts = pockets
     .filter((p) => p.spent > 0)
     .sort((a, b) => b.spent - a.spent);
+  const unassigned = Math.max(0, total - parts.reduce((sum, pocket) => sum + pocket.spent, 0));
   return (
     <div className="spending-content">
       <div className="donut">
@@ -445,8 +446,9 @@ export function SpendingRing({
             </div>
           ))
         ) : (
-          <p className="muted">No spending yet.</p>
+          total === 0 && <p className="muted">No spending yet.</p>
         )}
+        {unassigned > 0 && <div><span className="legend-dot unassigned-dot" /><span>Unassigned spending</span><strong>{Math.round((unassigned / total) * 100)}%</strong></div>}
         {parts.length > 5 && (
           <small className="muted">+ {parts.length - 5} other pockets</small>
         )}
