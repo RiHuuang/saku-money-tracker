@@ -321,6 +321,13 @@ input[type="checkbox"] {
 .top-avatar {
   width: 31px;
   height: 31px;
+  min-width: 31px;
+  aspect-ratio: 1;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  overflow: hidden;
   background: #f1e8de;
   color: #867367;
   border-radius: 50%;
@@ -674,7 +681,17 @@ main {
     border-color 0.2s,
     transform 0.2s;
   min-width: 0;
+  width: 100%;
 }
+.pocket-card-shell { position: relative; min-width: 0; }
+.pocket-card-actions { position: absolute; top: 12px; right: 12px; z-index: 2; }
+.pocket-menu-trigger { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--surface); color: var(--ink); }
+.pocket-menu { position: absolute; top: 40px; right: 0; min-width: 150px; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 9px 25px #143a292d; z-index: 5; }
+.pocket-menu button { display: block; width: 100%; min-height: 44px; text-align: left; padding: 8px 12px; border-radius: 7px; }
+.pocket-menu button:hover { background: var(--surface-muted); }
+.pocket-card-shell.menu-open .pocket-card { animation: pocket-wiggle .28s ease-in-out 2; }
+@keyframes pocket-wiggle { 25% { transform: rotate(-1deg); } 75% { transform: rotate(1deg); } }
+@media (prefers-reduced-motion: reduce) { .pocket-card-shell.menu-open .pocket-card { animation: none; } }
 .pocket-card:hover {
   border-color: var(--pocket-color);
   transform: translateY(-2px);
@@ -3285,6 +3302,10 @@ main {
 .plans-form > p { color: #667679; font-size: 13px; }
 .plans-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin: 15px 0; }
 .rule-row, .due-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 13px; border-bottom: 1px solid #e3eae8; padding: 12px 0; }
+.rule-row { grid-template-columns: auto minmax(0, 1fr) minmax(110px, auto) auto; }
+.rule-description, .rule-money { min-width: 0; }
+.rule-description strong, .rule-description small { overflow-wrap: anywhere; }
+.rule-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .rule-row > div:nth-child(2), .due-row > div { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
 .rule-row strong, .due-row strong { color: #173e40; }
 .rule-money { display: flex; flex-direction: column; text-align: right; gap: 3px; }
@@ -3299,6 +3320,9 @@ main {
   .daily-strip { grid-template-columns: 1fr; gap: 14px; }
   .credit-card-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rule-row, .due-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .rule-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .rule-row .rule-money { grid-column: 2; text-align: left; }
+  .rule-row .rule-actions { grid-column: 2; justify-content: flex-start; }
   .rule-row .text-button, .due-row .button { grid-column: 2 / -1; justify-self: start; }
   .due-row .text-button { grid-column: 2 / -1; justify-self: start; }
   .plans-fields { grid-template-columns: 1fr; }
@@ -3368,6 +3392,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .muted, .field, .section-heading p, .page-heading > div > p, .metric-panel > p, .metric-panel > small, .pocket-card h3, .pocket-card-bottom, .transaction-description > span, .transaction-date, .transaction-amount small, .settings-content section > p, .editor-help, .plans-empty, .credit-card-top small, .credit-card-values span, .rule-row small, .due-row small { color: var(--muted); }
 .summary-grid { grid-template-columns: 1.55fr 1fr 1fr; gap: 13px; }
 .balance-panel { position: relative; background: radial-gradient(circle at 95% -20%, #65ac8b 0, transparent 48%), linear-gradient(135deg, #104d3f 0%, #176b55 70%, #278163 100%); border-radius: 24px 24px 24px 8px; padding: 25px 26px 23px; box-shadow: 0 15px 32px #174e3930; }
+.balance-action { display: block; width: 100%; border: 0; text-align: left; color: inherit; cursor: pointer; }
+.balance-action:focus-visible { outline: 3px solid var(--teal); outline-offset: 4px; }
+.balance-cta { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; color: #e5fff3; font-weight: 700; }
+.pocket-activity { display: grid; gap: 18px; }
+.pocket-activity-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pocket-activity-summary > div, .pocket-move { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.pocket-activity-summary span { display: block; color: var(--muted); font-size: 12px; }
+.pocket-activity-summary strong { display: block; margin-top: 6px; overflow-wrap: anywhere; }
+.pocket-funding-note { color: var(--muted); font-size: 13px; }
+.pocket-move { display: flex; justify-content: space-between; gap: 12px; }
+@media (max-width: 600px) { .pocket-activity-summary { grid-template-columns: 1fr; } }
 .balance-panel::after { content: ""; position: absolute; width: 190px; height: 190px; border: 1px solid #ffffff22; border-radius: 50%; right: -70px; bottom: -115px; pointer-events: none; }
 .balance-panel .balance-number { font-variant-numeric: tabular-nums; letter-spacing: -.045em; }
 .balance-panel .balance-footer { position: relative; z-index: 1; }
@@ -3457,6 +3492,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .ledger-header { color: var(--muted); }
 .ledger-total, .ledger-total strong { color: var(--ink); }
 .export-menu { position: relative; flex: none; }
+.export-menu[open] { z-index: 20; }
 .export-menu summary { list-style: none; cursor: pointer; }
 .export-menu summary::-webkit-details-marker { display: none; }
 .export-menu > div { position: absolute; top: calc(100% + 7px); right: 0; min-width: 210px; z-index: 5; background: var(--surface); box-shadow: 0 9px 25px #143a292d; border: 1px solid var(--line); border-radius: 12px; padding: 5px; }

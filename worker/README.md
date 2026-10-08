@@ -1,0 +1,46 @@
+# Saku Cloudflare rollout
+
+**Current gate:** [FREE_TIER_GATE.md](FREE_TIER_GATE.md) records the deployed import, measurements, and blockers. Do not cut over while that gate is blocked.
+
+The Worker serves the browser app and API from one `workers.dev` host. D1 stores users and hashed sessions. Private R2 Standard storage holds snapshots and avatars. The existing Google OAuth project, Drive folder, and Sheet are retained. `PUBLIC_LOGIN_ENABLED` controls sign-in; `WRITE_ENABLED` independently gates snapshot, profile, account-deletion, and Drive mutations. Both remain unset on production during migration validation. Isolated staging temporarily enables both for acceptance tests; its bindings contain no imported production account.
+
+Backups retain the 10,000,000-byte capacity. Updated browser and Android clients transfer snapshots larger than 250 KB as immutable R2 parts, then commit a manifest with revision-conflict protection. Downloads and Sheet mirroring also fetch bounded parts. The widget resumes pending Sheet batches while the app is closed. Account deletion is resumable: the API returns 202 while it removes bounded batches of R2 objects, and the client waits for the final 200 before clearing its session. A five-minute Cron trigger resumes interrupted deletion.
+
+Profile photos are resized on the client and uploaded as binary WebP with `PUT /v2/me/avatar?name=...`. The Worker validates the static container and dimensions up to 512 pixels, keeps the 3 MB photo byte bound, and uses no image decoder. JSON control requests have a 150 KB bound; larger legacy JSON/base64 photos return 413 and must use the binary route. Google photos are fetched only on authenticated `/v1/me/avatar` reads, so a missing photo cannot fail sign-in; stored custom and migrated R2 photos remain available.
+
+## Provision
+
+1. Enable R2 in the Cloudflare dashboard. Create a private Standard bucket named `saku-data` with `npx wrangler r2 bucket create saku-data`. The `saku` D1 database ID is already set in `wrangler.jsonc`.
+2. Run `npx wrangler d1 execute saku --remote --file worker/schema.sql`.
+3. Put `GOOGLE_OAUTH_CLIENT_SECRET` and the **same existing** `TOKEN_ENCRYPTION_KEY` in Worker secrets with `npx wrangler secret put NAME`. Do not print or save the values in source files. Changing the encryption key would make migrated Google refresh tokens unreadable.
+4. Set both browser callbacks `https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev/auth/google/callback` and `https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev/auth/google/drive/callback` on the existing Google Web OAuth client. Basic sign-in requests identity scopes; Drive consent is a separate, recoverable action. Configure the public OAuth audience and required homepage, privacy, terms, and deletion URLs. Google production verification may reject a shared `workers.dev` domain; treat that as a launch blocker.
+5. Build and deploy with `npm run build` and `npx wrangler deploy`. Leave public login and writes disabled until the appropriate cutover checks pass.
+
+## Recovery export and import
+
+The migration tool needs Google Application Default Credentials with Firestore and Cloud Storage read permission. Set `GOOGLE_CLOUD_PROJECT` and `SAKU_BUCKET` only if they differ from the current project and bucket. Run `node server/migrate-to-cloudflare.mjs export` to save a local ignored `output/cloudflare-migration` recovery copy. Its manifest contains private user metadata and the object files contain financial records. Keep the folder private and backed up securely.
+
+Pause Cloud Run writes before the final export. Run the export again under that pause, then `node server/migrate-to-cloudflare.mjs verify` to check object hashes and current ledger formats. Run `node server/migrate-to-cloudflare.mjs compare-source` to compare all account metadata and every source object checksum. Run `node server/migrate-to-cloudflare.mjs import` to copy and independently checksum R2 objects, then verify imported D1 account revisions and snapshot paths. The import deliberately omits old sessions; users sign in again. Test at least one actual restored ledger before enabling writes. Retain the recovery export.
+
+The current Cloud Run IAM policy has only `allUsers` as invoker. Once every gate below passes and the brief sync pause is announced, freeze its writes by removing that binding:
+
+```powershell
+gcloud run services remove-iam-policy-binding saku-api --member=allUsers --role=roles/run.invoker --project=saku-money-tracker --region=us-central1
+```
+
+Confirm an unauthenticated old-API sync request no longer reaches the service. Then re-export, verify, import, and compare the imported account and object checksums while Cloudflare login is still closed. The importer refuses to run if Cloudflare public login is open or any Cloudflare sessions exist. If validation fails before Cloudflare accepts writes, restore the source with `gcloud run services add-iam-policy-binding saku-api --member=allUsers --role=roles/run.invoker --project=saku-money-tracker --region=us-central1` and leave Cloudflare login closed. After import, enable `PUBLIC_LOGIN_ENABLED=true` with `WRITE_ENABLED` still unset to prove real sign-in and read-only restore; then enable `WRITE_ENABLED=true` only after all gates pass. Old Android builds must be unable to resume writes to GCP after successful cutover.
+
+## Cutover checks
+
+- Set `PUBLIC_LOGIN_ENABLED=true` as a Worker secret only after import and runtime tests pass. Keep `WRITE_ENABLED` unset until production login and read-only restore pass. Set the same Worker URL in `.env.production` for Android foreground and widget code; build and distribute the updated app before opening writes.
+- Validate Google login on Android and web, relaunch, expired-access refresh, logout, account switching, sync conflict, photo, Sheet mirror, widget sync, and deletion. Test an account outside the OAuth test-user list before calling access public.
+- Measure Worker CPU for cold login, avatar, representative/maximum 10 MB backups, full mirroring and account deletion. Bounded deletion has passed staging functional tests, and the 250 KB transfer trial restored two full-size backups alongside photo and deletion traffic. Full 150-row and 100-row Sheet mirrors functionally passed but exceeded 10 ms CPU. The 64-row limit is deployed; its first maximum trial was interrupted by a local network reset, so a complete trial is still required. Real staging Google login passed on browser and Android, but the earlier Android login used 12 ms CPU. The current static JOSE imports and deferred Google photo retrieval still need cold-login and avatar measurements. See the gate document for evidence and measurement limits. Do not reduce the existing 10 MB capacity silently.
+- Monitor Cloudflare Worker errors/CPU, D1 rows and storage, and R2 Standard storage and operation usage. R2 can bill beyond its free allowance. Present old GCP resources for deletion only after verified cutover and a retained recovery export.
+
+Read-only usage check: run `node worker/live-usage.mjs` after `npx wrangler whoami`. It reads daily account-wide Worker requests/errors and D1 rows/storage, monthly R2 operations, and the latest available R2 storage samples. Data comes from Cloudflare's [D1 analytics](https://developers.cloudflare.com/d1/observability/metrics-analytics/) and [R2 analytics](https://developers.cloudflare.com/r2/platform/metrics-analytics/); it can lag current traffic. Both production and staging consume the account's quotas. `worker/live-metrics.mjs` and sanitized `worker/live-tail.mjs` provide the CPU evidence for the cutover gate. These are on-demand checks, not configured notifications.
+
+Local check: `npx wrangler d1 execute saku --local --file worker/schema.sql`, `npx wrangler dev`, then `node worker/local-write-gate.mjs` in another shell. For the full local sync smoke, run `npx wrangler dev --var WRITE_ENABLED:true` and `node worker/local-smoke.mjs`. Both tests use isolated synthetic accounts and no Google credentials.
+
+Sheet integration check: `node worker/local-sheet-integration.mjs` creates one disposable Google Sheet, uses local D1/R2 with a temporary account and local-only secret file, then trashes the Sheet and removes the temporary account and secret file. The same test can run on the isolated Free-tier staging Worker with `SAKU_STAGE=1`; `SAKU_LARGE_SHEET=1` exercises 250 rows with long notes. Staging is configured in `wrangler.stage.jsonc`; public login is disabled by default and temporarily enabled by CLI override for real login tests. Its D1/R2 bindings are separate from production. Never enable production `WRITE_ENABLED` to run a mirror test.
+
+For an isolated Android login build, set `VITE_SAKU_API_URL=https://saku-stage.saku-money-manager.workers.dev` in the build shell before `npm run android:sync` and Gradle. Both the Vite foreground client and native widget use this value; Gradle rejects a conflicting `SAKU_API_URL`. Keep `.env.production` on the authoritative API until cutover. Copy the resulting debug APK to a clearly named staging artifact and restore the ordinary production assets before building a release.

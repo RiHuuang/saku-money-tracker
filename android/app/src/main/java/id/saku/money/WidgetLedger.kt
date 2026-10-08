@@ -26,7 +26,7 @@ object WidgetLedger {
     const val WIDGET_STORAGE = "SakuWidgets"
     const val REVISION_KEY = "ledgerRevision"
     private const val MAX_AMOUNT = 1_000_000_000_000L
-    private const val FAVORITE_TAP_GUARD_MS = 1_500L
+    private const val FAVORITE_TAP_GUARD_MS = 15_000L
 
     private fun capacitor(context: Context) = context.getSharedPreferences(CAPACITOR_STORAGE, Context.MODE_PRIVATE)
     fun widgetPreferences(context: Context) = context.getSharedPreferences(WIDGET_STORAGE, Context.MODE_PRIVATE)
@@ -70,7 +70,7 @@ object WidgetLedger {
         val widgetPrefs = widgetPreferences(context)
         val previousAt = widgetPrefs.getLong("favoriteAt:$guardKey", Long.MIN_VALUE)
         val previousId = widgetPrefs.getString("favoriteId:$guardKey", "").orEmpty()
-        if (previousAt >= 0 && nowMs >= previousAt && nowMs - previousAt < FAVORITE_TAP_GUARD_MS && find(data.ledger.optJSONArray("transactions"), previousId) != null) {
+        if (previousAt >= 0 && nowMs >= previousAt && nowMs - previousAt < FAVORITE_TAP_GUARD_MS) {
             return@runCatching WidgetFavoriteAdd(previousId, false)
         }
         val amount = wholeAmount(favorite.opt("amount")) ?: error("Favorite amount is invalid")

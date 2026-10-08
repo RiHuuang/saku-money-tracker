@@ -81,12 +81,19 @@ import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
 import { backDestination, moreViews, type View } from "./navigation";
 import {
+  connectGoogleDrive,
+  adoptCloudSnapshot,
   loadAvatarUrl,
   loadCloudState,
+  refreshCloudMetadata,
+  resolveCloudWithLocal,
+  liveTicket,
+  liveUrl,
   AGREEMENT_VERSION,
   deleteCloudAccount,
   legalUrl,
   markCloudDirty,
+  mirrorCloud,
   pullCloud,
   pushCloud,
   signInGoogle,
@@ -96,8 +103,9 @@ import {
 } from "./cloud";
 
 type Edit =
-  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite }
+  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string }
   | { type: "pocket"; value?: Pocket }
+  | { type: "pocket_delete"; value: Pocket }
   | { type: "account_transfer"; value?: Transaction }
   | { type: "pocket_transfer" }
   | { type: "start" }
@@ -114,6 +122,9 @@ const mobileNavigation = [
   navigation[0], navigation[1], navigation[2], navigation[3],
   { id: "more", label: "More", icon: Menu },
 ] as const;
+const pocketHasReferences = (data: Data, pocketId: string) =>
+  data.transactions.some((t) => t.pocketId === pocketId) || data.recurring.some((r) => r.pocketId === pocketId) ||
+  data.favorites.some((f) => f.pocketId === pocketId) || data.pocketTransfers.some((move) => move.fromPocketId === pocketId || move.toPocketId === pocketId);
 export default function App() {
   const [data, setData] = useState<Data | null>(null),
     [loadError, setLoadError] = useState(""),
@@ -124,21 +135,28 @@ export default function App() {
     [busy, setBusy] = useState(false),
     [cloud, setCloud] = useState<CloudState | null>(null),
     [loginBusy, setLoginBusy] = useState(false),
-    [resolution, setResolution] = useState<{ local: Data; remote: Data } | null>(null),
+    [resolution, setResolution] = useState<{ local: Data; remote: Data; remoteState?: CloudState } | null>(null),
     [avatarUrl, setAvatarUrl] = useState("");
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [previousView, setPreviousView] = useState<View>("overview");
+  const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
+  const [pocketAllHistory, setPocketAllHistory] = useState(false);
   const saving = useRef(false);
   const widgetRevision = useRef(0);
   const pendingSync = useRef<Data | null>(null);
   const activeSync = useRef<Data | null>(null);
   const syncRunning = useRef(false);
+  const mirrorRunning = useRef(false);
+  const latest = useRef({ data, cloud, edit });
+  latest.current = { data, cloud, edit };
+  const reconcileRef = useRef<(() => Promise<void>) | null>(null);
+  const selectedPocket = data?.pockets.find((p) => p.id === selectedPocketId);
+  function openPocket(id: string) { go("pockets"); setSelectedPocketId(id); setPocketAllHistory(false); }
   useEffect(() => {
     void (async () => {
       try {
         const state = await loadCloudState();
         setCloud(state);
-        if (!Capacitor.isNativePlatform()) { setData(await loadData()); return; }
         if (state.signedIn && state.user?.id) await openWorkspace(state);
       } catch { setLoadError("Saku could not open your protected workspace. Your saved data has been left untouched."); }
     })();
@@ -146,18 +164,23 @@ export default function App() {
   async function openWorkspace(state: CloudState) {
     if (!state.user?.id) return;
     const scoped = await hasUserData(state.user.id);
-    const local = scoped ? await loadData(state.user.id) : await loadLegacyData();
+    const local = scoped ? await loadData(state.user.id) : Capacitor.isNativePlatform() ? await loadLegacyData() : null;
     if (!scoped) await loadData(state.user.id);
     const useful = (value: Data | null) => Boolean(value && !value.demo && (value.transactions.length || value.pockets.length || value.creditCards.length || value.name !== "My"));
-    let remote: Data | null = null;
-    try { const result = await pullCloud(); remote = result.data; setCloud(result.state); }
+    let remote: Data | null = null, remoteState: CloudState | undefined;
+    try { const result = await pullCloud(); remote = result.data; remoteState = result.state; }
     catch {
       if (!useful(local)) throw new Error("Could not reach Saku Cloud. Connect to the internet and retry before setting up a workspace. Your cloud data has not changed.");
       // A saved local ledger remains available offline.
     }
-    if (useful(local) && useful(remote) && JSON.stringify(local) !== JSON.stringify(remote)) { setResolution({ local: local!, remote: remote! }); return; }
-    const chosen = useful(local) ? local! : useful(remote) ? remote! : emptyData();
+    const newerCleanCloud = scoped && !state.dirty && remoteState && remoteState.revision > state.revision && useful(remote);
+    if (useful(local) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
+      setResolution({ local: local!, remote: remote || emptyData(), remoteState });
+      return;
+    }
+    const chosen = newerCleanCloud ? remote! : useful(local) ? local! : useful(remote) ? remote! : emptyData();
     await replaceData(chosen);
+    if (remoteState && !remoteState.dirty && remote && JSON.stringify(chosen) === JSON.stringify(remote)) setCloud(await adoptCloudSnapshot(remoteState));
     setData(chosen);
     if (!useful(chosen)) setEdit({ type: "start" });
   }
@@ -177,6 +200,74 @@ export default function App() {
     void queueSync(data);
   }, [data, cloud?.signedIn, cloud?.dirty]);
   useEffect(() => {
+    if (!cloud?.signedIn || !cloud.user?.id || !data) return;
+    let stopped = false, socket: WebSocket | null = null, timer: ReturnType<typeof setTimeout> | null = null;
+    let running = false, retry = 0, needed = true, signal = 0;
+    const userId = cloud.user.id;
+    const visible = () => document.visibilityState === "visible" && navigator.onLine !== false;
+    const reconcile = async () => {
+      signal++;
+      needed = true;
+      if (running || !visible() || stopped) return;
+      const current = latest.current;
+      if (current.edit || saving.current || syncRunning.current || !current.data || current.cloud?.user?.id !== userId) return;
+      const startedWith = signal;
+      running = true;
+      try {
+        const { revision, state } = await refreshCloudMetadata();
+        if (stopped || latest.current.cloud?.user?.id !== userId) return;
+        setCloud(state);
+        if (revision > state.revision) {
+          const before = latest.current.data;
+          const result = await pullCloud();
+          if (stopped || latest.current.data !== before || latest.current.edit || saving.current) return;
+          if (result.state.dirty) {
+            if (result.data) setResolution({ local: before!, remote: result.data, remoteState: result.state });
+          } else if (result.data) {
+            await replaceData(result.data);
+            const adopted = await adoptCloudSnapshot(result.state);
+            setData(result.data);
+            setCloud(adopted);
+          }
+        }
+        needed = signal !== startedWith;
+      } catch { /* Keep local data and retry after reconnection or next notice. */ }
+      finally { running = false; if (needed && signal !== startedWith) queueMicrotask(() => { void reconcile(); }); }
+    };
+    reconcileRef.current = reconcile;
+    const connect = async () => {
+      if (stopped || !visible() || socket) return;
+      try {
+        const { room, ticket } = await liveTicket();
+        if (stopped || !visible()) return;
+        socket = new WebSocket(liveUrl(room, ticket));
+        socket.onopen = () => { retry = 0; void reconcile(); };
+        socket.onmessage = () => { void reconcile(); };
+        socket.onclose = () => {
+          socket = null;
+          if (!stopped && visible()) timer = setTimeout(() => void connect(), Math.min(15000, 500 * 2 ** retry++));
+        };
+      } catch { if (!stopped && visible()) timer = setTimeout(() => void connect(), Math.min(15000, 500 * 2 ** retry++)); }
+    };
+    const activity = () => {
+      if (!visible()) { if (timer) clearTimeout(timer); socket?.close(); socket = null; return; }
+      if (needed) void reconcile();
+      void connect();
+    };
+    document.addEventListener("visibilitychange", activity);
+    window.addEventListener("online", activity);
+    void connect();
+    return () => { stopped = true; if (timer) clearTimeout(timer); socket?.close(); document.removeEventListener("visibilitychange", activity); window.removeEventListener("online", activity); if (reconcileRef.current === reconcile) reconcileRef.current = null; };
+  }, [cloud?.signedIn, cloud?.user?.id, Boolean(data)]);
+  useEffect(() => { if (!edit) void reconcileRef.current?.(); }, [edit]);
+  useEffect(() => {
+    if (!data || !cloud?.signedIn || !cloud.sheetPending || !cloud.spreadsheetUrl || cloud.dirty) return;
+    if (cloud.revision === 0) { void queueSync(data); return; }
+    void attemptMirror();
+    const timer = setInterval(() => void attemptMirror(), 5 * 60_000);
+    return () => clearInterval(timer);
+  }, [data, cloud?.signedIn, cloud?.sheetPending, cloud?.spreadsheetUrl, cloud?.dirty, cloud?.user?.id]);
+  useEffect(() => {
     if (!Capacitor.isNativePlatform() || !cloud?.user?.id || !data) return;
     let active = true;
     void homeWidgetRevision().then((revision) => { widgetRevision.current = revision; });
@@ -191,6 +282,7 @@ export default function App() {
         widgetRevision.current = revision;
         if (active) { setData(nextData); setCloud(nextCloud); }
         if (active && nextCloud.signedIn && nextCloud.dirty) await queueSync(nextData);
+        if (active) void reconcileRef.current?.();
       })();
     });
     return () => { active = false; void listener.then((handle) => handle.remove()); };
@@ -207,6 +299,7 @@ export default function App() {
     if (!Capacitor.isNativePlatform()) return;
     const listener = NativeApp.addListener("backButton", () => {
       if (edit) setEdit(null);
+      else if (selectedPocketId) setSelectedPocketId(null);
       else {
         const destination = backDestination(view, previousView);
         if (destination) setView(destination);
@@ -216,7 +309,7 @@ export default function App() {
     return () => {
       void listener.then((h) => h.remove());
     };
-  }, [edit, view, previousView]);
+  }, [edit, view, previousView, selectedPocketId]);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const openQuickAdd = (url?: string) => { if (url?.startsWith("saku://quick-add")) { setView("overview"); setEdit({ type: "transaction" }); } };
@@ -261,7 +354,7 @@ export default function App() {
         setCloud(await pushCloud(snapshot));
         activeSync.current = null;
       }
-      if (userInitiated) setToast("Backed up to Google Sheets");
+      if (userInitiated) setToast("Cloud backup saved. Google Sheet is updating.");
     } catch (error: unknown) {
       pendingSync.current = null;
       activeSync.current = null;
@@ -270,7 +363,19 @@ export default function App() {
       setToast(status === 409 ? "Google has newer data. Review before syncing again." : "Saved offline. Automatic sync will retry when Saku is active.");
     } finally {
       syncRunning.current = false;
+      void reconcileRef.current?.();
     }
+  }
+  async function attemptMirror(userInitiated = false) {
+    if (mirrorRunning.current || !cloud?.signedIn || !cloud.sheetPending || !cloud.spreadsheetUrl) return;
+    mirrorRunning.current = true;
+    try {
+      const next = await mirrorCloud();
+      setCloud((current) => current?.user?.id === next.user?.id ? next : current);
+      if (userInitiated) setToast(next.sheetPending ? "Cloud backup saved. Google Sheet is still updating." : "Google Sheet updated");
+    } catch (error) {
+      if (userInitiated) setToast(error instanceof Error ? error.message : "Google Sheet update failed");
+    } finally { mirrorRunning.current = false; }
   }
   async function recover(file: File | undefined) {
     if (!file) return;
@@ -284,7 +389,7 @@ export default function App() {
       );
     }
   }
-  if (Capacitor.isNativePlatform() && cloud && !cloud.signedIn)
+  if (cloud && !cloud.signedIn)
     return <LoginScreen configured={cloud.configured} busy={loginBusy} error={loadError} onLogin={async () => {
       setLoginBusy(true); setLoadError("");
       try { const next = await signInGoogle(); setCloud(next); await openWorkspace(next); }
@@ -293,7 +398,7 @@ export default function App() {
     }} />;
   if (resolution)
     return <WorkspaceChoice local={resolution.local} remote={resolution.remote} onChoose={async (chosen, localWins) => {
-      if (localWins) { await saveData(chosen); setCloud((value) => value ? { ...value, dirty: true } : value); setData(chosen); void queueSync(chosen); } else await replaceData(chosen); setData(chosen); setResolution(null);
+      if (localWins) { await saveData(chosen); if (resolution.remoteState) setCloud(await resolveCloudWithLocal(resolution.remoteState)); else setCloud((value) => value ? { ...value, dirty: true } : value); setData(chosen); void queueSync(chosen); } else { await replaceData(chosen); if (resolution.remoteState) setCloud(await adoptCloudSnapshot(resolution.remoteState, true)); } setData(chosen); setResolution(null); if (!chosen.transactions.length && !chosen.pockets.length && !chosen.accounts.length) setEdit({ type: "start" });
     }} onBackup={() => void download(`saku-local-backup-${today()}.json`, JSON.stringify(resolution.local, null, 2), "application/json")} />;
   if (!data)
     return (
@@ -351,6 +456,7 @@ export default function App() {
   };
   const go = (v: View) => {
     if (v === "more" && !moreViews.includes(view)) setPreviousView(view);
+    setSelectedPocketId(null);
     setView(v);
     window.scrollTo({ top: 0 });
   };
@@ -439,7 +545,7 @@ export default function App() {
           <div className="topbar-actions">
             <span className="local-label">
               {cloud?.signedIn ? <CheckCheck size={13} /> : <LockKeyhole size={13} />}
-              {cloud?.signedIn ? cloud.dirty ? "Not synced" : "Synced" : "On-device"}
+              {cloud?.signedIn ? cloud.dirty ? "Not synced" : cloud.revision === 0 ? "Not backed up" : "Synced" : "On-device"}
             </span>
             <button
               className="top-avatar"
@@ -454,8 +560,9 @@ export default function App() {
           <section className="page-heading">
             <div>
               {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={() => go("more")}><ChevronLeft size={17} /> More</button>}
-              <p>{titles[view][0]}</p>
-              <h1>{titles[view][1]}</h1>
+              {selectedPocket && view === "pockets" && <button className="back-to-more" onClick={() => setSelectedPocketId(null)}><ChevronLeft size={17} /> All pockets</button>}
+              <p>{selectedPocket && view === "pockets" ? "Pocket activity" : titles[view][0]}</p>
+              <h1>{selectedPocket && view === "pockets" ? selectedPocket.name : titles[view][1]}</h1>
             </div>
             <div className="heading-actions">
               {view !== "settings" && view !== "more" && (
@@ -496,7 +603,7 @@ export default function App() {
                   <span>Add transaction</span>
                 </button>
               )}
-              {view === "pockets" && (
+              {view === "pockets" && !selectedPocket && (
                 <button
                   className="button primary"
                   onClick={() => setEdit({ type: "pocket" })}
@@ -505,6 +612,7 @@ export default function App() {
                   New pocket
                 </button>
               )}
+              {view === "pockets" && selectedPocket && <button className="button primary" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket.id })}><Plus size={18} /> Add transaction</button>}
             </div>
           </section>
           {view === "more" && <section className="more-list" aria-label="More destinations">
@@ -515,7 +623,7 @@ export default function App() {
           {view === "overview" && (
             <>
               <section className="summary-grid">
-                <div className="balance-panel">
+                <button className="balance-panel balance-action" onClick={() => go("insights")} aria-label={`View insights for ${monthLabel(month)}`}>
                   <div className="balance-top">
                     <span>
                       <Wallet size={17} />
@@ -536,7 +644,8 @@ export default function App() {
                     <strong>{money(stats.available)} available</strong>
                   </div>
                   <p className="availability-explainer">Capped by recorded cash and positive pocket balances. Not a live bank balance.</p>
-                </div>
+                  <span className="balance-cta">View insights <ArrowRight size={16} /></span>
+                </button>
                 <div className="metric-panel">
                   <div className="metric-label">
                     <DirectionIcon income />
@@ -601,7 +710,7 @@ export default function App() {
                     </h2>
                     <p>Your month, thoughtfully divided.</p>
                   </div>
-                  <button className="text-button" onClick={() => go("pockets")}>
+                  <button className="text-button" onClick={() => { setSelectedPocketId(null); go("pockets"); }}>
                     All pockets <ArrowRight size={16} />
                   </button>
                 </div>
@@ -611,7 +720,9 @@ export default function App() {
                       <PocketCard
                         key={p.id}
                         p={p}
-                        onClick={() => setEdit({ type: "pocket", value: p })}
+                        onClick={() => openPocket(p.id)}
+                        onEdit={() => setEdit({ type: "pocket", value: p })}
+                        onDelete={() => setEdit({ type: "pocket_delete", value: p })}
                       />
                     ))}
                   </div>
@@ -696,7 +807,14 @@ export default function App() {
               notify={setToast}
             />
           )}
-          {view === "pockets" && (
+          {view === "pockets" && selectedPocket && <section className="pocket-activity">
+            <div className="pocket-activity-summary"><div><span>Funded this month</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0)}</strong></div><div><span>Spent this month</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)}</strong></div><div><span>Remaining</span><strong>{money((stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) - (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0))}</strong></div></div>
+            <p className="pocket-funding-note">Funding is your monthly budget and recorded moves between pockets. Cash income is recorded in accounts.</p>
+            <div className="section-heading"><h2>History</h2><button className="text-button" onClick={() => setPocketAllHistory((value) => !value)}>{pocketAllHistory ? "Selected month" : "All history"}</button></div>
+            {data.pocketTransfers.filter((move) => (move.fromPocketId === selectedPocket.id || move.toPocketId === selectedPocket.id) && (pocketAllHistory || move.month === month)).map((move) => <div className="pocket-move" key={move.id}><span>{move.toPocketId === selectedPocket.id ? "Budget moved in" : "Budget moved out"} · {monthLabel(move.month, true)}</span><strong>{move.toPocketId === selectedPocket.id ? "+" : "−"}{money(move.amount)}</strong></div>)}
+            <TransactionList transactions={data.transactions.filter((t) => t.pocketId === selectedPocket.id && (pocketAllHistory || t.date.startsWith(month))).sort((a, b) => b.date.localeCompare(a.date))} pockets={data.pockets} onEdit={(value) => setEdit({ type: "transaction", value })} groupDates />
+          </section>}
+          {view === "pockets" && !selectedPocket && (
             <>
               <div className="budget-overview">
                 <div>
@@ -732,7 +850,9 @@ export default function App() {
                   <PocketCard
                     key={p.id}
                     p={p}
-                    onClick={() => setEdit({ type: "pocket", value: p })}
+                    onClick={() => openPocket(p.id)}
+                    onEdit={() => setEdit({ type: "pocket", value: p })}
+                    onDelete={() => setEdit({ type: "pocket_delete", value: p })}
                   />
                 ))}
                 <button
@@ -859,7 +979,7 @@ export default function App() {
                     <button
                       className="breakdown-row"
                       key={p.id}
-                      onClick={() => setEdit({ type: "pocket", value: p })}
+                      onClick={() => openPocket(p.id)}
                     >
                       <span>
                         <PocketIcon name={p.icon} color={p.color} />
@@ -899,14 +1019,15 @@ export default function App() {
               avatarUrl={avatarUrl}
               setCloud={setCloud}
               setData={setData}
-              syncNow={() => queueSync(data, true)}
+              onSignedIn={async (state) => { setData(null); setCloud(state); await openWorkspace(state); }}
+              syncNow={() => cloud?.dirty || (cloud?.sheetPending && cloud.revision === 0) ? queueSync(data, true) : attemptMirror(true)}
               themePreference={themePreference}
               onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast("Appearance could not be saved.")); }}
             />
           )}
         </main>
       </div>
-      {(view === "overview" || view === "transactions") && <button className="mobile-add-action" onClick={() => setEdit({ type: "transaction" })}><Plus size={20} /> Add transaction</button>}
+      {(view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket)) && <button className="mobile-add-action" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket?.id })}><Plus size={20} /> Add transaction</button>}
       <nav className="bottom-nav" aria-label="Mobile navigation">
         {mobileNavigation.map((n) => (
           <button
@@ -929,10 +1050,11 @@ export default function App() {
       {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, "Pocket budget moved")) setEdit(null); }} />}
       {edit?.type === "transaction" && (
         <TransactionEditor
-          key={edit.value?.id || edit.favorite?.id || edit.cardId || "new"}
+          key={edit.value?.id || edit.favorite?.id || edit.cardId || edit.pocketId || "new"}
           data={data}
           transaction={edit.value}
           initialCardId={edit.cardId}
+          initialPocketId={edit.pocketId}
           favorite={edit.favorite}
           month={month}
           busy={busy}
@@ -1027,6 +1149,10 @@ export default function App() {
           }}
         />
       )}
+      {edit?.type === "pocket_delete" && <Modal title={`Delete ${edit.value.name}?`} subtitle="This pocket will be removed from future plans." onClose={() => setEdit(null)}>
+        {pocketHasReferences(data, edit.value.id) ? <p className="editor-help">This pocket has transactions, recurring items, shortcuts, or budget moves. Move or remove them before deleting it.</p> : <p>Delete this pocket and its monthly budgets?</p>}
+        <div className="form-footer"><button className="button secondary" onClick={() => setEdit(null)}>Cancel</button>{!pocketHasReferences(data, edit.value.id) && <button className="button danger" disabled={busy} onClick={() => void commit({ ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) }, "Pocket deleted").then((saved) => { if (saved) setEdit(null); })}>Delete pocket</button>}</div>
+      </Modal>}
       {edit?.type === "start" && (
         <StartProfile
           busy={busy}
@@ -1064,6 +1190,18 @@ function Transactions({
   onEdit: (t: Transaction) => void;
   notify: (s: string) => void;
 }) {
+  const exportMenu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOutside = (event: MouseEvent) => {
+      const menu = exportMenu.current;
+      if (!menu?.open || menu.contains(event.target as Node)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      menu.open = false;
+    };
+    document.addEventListener("click", closeOutside, true);
+    return () => document.removeEventListener("click", closeOutside, true);
+  }, []);
   const [query, setQuery] = useState(""),
     [type, setType] = useState("all"),
     [pocket, setPocket] = useState("all"),
@@ -1103,9 +1241,9 @@ function Transactions({
             </button>
           ))}
         </div>
-        <details className="export-menu"><summary className="button secondary"><Download size={16} /> Export CSV</summary><div>
-          <button onClick={() => void download(`saku-${month}.csv`, exportCSV(rows, data.pockets), "text/csv").catch(() => notify("Export could not be saved."))}>Current results ({rows.length})</button>
-          <button onClick={() => void download("saku-all-transactions.csv", exportCSV(data.transactions, data.pockets), "text/csv").catch(() => notify("Export could not be saved."))}>All history</button>
+        <details ref={exportMenu} className="export-menu" onKeyDown={(event) => { if (event.key === "Escape") { exportMenu.current?.removeAttribute("open"); event.stopPropagation(); } }}><summary className="button secondary"><Download size={16} /> Export CSV</summary><div>
+          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download(`saku-${month}.csv`, exportCSV(rows, data.pockets), "text/csv").catch(() => notify("Export could not be saved.")); }}>Current results ({rows.length})</button>
+          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download("saku-all-transactions.csv", exportCSV(data.transactions, data.pockets), "text/csv").catch(() => notify("Export could not be saved.")); }}>All history</button>
         </div></details>
       </div>
       <div className="transaction-filters">
@@ -1167,6 +1305,7 @@ function TransactionEditor({
   transaction,
   initialTransfer,
   initialCardId,
+  initialPocketId,
   favorite,
   month,
   busy,
@@ -1181,6 +1320,7 @@ function TransactionEditor({
   transaction?: Transaction;
   initialTransfer?: boolean;
   initialCardId?: string;
+  initialPocketId?: string;
   favorite?: Favorite;
   month: string;
   busy: boolean;
@@ -1204,7 +1344,7 @@ function TransactionEditor({
       transaction?.date || today(),
     ),
     [pocket, setPocket] = useState(
-      transaction?.pocketId || favorite?.pocketId || data.pockets[0]?.id || "",
+      transaction?.pocketId || favorite?.pocketId || initialPocketId || data.pockets[0]?.id || "",
     ),
     [account, setAccount] = useState(transaction && transaction.kind !== "card_purchase" ? transaction.account : favorite && !favorite.cardId ? favorite.account : data.accounts[0]),
     [transferFrom, setTransferFrom] = useState(transferOutgoing?.account || data.accounts[0]),
@@ -1538,7 +1678,7 @@ function PocketEditor({
     [error, setError] = useState(""),
     [deleting, setDeleting] = useState(false);
   const used =
-    !!pocket && (data.transactions.some((t) => t.pocketId === pocket.id) || data.recurring.some((r) => r.pocketId === pocket.id) || data.favorites.some((f) => f.pocketId === pocket.id));
+    !!pocket && pocketHasReferences(data, pocket.id);
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (
@@ -1722,9 +1862,9 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
   </main>;
 }
 function WorkspaceChoice({ local, remote, onChoose, onBackup }: { local: Data; remote: Data; onChoose: (data: Data, localWins: boolean) => Promise<void>; onBackup: () => void }) {
-  return <main className="login-screen"><section className="login-panel workspace-choice"><ShieldCheck size={30} /><h1>Choose this device's workspace</h1><p>Both this phone and Google Sheets contain Saku data. Nothing will be overwritten until you choose.</p>
+  return <main className="login-screen"><section className="login-panel workspace-choice"><ShieldCheck size={30} /><h1>Choose this device's workspace</h1><p>This device has local Saku data. Choose whether to bring it into this Google account or use the cloud backup. Nothing is uploaded until you choose.</p>
     <button className="workspace-option" onClick={() => void onChoose(local, true)}><strong>Keep this phone</strong><span>{local.transactions.length} transactions · {local.pockets.length} pockets</span></button>
-    <button className="workspace-option" onClick={() => void onChoose(remote, false)}><strong>Restore Google copy</strong><span>{remote.transactions.length} transactions · {remote.pockets.length} pockets</span></button>
+    <button className="workspace-option" onClick={() => void onChoose(remote, false)}><strong>{remote.transactions.length || remote.pockets.length ? "Restore cloud copy" : "Start without local data"}</strong><span>{remote.transactions.length} transactions · {remote.pockets.length} pockets</span></button>
     <button className="button secondary" onClick={onBackup}><Download size={17} />Export phone backup first</button>
   </section></main>;
 }
@@ -1797,6 +1937,7 @@ function SettingsView({
   avatarUrl,
   setCloud,
   setData,
+  onSignedIn,
   syncNow,
   themePreference,
   onThemeChange,
@@ -1809,6 +1950,7 @@ function SettingsView({
   avatarUrl: string;
   setCloud: (state: CloudState | null) => void;
   setData: (data: Data) => void;
+  onSignedIn: (state: CloudState) => Promise<void>;
   syncNow: () => Promise<void>;
   themePreference: ThemePreference;
   onThemeChange: (preference: ThemePreference) => void;
@@ -1966,7 +2108,7 @@ function SettingsView({
           <span className="connection-icon"><ShieldCheck size={24} /></span>
           <div>
             <h2>Google backup</h2>
-            <p>Keep an encrypted backup in Saku Cloud and a readable copy in your own Google Drive.</p>
+            <p>Keep a private backup in Saku Cloud and, with your permission, a readable copy in your own Google Drive.</p>
           </div>
         </div>
         {!cloud?.signedIn ? (
@@ -1974,7 +2116,7 @@ function SettingsView({
             <p>Signing in also creates your Saku account. Saku never receives or stores your Google password.</p>
             <button className="button primary" disabled={cloudBusy || !cloud?.configured} onClick={() => void cloudAction(async () => {
               const next = await signInGoogle();
-              setCloud(next);
+              await onSignedIn(next);
               setName(next.user?.name || name);
               notify("Google account connected");
             })}>
@@ -1992,6 +2134,7 @@ function SettingsView({
             </div>
             <div className="settings-actions">
               {(cloud.dirty || cloud.sheetPending) && <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(syncNow)}><Upload size={17} />Retry sync</button>}
+              {cloud.sheetPending && <button className="button secondary" disabled={cloudBusy} onClick={() => void cloudAction(async () => { setCloud(await connectGoogleDrive()); notify("Google Drive connected"); })}><ExternalLink size={17} />{cloud.spreadsheetUrl ? "Reconnect Google Drive" : "Connect Google Drive"}</button>}
               <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(true)}><Download size={17} />Restore cloud copy</button>
               {cloud.spreadsheetUrl && <a className="button secondary" href={cloud.spreadsheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} />Open Sheet</a>}
               <button className="button text-button" disabled={cloudBusy} onClick={() => void cloudAction(async () => {
@@ -2085,12 +2228,12 @@ function SettingsView({
             <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(async () => {
               const result = await pullCloud();
               if (!result.data) { notify("There is no cloud backup yet."); setPullConfirm(false); return; }
-              if (await commit(result.data, "Cloud backup restored")) {
-                setData(result.data);
-                setName(result.data.name);
-                setCloud(result.state);
-                setPullConfirm(false);
-              }
+              await replaceData(result.data);
+              setCloud(await adoptCloudSnapshot(result.state, true));
+              setData(result.data);
+              setName(result.data.name);
+              setPullConfirm(false);
+              notify("Cloud backup restored");
             })}>Restore cloud copy</button>
           </div>
         </Modal>
@@ -2103,13 +2246,13 @@ function SettingsView({
             <button className="button danger-button" disabled={cloudBusy || deleteText !== "DELETE"} onClick={() => void cloudAction(async () => {
               const userId = cloud?.user?.id;
               if (!userId) return;
-              await deleteCloudAccount();
+              const deletion = await deleteCloudAccount();
               await removeUserData(userId);
               setData(emptyData());
               setCloud(await loadCloudState());
               setDeleteConfirm(false);
               setDeleteText("");
-              notify("Saku account deleted");
+              notify(deletion.driveCleanupFailed ? "Saku account deleted. Remove its Sheet from Google Drive manually." : "Saku account deleted");
             })}><Trash2 size={16} />Delete permanently</button>
           </div>
         </Modal>

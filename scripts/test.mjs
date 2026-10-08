@@ -12,6 +12,18 @@ try {
   const child = spawn(process.execPath, ["--test", ...outputs], { stdio: "inherit" });
   const code = await new Promise((resolve) => child.on("exit", resolve));
   process.exitCode = code ?? 1;
+  if (process.exitCode === 0) {
+    await import("./cloud-refresh.test.mjs");
+    await import("../worker/avatar.test.mjs");
+    await import("../worker/google-token.test.mjs");
+    await import("../worker/crypto.test.mjs");
+    await import("../worker/profile-race.test.mjs");
+    await import("../worker/android-release.test.mjs");
+    await import("../worker/sheet-refresh.test.mjs");
+    await import("../worker/bounded-login.test.mjs");
+    await import("../worker/live.test.mjs");
+    await import("../worker/live-route.test.mjs");
+  }
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

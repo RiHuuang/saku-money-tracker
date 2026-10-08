@@ -1,4 +1,6 @@
-# Saku Cloud API
+# Legacy GCP API and migration source
+
+This Cloud Run implementation remains available until the Cloudflare migration is verified. New deployment and cutover instructions are in [`worker/README.md`](../worker/README.md); do not use the commands below for a new public deployment.
 
 The API is a small Cloud Run service for Google registration/sign-in and opt-in ledger sync. It stores:
 

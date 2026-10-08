@@ -1,33 +1,12 @@
 import crypto from "node:crypto";
+export { avatarAfterSignIn, isGoogleAvatarUrl, sessionToken, splitSessionToken } from "./identity.js";
 
 export const hashToken = (value) => crypto.createHash("sha256").update(value).digest("hex");
 export const tokenPart = () => crypto.randomBytes(32).toString("base64url");
-export const sessionToken = (id, secret) => `${id}.${secret}`;
-export function splitSessionToken(token) {
-  const [id, secret, extra] = String(token || "").split(".");
-  return id && secret && !extra ? { id, secret } : null;
-}
 export function timingSafeEqual(a, b) {
   const left = Buffer.from(String(a));
   const right = Buffer.from(String(b));
   return left.length === right.length && crypto.timingSafeEqual(left, right);
-}
-export function avatarAfterSignIn(existing, googleAvatarPath, nextVersion) {
-  if (existing?.avatarSource === "custom" && existing.avatarPath) {
-    return { avatarPath: existing.avatarPath, avatarSource: "custom", avatarVersion: existing.avatarVersion || "legacy" };
-  }
-  const avatarPath = googleAvatarPath || existing?.avatarPath || null;
-  return {
-    avatarPath,
-    avatarSource: avatarPath ? "google" : null,
-    avatarVersion: googleAvatarPath ? nextVersion : existing?.avatarVersion || "legacy",
-  };
-}
-export function isGoogleAvatarUrl(value) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && (url.hostname === "googleusercontent.com" || url.hostname.endsWith(".googleusercontent.com"));
-  } catch { return false; }
 }
 export function encryptionKey(value) {
   const key = Buffer.from(String(value || ""), "base64");

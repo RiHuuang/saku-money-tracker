@@ -30,6 +30,15 @@ class GoogleAuthPlugin : Plugin() {
         startActivityForResult(call, Intent(context, GoogleAuthorizationActivity::class.java), "authorizationResult")
     }
 
+    @PluginMethod
+    fun authorizeDrive(call: PluginCall) {
+        if (BuildConfig.SAKU_GOOGLE_WEB_CLIENT_ID.isBlank()) {
+            call.reject("Google sign-in is not configured in this build")
+            return
+        }
+        startActivityForResult(call, Intent(context, GoogleAuthorizationActivity::class.java).putExtra(GoogleAuthorizationActivity.DRIVE, true), "authorizationResult")
+    }
+
     @ActivityCallback
     private fun authorizationResult(call: PluginCall?, result: ActivityResult) {
         if (call == null) return

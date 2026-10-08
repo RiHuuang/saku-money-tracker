@@ -1,6 +1,6 @@
 # Saku
 
-An offline-first Android money tracker, built with React, TypeScript and Capacitor. Amounts are whole Indonesian rupiah. An installable Android application and a responsive browser preview share the same application.
+An offline-first Android money tracker, built with React, TypeScript and Capacitor. Amounts are whole Indonesian rupiah. The installable Android application and the planned Cloudflare-hosted browser app share the same application.
 
 ## Run
 
@@ -14,7 +14,7 @@ npm run android:open
 
 Android requires JDK 21 and Android SDK 36. Build a debug APK in Android Studio, or run `gradlew.bat assembleDebug` from `android` with `JAVA_HOME` and `ANDROID_HOME` set to your installed toolchains. Google Play releases use an AAB and environment-provided signing credentials; see [`RELEASE.md`](RELEASE.md).
 
-The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a connected Android 12+ arm64 phone, install it with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`, or open the APK on the phone and permit installation from that source. Saku appears in the app drawer and can be placed on the home screen like any other app. It does not need the computer or dev server after installation. On a fresh install, open **Monthly check** and download the model once while online; afterward PDFs can be processed in airplane mode. The browser preview at the Vite URL is for development and has no native PDF AI.
+The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a connected Android 12+ arm64 phone, install it with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`, or open the APK on the phone and permit installation from that source. Saku appears in the app drawer and can be placed on the home screen like any other app. It does not need the computer or dev server after installation. On a fresh install, open **Monthly check** and download the model once while online; afterward PDFs can be processed in airplane mode. Use `npx wrangler dev` with a locally initialized D1 database to test browser login; the standalone Vite server does not provide the API. The browser has no native PDF AI.
 
 ## Included
 
@@ -64,13 +64,13 @@ Banks with proprietary CSV preambles must export or prepare a simple table first
 
 ## Google sign-in and Sheets sync
 
-On Android, **Continue with Google** is both registration and sign-in. It uses Google Identity Services to obtain a one-time server authorization code. The Cloud Run API validates Google's signed ID token and keys the Saku user by its immutable `sub`. Saku never receives or stores a Google password.
+**Continue with Google** is registration and sign-in on Android and the hosted browser app. Android uses Google Identity Services to obtain a one-time server authorization code; the browser uses Google's redirect flow with PKCE. The Worker validates Google's signed ID token and keys the Saku user by its immutable `sub`. Saku never receives or stores a Google password.
 
-The backend creates a private `Saku` folder and `Saku Money Tracker` spreadsheet in that same Google account. The app requests `drive.file`, so it can access only Drive files that it created or the user explicitly opened with it. The Sheet contains `Transactions`, `Pockets`, `Accounts`, `Cards`, `Recurring`, `Quick_entries`, `Pocket_transfers`, and `Existing_installments` tabs. Formula-like text is escaped before it reaches Sheets.
+After sign-in, the user can grant `drive.file` separately to create or reconnect a private `Saku` folder and `Saku Money Tracker` spreadsheet in that same Google account. Declining Drive permission does not block Saku login; the cloud backup remains available and the Sheet shows as pending. The permission lets Saku access only Drive files it created or the user explicitly opened with it. The Sheet contains `Transactions`, `Pockets`, `Accounts`, `Cards`, `Recurring`, `Quick_entries`, `Pocket_transfers`, and `Existing_installments` tabs. Formula-like text is escaped before it reaches Sheets.
 
-Cloud Storage keeps the compressed, revisioned private ledger database and a 256 px WebP profile image. Firestore keeps user/sheet metadata, optimistic sync revision, an AES-256-GCM encrypted Google refresh token, and hashes of Saku session secrets. Plain session tokens remain only in Android Keystore-protected storage. Conflicting revisions fail instead of silently replacing another device's copy. Device data remains usable offline; foreground edits sync immediately, and a network-constrained Android job syncs widget edits while Saku is closed.
+The Cloudflare migration uses R2 for private ledger snapshots and profile images, and D1 for user/sheet metadata, optimistic sync revision, an AES-256-GCM encrypted Google refresh token, and hashes of Saku session secrets. New backups stream as bounded JSON; imported gzip backups remain readable. Plain Android session tokens remain only in Android Keystore-protected storage; the browser uses secure, HttpOnly cookies. Conflicting revisions fail instead of silently replacing another device's copy. Device data remains usable offline; foreground edits sync immediately, and a network-constrained Android job syncs widget edits while Saku is closed.
 
-The checked-in backend, deployment script, OAuth checklist, and build settings are in [`server/README.md`](server/README.md). The current debug APK is configured for the deployed `saku-api` Cloud Run service and the `Saku Android Debug` OAuth client.
+The Cloudflare Worker and deployment checklist are in [`worker/README.md`](worker/README.md). The old Cloud Run implementation remains in [`server/`](server/) for the verified data migration. Android builds require the Worker URL in `.env.production`; previously distributed builds still point to Cloud Run until replaced.
 
 ## Device verification
 

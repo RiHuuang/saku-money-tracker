@@ -59,12 +59,19 @@ class WidgetLedgerInstrumentedTest {
         assertEquals(2, WidgetLedger.load(context)!!.ledger.getJSONArray("transactions").length())
         assertTrue(WidgetLedger.undo(context, first.transactionId))
         assertEquals(1, WidgetLedger.load(context)!!.ledger.getJSONArray("transactions").length())
+        val afterUndo = WidgetLedger.revision(context)
+        val afterUndoTap = WidgetLedger.addFavorite(context, "coffee", 15_999).getOrThrow()
+        assertFalse(afterUndoTap.created)
+        assertEquals(1, WidgetLedger.load(context)!!.ledger.getJSONArray("transactions").length())
+        assertEquals(afterUndo, WidgetLedger.revision(context))
     }
 
     @Test
     fun favoriteCanBeAddedAgainAfterTapGuard() {
         val first = WidgetLedger.addFavorite(context, "coffee", 1_000).getOrThrow()
-        val later = WidgetLedger.addFavorite(context, "coffee", 2_500).getOrThrow()
+        val blocked = WidgetLedger.addFavorite(context, "coffee", 15_999).getOrThrow()
+        assertFalse(blocked.created)
+        val later = WidgetLedger.addFavorite(context, "coffee", 16_000).getOrThrow()
         assertTrue(first.created)
         assertTrue(later.created)
         assertFalse(first.transactionId == later.transactionId)

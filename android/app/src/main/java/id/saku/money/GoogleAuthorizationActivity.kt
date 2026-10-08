@@ -13,17 +13,17 @@ class GoogleAuthorizationActivity : Activity() {
     companion object {
         const val CODE = "authorizationCode"
         const val ERROR = "authorizationError"
+        const val DRIVE = "requestDrivePermission"
         private const val REQUEST_AUTHORIZATION = 4312
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return
+        val scopes = mutableListOf(Scope("openid"), Scope("email"), Scope("profile"))
+        if (intent.getBooleanExtra(DRIVE, false)) scopes.add(Scope("https://www.googleapis.com/auth/drive.file"))
         val request = AuthorizationRequest.builder()
-            .setRequestedScopes(listOf(
-                Scope("openid"), Scope("email"), Scope("profile"),
-                Scope("https://www.googleapis.com/auth/drive.file")
-            ))
+            .setRequestedScopes(scopes)
             .requestOfflineAccess(BuildConfig.SAKU_GOOGLE_WEB_CLIENT_ID, true)
             .build()
         Identity.getAuthorizationClient(this).authorize(request)

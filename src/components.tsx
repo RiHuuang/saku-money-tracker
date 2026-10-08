@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode, type CSSProperties, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type CSSProperties, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -14,6 +14,7 @@ import {
   Home,
   Plane,
   Plus,
+  MoreHorizontal,
   ShoppingBag,
   Utensils,
   Wallet,
@@ -191,10 +192,28 @@ export function Modal({
 export function PocketCard({
   p,
   onClick,
+  onEdit,
+  onDelete,
 }: {
   p: Pocket & { limit: number; spent: number };
   onClick: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shell = useRef<HTMLDivElement>(null);
+  const suppressClick = useRef(false);
+  const cancelHold = () => { if (hold.current) clearTimeout(hold.current); hold.current = null; };
+  useEffect(() => cancelHold, []);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const outside = (event: PointerEvent) => { if (!shell.current?.contains(event.target as Node)) setMenuOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
+  }, [menuOpen]);
   const remaining = p.limit - p.spent,
     percent = p.limit
       ? Math.round((p.spent / p.limit) * 100)
@@ -202,12 +221,12 @@ export function PocketCard({
         ? 100
         : 0;
   return (
-    <button
-      className="pocket-card"
-      onClick={onClick}
-      style={{ "--pocket-color": p.color } as CSSProperties}
-      aria-label={`Edit ${p.name} pocket`}
-    >
+    <div ref={shell} className={`pocket-card-shell ${menuOpen ? "menu-open" : ""}`} style={{ "--pocket-color": p.color } as CSSProperties}>
+    <button className="pocket-card" onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } onClick(); }}
+      onPointerDown={(event) => { if (event.pointerType === "mouse" && event.button !== 0) return; cancelHold(); suppressClick.current = false; hold.current = setTimeout(() => { suppressClick.current = true; setMenuOpen(true); }, 500); }}
+      onPointerUp={cancelHold} onPointerCancel={cancelHold} onPointerLeave={cancelHold}
+      onContextMenu={(event) => { event.preventDefault(); cancelHold(); setMenuOpen(true); }}
+      aria-label={`View ${p.name} pocket activity`}>
       <div className="pocket-card-top">
         <PocketIcon name={p.icon} color={p.color} />
         <ChevronRight size={17} className="muted" />
@@ -230,6 +249,10 @@ export function PocketCard({
         <span>{percent}%</span>
       </div>
     </button>
+    {onEdit && <div className="pocket-card-actions"><button type="button" className="pocket-menu-trigger" aria-label={`Options for ${p.name}`} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={20} /></button>
+      {menuOpen && <div className="pocket-menu"><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }}>Edit pocket</button><button type="button" onClick={() => { setMenuOpen(false); (onDelete || onEdit)(); }}>Delete pocket…</button></div>}
+    </div>}
+    </div>
   );
 }
 export function TransactionList({

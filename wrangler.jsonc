@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "saku",
+  "main": "worker/index.js",
+  "minify": true,
+  "compatibility_date": "2026-10-03",
+  "limits": { "cpu_ms": 1000 },
+  "routes": [{ "pattern": "app.sakumoney.my.id", "custom_domain": true }],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/v1/*", "/v2/*", "/auth/*", "/download/*", "/health", "/privacy", "/terms", "/account-deletion"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "saku", "database_id": "d0a4bccb-3a87-45f1-b316-88a380c545a9" }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "saku-data" }],
+  "durable_objects": { "bindings": [{ "name": "LIVE_UPDATES", "class_name": "UserLiveUpdates" }] },
+  "migrations": [{ "tag": "v1-live-updates", "new_sqlite_classes": ["UserLiveUpdates"] }],
+  "vars": { "GOOGLE_OAUTH_CLIENT_ID": "213129330817-578l0t3n12ctd9uja57ad2bcf22t5o7l.apps.googleusercontent.com", "SUPPORT_EMAIL": "richardhuang.email@gmail.com", "ALLOWED_ORIGINS": "https://localhost", "WRITE_ENABLED": "true", "ANDROID_RELEASE_ENABLED": "true" }
+}

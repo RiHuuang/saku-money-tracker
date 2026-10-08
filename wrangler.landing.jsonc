@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "saku-landing",
+  "main": "worker/landing.js",
+  "compatibility_date": "2026-10-03",
+  "limits": { "cpu_ms": 1000 },
+  "routes": [
+    { "pattern": "sakumoney.my.id", "custom_domain": true },
+    { "pattern": "www.sakumoney.my.id", "custom_domain": true }
+  ],
+  "assets": { "directory": "./landing", "binding": "ASSETS", "run_worker_first": true },
+  "observability": { "enabled": true }
+}

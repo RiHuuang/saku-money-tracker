@@ -1,6 +1,7 @@
 node_modules/
 server/node_modules/
 dist/
+.wrangler/
 .gradle/
 .gradle-home/
 .gradle-user/
@@ -10,6 +11,7 @@ android/**/build/
 *.log
 *.tsbuildinfo
 .env*
+.dev.vars
 artifacts/
 output/
 tmp/
@@ -19,3 +21,4 @@ tmp/
 google-services.json
 service-account*.json
 client-secret*.json
+android/app/src/test/resources/sheet-parity.json
