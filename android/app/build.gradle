@@ -14,6 +14,9 @@ def sakuApiUrl = project.findProperty('SAKU_API_URL') ?: System.getenv('SAKU_API
 if (sakuApiUrl && webApiUrl && sakuApiUrl != webApiUrl) {
     throw new GradleException('SAKU_API_URL and VITE_SAKU_API_URL must match so widget and foreground sync use the same service')
 }
+if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } && sakuApiUrl != 'https://app.sakumoney.my.id') {
+    throw new GradleException('Release builds require SAKU_API_URL=https://app.sakumoney.my.id')
+}
 
 android {
     namespace = "id.saku.money"
@@ -22,8 +25,8 @@ android {
         applicationId "id.saku.money"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '5')
-        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.1.0'
+        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '6')
+        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.1.1'
         ndk { abiFilters 'arm64-v8a' }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "SAKU_GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty('SAKU_GOOGLE_WEB_CLIENT_ID') ?: ''}\""

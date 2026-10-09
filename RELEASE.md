@@ -1,8 +1,12 @@
 # Saku production release
 
-## Current direct APK release — October 8
+## Current direct APK release — October 9
 
-Saku 2.1.0 is built as `android/app/build/outputs/apk/release/app-release.apk` (versionCode 5, versionName 2.1.0). Release unit tests, release lint, and `assembleRelease` passed. APK signature verification reports the same registered release certificate SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`. The build SHA-256 is `630DE53CBA4FAACDC8D2D98E1C37E45D9E3554188A71BB2EA0348F72E78CA249`. The phone update and production download replacement are pending final deployment checks.
+Saku 2.1.1 fixes the Android 2.1.0 sign-in/sync failure: the ignored `.env.production` still targeted the frozen Google Cloud API. The production API address is now checked into `.env.production`; Vite rejects another target for a production build, and Gradle rejects another target for a release build. Both the foreground bundle and widget BuildConfig target `https://app.sakumoney.my.id`. The signed versionCode 6 APK was built with the existing release certificate (SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`), and its SHA-256 is `7EE21E6B865ACB1200B7FC796994F3B66FAA67B5F4F5842D5F5B9F68B0A32629`. It was installed over 2.1.0 on the Xiaomi phone without clearing app data; the user signed in and confirmed the status reached `Synced`.
+
+### Previous 2.1.0 release
+
+Saku 2.1.0 (versionCode 5) passed release unit tests, release lint, and `assembleRelease`; its signed APK SHA-256 was `630DE53CBA4FAACDC8D2D98E1C37E45D9E3554188A71BB2EA0348F72E78CA249`. It was installed on the phone and served as the production download, then superseded by 2.1.1 after its stale Android API address caused sign-in and sync to fail.
 
 ### Previous 2.0.1 release
 
