@@ -25,8 +25,8 @@ android {
         applicationId "id.saku.money"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '6')
-        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.1.1'
+        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '7')
+        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.1.2'
         ndk { abiFilters 'arm64-v8a' }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "SAKU_GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty('SAKU_GOOGLE_WEB_CLIENT_ID') ?: ''}\""

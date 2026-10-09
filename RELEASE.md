@@ -2,6 +2,10 @@
 
 ## Current direct APK release — October 9
 
+Saku 2.1.2 moves **Record payment** into a dialog and records payments above tracked card debt as card credit, increasing available credit by the full cash payment. The dialog previews the resulting credit and available limit before saving. The signed versionCode 7 APK passed release unit tests, release lint, and `assembleRelease`; it uses the existing release certificate and has SHA-256 `8ABDFA784DC956430881FEBE46F4FBDEA2FAF7C634AD61EBB21C41F2EB55B92B`. A browser check confirmed the production dialog and overpayment preview without submitting a financial transaction.
+
+### Previous 2.1.1 release
+
 Saku 2.1.1 fixes the Android 2.1.0 sign-in/sync failure: the ignored `.env.production` still targeted the frozen Google Cloud API. The production API address is now checked into `.env.production`; Vite rejects another target for a production build, and Gradle rejects another target for a release build. Both the foreground bundle and widget BuildConfig target `https://app.sakumoney.my.id`. The signed versionCode 6 APK was built with the existing release certificate (SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`), and its SHA-256 is `7EE21E6B865ACB1200B7FC796994F3B66FAA67B5F4F5842D5F5B9F68B0A32629`. It was installed over 2.1.0 on the Xiaomi phone without clearing app data; the user signed in and confirmed the status reached `Synced`.
 
 ### Previous 2.1.0 release

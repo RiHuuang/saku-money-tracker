@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { CalendarDays, CreditCard as CreditCardIcon, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
-  cardBalance, cardDue, dueRules, installmentAmounts, money, shiftMonth, today, uid, validAmount,
+  cardBalance, cardDue, dueRules, installmentAmounts, money, shiftMonth, today, uid, validAmount, validDate,
   type CreditCard, type Data, type RecurringRule, type Transaction,
 } from "./domain";
 import { Modal, MoneyInput } from "./components";
@@ -37,6 +37,17 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
   const [ruleMonth, setRuleMonth] = useState(month);
   const [deleteId, setDeleteId] = useState("");
   const pending = dueRules(data);
+  const paymentCard = data.creditCards.find((card) => card.id === payCard);
+  const paymentBalance = paymentCard ? cardBalance(data, paymentCard.id) : 0;
+  const paymentAmount = Number(payAmount);
+  const paymentCreditAfter = validAmount(paymentAmount) ? Math.max(0, paymentAmount - paymentBalance) : 0;
+
+  function openPayment(cardId: string) {
+    setPayCard(cardId);
+    setPayAmount("");
+    setPayAccount(data.accounts.includes(payAccount) ? payAccount : data.accounts[0]);
+    setPayDate(today());
+  }
 
   function editCard(card?: CreditCard) {
     setCardDraft(card || { id: "", name: "", limit: 0, openingDebt: 0, dueDay: 15 });
@@ -70,9 +81,10 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
     e.preventDefault();
     const amount = Number(payAmount);
     const card = data.creditCards.find((c) => c.id === payCard);
-    if (!card || !validAmount(amount) || amount > cardBalance(data, card.id) || !data.accounts.includes(payAccount) || payDate > today()) {
-      notify("Check the card, amount, source account, and date."); return;
-    }
+    if (!card) { notify("Choose a card to pay."); return; }
+    if (!validAmount(amount)) { notify("Enter a payment amount in whole rupiah."); return; }
+    if (!data.accounts.includes(payAccount)) { notify("Choose a source account for this payment."); return; }
+    if (!validDate(payDate) || payDate > today()) { notify("Choose a valid payment date up to today."); return; }
     const transaction: Transaction = { id: uid(), name: `Payment to ${card.name}`, amount, type: "expense", kind: "card_payment", cardId: card.id, date: payDate, pocketId: "", account: payAccount, note: "" };
     if (await commit({ ...data, transactions: [...data.transactions, transaction] }, "Card payment recorded")) { setPayAmount(""); setPayCard(""); }
   }
@@ -141,8 +153,8 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
         const existing = data.existingInstallments.filter((item) => item.cardId === card.id);
         return <section className="credit-card-item" key={card.id}>
           <div className="credit-card-top"><span className="credit-card-icon"><CreditCardIcon size={22} /></span><div><h3>{card.name}</h3><small>Payment day {card.dueDay} each month</small></div><button className="text-button" onClick={() => editCard(card)}>Edit</button></div>
-          <div className="credit-card-values"><div><span>Outstanding now</span><strong>{money(debt)}</strong></div><div><span>Available credit now</span><strong>{money(Math.max(0, card.limit - debt))}</strong></div><div><span>Scheduled this month</span><strong>{money(cardDue(data, card.id, month))}</strong></div></div>
-          <div className="credit-card-actions"><button className="button primary" onClick={() => onNewPurchase(card.id)}><Plus size={16} /> Purchase</button><button className="button secondary" onClick={() => { setPayCard(card.id); setPayAmount(""); }}>Record payment</button></div>
+          <div className="credit-card-values"><div><span>Outstanding now</span><strong>{money(Math.max(0, debt))}</strong></div><div><span>Available credit now</span><strong>{money(Math.max(0, card.limit - debt))}</strong></div><div><span>Scheduled this month</span><strong>{money(cardDue(data, card.id, month))}</strong></div>{debt < 0 && <div><span>Credit from extra payments</span><strong>{money(-debt)}</strong></div>}</div>
+          <div className="credit-card-actions"><button className="button primary" onClick={() => onNewPurchase(card.id)}><Plus size={16} /> Purchase</button><button className="button secondary" onClick={() => openPayment(card.id)}>Record payment</button></div>
           {!!purchases.length && <details className="card-purchases"><summary>{purchases.length} purchases · installment details</summary>{purchases.slice().sort((a,b) => b.date.localeCompare(a.date)).map((t) => <div key={t.id}><span>{t.date} · {t.name}{t.recurringRuleId ? " · recurring" : ""}<small>{installmentAmounts(t.amount, t.installments || 1).map((a, i) => `${shiftMonth(t.firstDueMonth || shiftMonth(t.date.slice(0, 7), 1), i)} ${money(a)}`).join(" · ")}</small></span><strong>{money(t.amount)} · {t.installments === 1 ? "one payment" : `${t.installments} payments`}</strong></div>)}</details>}
           {!!payments.length && <details className="card-purchases"><summary>{payments.length} payments recorded</summary>{payments.slice().sort((a,b) => b.date.localeCompare(a.date)).map((t) => <div key={t.id}><span>{t.date} · {t.account}</span><strong>{money(t.amount)}</strong></div>)}</details>}
           {!!existing.length && <details className="card-purchases"><summary>{existing.length} installments already underway</summary>{existing.map((item) => <div key={item.id}><span>{item.name}<small>Next due {item.nextDueMonth} · {item.paymentsLeft} payments left</small></span><strong>{money(item.monthlyAmount)} / month</strong></div>)}</details>}
@@ -156,12 +168,12 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
         <label className="field">Already owed (Rp)<MoneyInput min={0} required value={openingDebt} onValueChange={setOpeningDebt} /></label>
         <label className="field">Payment day<input type="number" min={1} max={28} required value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></label>
       </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>Save card</button><button type="button" className="button secondary" onClick={() => setCardDraft(null)}>Cancel</button></div></form>}
-      {payCard && <form className="plans-form" onSubmit={(e) => void makePayment(e)}><h3>Record card payment</h3><p>The card debt goes down. This does not count as new spending.</p><div className="plans-fields">
+      {paymentCard && <Modal title="Record card payment" subtitle="Pay down this card from one of your accounts." onClose={() => setPayCard("")}><form className="plans-form" onSubmit={(e) => void makePayment(e)}><div className="plans-payment-balance"><span>Outstanding now</span><strong>{money(Math.max(0, paymentBalance))}</strong><small>This payment moves cash to the card. It is not new spending.</small></div><div className="plans-fields">
         <label className="field">Card<select value={payCard} onChange={(e) => setPayCard(e.target.value)}>{data.creditCards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-        <label className="field">Amount (Rp)<MoneyInput min={1} max={Math.max(0, cardBalance(data, payCard))} required value={payAmount} onValueChange={setPayAmount} /></label>
+        <label className="field">Amount (Rp)<MoneyInput min={1} required value={payAmount} onValueChange={setPayAmount} /></label>
         <label className="field">Paid from<select value={payAccount} onChange={(e) => setPayAccount(e.target.value)}>{data.accounts.map((a) => <option key={a}>{a}</option>)}</select></label>
         <label className="field">Date<input type="date" max={today()} required value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
-      </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>Record payment</button><button type="button" className="button secondary" onClick={() => setPayCard("")}>Cancel</button></div></form>}
+      </div>{paymentCreditAfter > 0 && <p className="plans-payment-credit">This payment will leave {money(paymentCreditAfter)} as card credit. Available credit will be {money(paymentCard.limit - paymentBalance + paymentAmount)}.</p>}<div className="plans-form-actions"><button className="button primary" disabled={busy}>Record payment</button><button type="button" className="button secondary" onClick={() => setPayCard("")}>Cancel</button></div></form></Modal>}
     </> : <>
       <div className="section-heading plans-heading"><div><h2>Recurring bills</h2><p>{money(data.recurring.filter((r) => r.active && r.type === "expense").reduce((n, r) => n + r.amount * 12, 0))} planned per year · Record each charge only when it happens.</p></div><button className="button secondary" onClick={() => editRule()}><Plus size={16} /> Add bill</button></div>
       {pending.length > 0 && <section className="due-list"><h3>Ready to record</h3>{pending.map(({ rule, date }) => <div key={`${rule.id}:${date}`} className="due-row"><CalendarDays size={17} /><div><strong>{rule.name}</strong><small>Due {date} · {rule.account}</small></div><strong>{money(rule.amount)}</strong><button className="button primary" disabled={busy} onClick={() => void postRule(rule, date)}>{rule.cardId ? "Mark charged" : rule.type === "income" ? "Record income" : "Mark paid"}</button><button className="text-button" disabled={busy} onClick={() => void skipRule(rule, date)}>Skip</button></div>)}</section>}

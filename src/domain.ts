@@ -217,7 +217,7 @@ export function summary(data: Data, month: string) {
     budget,
     remaining,
     available: Math.min(Math.max(0, balance), remaining),
-    cardDebt: data.creditCards.reduce((n, c) => n + cardBalance(data, c.id), 0),
+    cardDebt: data.creditCards.reduce((n, c) => n + Math.max(0, cardBalance(data, c.id)), 0),
     unassigned: transactions.filter((t) => isSpending(t) && !t.pocketId).reduce((n, t) => n + personalAmount(t), 0),
     accounts: data.accounts.map((account) => ({ account, balance: accountBalance(data, account) })),
   };
@@ -447,8 +447,6 @@ export function validateData(input: unknown): Data {
     if (repaid > source.amount - source.split!.ownAmount)
       throw new Error("Repayments exceed the amount owed.");
   }
-  if (d.creditCards.some((card) => cardBalance(d, card.id) < 0))
-    throw new Error("Card payments exceed the recorded card balance.");
   const ruleIds = new Set<string>();
   for (const r of d.recurring) {
     const card = d.creditCards.find((c) => c.id === r?.cardId);

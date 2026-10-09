@@ -3299,6 +3299,11 @@ main {
 .card-purchases strong { text-align: right; }
 .muted-action { margin-top: 12px; font-size: 11px; }
 .plans-form, .due-list { border-top: 1px solid #dce7e4; padding-top: 18px; }
+.modal .plans-form { border-top: 0; padding-top: 0; }
+.plans-payment-balance { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-muted); }
+.plans-payment-balance span, .plans-payment-balance small { color: var(--muted); font-size: 12px; }
+.plans-payment-balance strong { color: var(--ink); font-size: 24px; line-height: 1.2; }
+.plans-payment-credit { margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); color: var(--teal); font-size: 13px; line-height: 1.5; }
 .plans-form > p { color: #667679; font-size: 13px; }
 .plans-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin: 15px 0; }
 .rule-row, .due-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 13px; border-bottom: 1px solid #e3eae8; padding: 12px 0; }

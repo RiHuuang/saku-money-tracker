@@ -200,7 +200,16 @@ test("card purchase charges a pocket once and payment restores card credit", () 
   assert.equal(summary(d, "2026-10").balance, 459999);
   assert.equal(summary(d, "2026-10").expenses, 0);
   d.transactions[2].amount = 130000;
-  assert.throws(() => validateData(d), /Card payments exceed/);
+  assert.doesNotThrow(() => validateData(d));
+  assert.equal(cardBalance(d, "bca-card"), -9999);
+  assert.equal(summary(d, "2026-10").cardDebt, 0);
+  assert.equal(summary(d, "2026-10").balance, 370000);
+  assert.equal(1000000 - cardBalance(d, "bca-card"), 1009999);
+  d.transactions.push({ id: "later-purchase", name: "Later purchase", amount: 4000, type: "expense", kind: "card_purchase", cardId: "bca-card", installments: 1, firstDueMonth: "2026-11", date: "2026-10-16", pocketId: "food", account: "CC BCA", note: "" });
+  assert.doesNotThrow(() => validateData(d));
+  assert.equal(cardBalance(d, "bca-card"), -5999);
+  assert.equal(summary(d, "2026-10").balance, 370000);
+  assert.equal(summary(d, "2026-10").expenses, 4000);
 });
 test("shared bill retains full cash movement but spends only own share", () => {
   const d = emptyData();
