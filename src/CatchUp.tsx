@@ -10,6 +10,7 @@ import { confirmedImportAccount, importedTransactions, importRowAccount, importR
 
 const possibleKey = (row: Pick<ImportRow, "date" | "name" | "amount" | "direction">, account: string) => JSON.stringify([account, row.date, row.amount, row.direction, row.name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim()]);
 const similarKey = (row: Pick<ImportRow, "date" | "amount" | "direction">, account: string) => JSON.stringify([account, row.date, row.amount, row.direction]);
+const consentTargetFor = (draft: ImportDraft | null, owner: string) => draft?.owner === owner && draft.sources.length ? JSON.stringify([owner, draft.id, draft.sources.map((source) => source.id)]) : "";
 const activityOptions: { value: ImportRow["activity"]; label: string }[] = [
   { value: "purchase", label: "Purchase or payment" }, { value: "fee", label: "Bank or service fee" },
   { value: "refund", label: "Refund received" }, { value: "interest", label: "Interest earned" },
@@ -43,7 +44,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const [processing, setProcessing] = useState(false);
   const [activePage, setActivePage] = useState<{ sourceId: string; page: number; total: number } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [consent, setConsent] = useState(false);
+  const [consentTarget, setConsentTarget] = useState("");
   const [info, setInfo] = useState("");
   const [previewId, setPreviewId] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
@@ -76,7 +77,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     void listImportDrafts(owner).then((items) => { if (live) { persisted.current = new Map(items.map((item) => [item.id, item])); setDrafts(items); setDraft(items[0] || null); setSelectedMatches([]); draftRef.current = items[0] || null; } }).catch(() => { if (live) setInfo("Local drafts are unavailable in this browser."); });
     return () => { live = false; cancelled.current = true; };
   }, [owner]);
-  useEffect(() => { setConsent(localStorage.getItem(importConsentKey(owner)) === "yes"); }, [owner]);
+  useEffect(() => { setConsentTarget(""); try { localStorage.removeItem(importConsentKey(owner)); } catch { /* Consent is never required in storage. */ } }, [owner]);
+  const consent = !!consentTarget && consentTarget === consentTargetFor(draft, owner);
   const preview = draft?.sources.find((source) => source.id === previewId);
   useEffect(() => {
     if (!preview) { setPreviewUrl(""); return; }
@@ -130,7 +132,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   }
   async function extract() {
     if (!draftRef.current || !userId || processingRef.current || savingRef.current) return;
-    if (!consent) { setInfo("Confirm cloud processing before starting."); return; }
+    if (!consentTarget || consentTarget !== consentTargetFor(draftRef.current, owner)) { setInfo("Confirm cloud processing for these files before starting."); return; }
     if (draftRef.current.sources.some((source) => !source.mixedAccounts && !confirmedImportAccount(source, data))) { setInfo("Choose an account or mark a file as mixed accounts before extraction."); return; }
     const draftId = draftRef.current.id;
     const sources = draftRef.current.sources;
@@ -176,7 +178,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       setInfo(cancelled.current ? "Paused. Your progress is saved on this device." : failedSources ? `${failedSources} ${failedSources === 1 ? "source needs" : "sources need"} attention. Successful pages were kept; fix or remove the marked source, then retry.` : draftRef.current?.rows.length ? "Extraction finished. Check the rows before saving." : "No transactions were found. Check the source preview or try a clearer screenshot.");
     } catch (error) {
       setInfo(error instanceof Error ? error.message : "Could not process this page. Your progress is saved.");
-    } finally { processingRef.current = false; setProcessing(false); setActivePage(null); }
+    } finally { processingRef.current = false; setProcessing(false); setActivePage(null); setConsentTarget(""); }
   }
   async function updateRow(id: string, patch: Partial<ImportRow>) {
     if (!draftRef.current || savingRef.current) return;
@@ -263,7 +265,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   async function newDraft() {
     if (processingRef.current || savingRef.current) return;
     const next: ImportDraft = { id: uid(), owner, month, sources: [], rows: [], saved: [], createdAt: Date.now() };
-    try { await save(next); setDrafts(await listImportDrafts(owner)); setSelectedMatches([]); setInfo(""); setPreviewId(""); setDeleteConfirmationId(""); }
+    try { await save(next); setDrafts(await listImportDrafts(owner)); setConsentTarget(""); setSelectedMatches([]); setInfo(""); setPreviewId(""); setDeleteConfirmationId(""); }
     catch { /* save explains the local storage problem */ }
   }
   async function deleteDraft() {
@@ -273,7 +275,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     if (draftRef.current?.id !== id || processingRef.current || savingRef.current) return;
     try {
       await deleteImportDraft(id); persisted.current.delete(id);
-      const next = await listImportDrafts(owner); setDrafts(next); setDraft(next[0] || null); setSelectedMatches([]); draftRef.current = next[0] || null;
+      const next = await listImportDrafts(owner); setDrafts(next); setDraft(next[0] || null); setConsentTarget(""); setSelectedMatches([]); draftRef.current = next[0] || null;
       setInfo(""); setPreviewId(""); setDeleteConfirmationId("");
     } catch { setInfo("Could not remove the local draft. Check available device storage and try again."); }
   }
@@ -281,10 +283,10 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     <header className="catchup-hero"><div><p className="catchup-eyebrow">SAKU · {statementMode ? "MONTHLY CHECK" : "CATCH UP"}</p><h2>{statementMode ? "Check what you recorded." : "Missed a day? Add it together."}</h2><p>{statementMode ? "Compare a statement or transaction screenshot with your ledger. Confirm exact matches and review the rest." : "Choose screenshots or statements from your banks and wallets. Review one list, then save the clear rows in a batch."}</p></div><div className="catchup-hero-count"><strong>{statementMode ? exactMatches.length : draft?.rows.length || "—"}</strong><span>{statementMode ? "exact statement matches" : draft?.rows.length ? "transactions found in this draft" : "Your review starts when you add a file"}</span></div></header>
     <div className="catchup-steps"><span>Choose files</span><ArrowRight size={13} /><span>Check the list</span><ArrowRight size={13} /><span>Add to Saku</span></div>
     <section className="catchup-panel"><div className="catchup-panel-head"><div><h3>Your sources</h3><p>Up to ten files per draft · screenshots and PDFs</p></div><label className="button primary"><Upload size={16} /> Add files<input hidden disabled={!userId || processing || saving} type="file" accept=".pdf,image/png,image/jpeg,image/webp" multiple onChange={(event) => { void addFiles(event.target.files); event.target.value = ""; }} /></label></div>
-      {drafts.length > 1 && <label className="field">Local draft<select disabled={processing || saving} value={draft?.id || ""} onChange={(event) => { const next = drafts.find((item) => item.id === event.target.value) || null; setDraft(next); setSelectedMatches([]); draftRef.current = next; setInfo(""); setPreviewId(""); setDeleteConfirmationId(""); }}><option value="">Select draft</option>{drafts.map((item) => <option key={item.id} value={item.id}>{new Date(item.createdAt).toLocaleDateString("id-ID")} · {item.sources.length} sources · {item.rows.length} rows</option>)}</select></label>}
+      {drafts.length > 1 && <label className="field">Local draft<select disabled={processing || saving} value={draft?.id || ""} onChange={(event) => { const next = drafts.find((item) => item.id === event.target.value) || null; setDraft(next); setConsentTarget(""); setSelectedMatches([]); draftRef.current = next; setInfo(""); setPreviewId(""); setDeleteConfirmationId(""); }}><option value="">Select draft</option>{drafts.map((item) => <option key={item.id} value={item.id}>{new Date(item.createdAt).toLocaleDateString("id-ID")} · {item.sources.length} sources · {item.rows.length} rows</option>)}</select></label>}
       {!!draft?.sources.length && <div className="catchup-sources">{draft.sources.map((source) => <div className="catchup-source" key={source.id}>{/\.pdf$/i.test(source.name) ? <FileText size={20} /> : <FileImage size={20} />}<div><strong>{source.name}</strong><small className={source.error ? "catchup-source-error" : undefined}>{activePage?.sourceId === source.id ? `Extracting page ${activePage.page} of ${activePage.total}` : source.error ? `Needs attention · ${source.error}` : source.pageCount ? `${source.processedPages} of ${source.pageCount} pages` : "Ready to process"}</small></div><button className="text-button" onClick={() => setPreviewId(source.id)}>Preview</button><label>Account<select disabled={processing || saving || source.mixedAccounts || sourceHasSavedRows(source.id)} value={source.mixedAccounts ? "" : confirmedImportAccount(source, data)} onChange={(event) => void updateAccount(source.id, event.target.value)}><option value="">{source.mixedAccounts ? "Choose on each row" : "Choose account"}</option>{[...data.accounts, ...data.creditCards.map((card) => card.name)].map((account) => <option key={account}>{account}</option>)}</select></label><label className="catchup-mixed"><input type="checkbox" disabled={processing || saving || sourceHasSavedRows(source.id)} checked={!!source.mixedAccounts} onChange={(event) => void updateMixedAccounts(source.id, event.target.checked)} /> This file shows multiple Saku accounts</label><button className="catchup-icon" disabled={processing || saving || sourceHasSavedRows(source.id)} title={sourceHasSavedRows(source.id) ? "Undo saved entries before removing this source" : "Remove source"} aria-label={`Remove ${source.name}`} onClick={() => void removeSource(source.id)}><X size={16} /></button></div>)}</div>}
       {!!draft?.sources.some((source) => sourceHasSavedRows(source.id)) && <p className="import-note">Source account choices are locked after saving. Undo unchanged entries before changing them.</p>}
-      <label className="catchup-consent"><input type="checkbox" checked={consent} onChange={(event) => { const allowed = event.target.checked; setConsent(allowed); if (allowed) localStorage.setItem(importConsentKey(owner), "yes"); else localStorage.removeItem(importConsentKey(owner)); }} /><span>Send selected page text and images to Cloudflare AI. Original files and review drafts stay on this device; saved transactions follow your existing backup and Sheet sync.</span></label>
+      <label className="catchup-consent"><input type="checkbox" checked={consent} disabled={!draft?.sources.length || processing} onChange={(event) => setConsentTarget(event.target.checked ? consentTargetFor(draft, owner) : "")} /><span>For this processing run, send these files’ page text and images to Cloudflare AI. Original files and review drafts stay on this device; saved transactions follow your existing backup and Sheet sync.</span></label>
       {!!draft?.sources.length && draft.sources.some((source) => !source.mixedAccounts && !confirmedImportAccount(source, data)) && <p className="import-note">Choose the account shown in each file, or mark it as mixed accounts, before processing it.</p>}
       {!!draft?.sources.length && <p className="import-note">For mixed-account files, choose an account on each row. Moves between pockets of one Saku account are not spending; mark those “Don't import.”</p>}
       <div className="catchup-actions"><button className="button primary" disabled={!draft?.sources.length || draft.sources.some((source) => !source.mixedAccounts && !confirmedImportAccount(source, data)) || processing || saving || !consent || !userId} onClick={() => void extract()}>{processing ? "Processing…" : draft?.sources.some((source) => source.error) ? "Retry unfinished sources" : "Extract transactions"}<ArrowRight size={16} /></button>{processing && <button className="button secondary" onClick={() => { cancelled.current = true; }}>Pause after this page</button>}<button className="text-button" disabled={processing || saving} onClick={() => void newDraft()}>New draft</button>{draft && <button className="text-button" disabled={processing || saving} onClick={() => setDeleteConfirmationId(draft.id)}>Remove draft</button>}</div>
