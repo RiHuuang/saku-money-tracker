@@ -50,6 +50,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const [deleteConfirmationId, setDeleteConfirmationId] = useState("");
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [reviewView, setReviewView] = useState<"attention" | "adding" | "setAside" | "all">("attention");
+  const [selectedMatches, setSelectedMatches] = useState<string[]>([]);
   const cancelled = useRef(false);
   const processingRef = useRef(false);
   const savingRef = useRef(false);
@@ -72,7 +73,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   };
   useEffect(() => {
     let live = true;
-    void listImportDrafts(owner).then((items) => { if (live) { persisted.current = new Map(items.map((item) => [item.id, item])); setDrafts(items); setDraft(items[0] || null); draftRef.current = items[0] || null; } }).catch(() => { if (live) setInfo("Local drafts are unavailable in this browser."); });
+    void listImportDrafts(owner).then((items) => { if (live) { persisted.current = new Map(items.map((item) => [item.id, item])); setDrafts(items); setDraft(items[0] || null); setSelectedMatches([]); draftRef.current = items[0] || null; } }).catch(() => { if (live) setInfo("Local drafts are unavailable in this browser."); });
     return () => { live = false; cancelled.current = true; };
   }, [owner]);
   useEffect(() => { setConsent(localStorage.getItem(importConsentKey(owner)) === "yes"); }, [owner]);
@@ -108,6 +109,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const statementRows: BankRow[] = (draft?.rows || []).filter((row) => row.decision !== "skip" && !!accountForRow(row) && validDate(row.date) && validAmount(row.amount) && row.direction !== "unknown" && !["pending", "failed", "reward", "pay_later", "unknown"].includes(row.activity) && (!usesDeferredFunding(row) || data.creditCards.some((card) => card.name === accountForRow(row)))).map((row) => ({ id: row.id, file: draft?.sources.find((source) => source.id === row.sourceId)?.name || "", account: accountForRow(row), date: row.date, name: row.name, amount: row.amount, type: row.direction as "income" | "expense" }));
   const comparisons = reconcile(statementRows, data.transactions, draft?.month || month);
   const exactMatches = comparisons.filter((row) => row.status === "matched");
+  const unverifiedMatches = exactMatches.filter((row) => !data.transactions.find((transaction) => transaction.id === row.matchId)?.verified);
+  const matchesToConfirm = unverifiedMatches.filter((row) => selectedMatches.includes(row.matchId));
   async function addFiles(files: FileList | null) {
     if (!files?.length) return;
     if (processingRef.current || savingRef.current) { setInfo("Wait for the current import step to finish before adding files."); return; }
@@ -235,10 +238,14 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     } finally { savingRef.current = false; setSaving(false); }
   }
   async function confirmExactMatches() {
-    const ids = new Set(exactMatches.map((row) => row.matchId));
+    const ids = new Set(matchesToConfirm.map((row) => row.matchId));
     if (!ids.size || busy || processingRef.current || savingRef.current) return;
     savingRef.current = true; setSaving(true);
-    try { await commit({ ...data, transactions: data.transactions.map((transaction) => ids.has(transaction.id) ? { ...transaction, verified: true } : transaction) }, `${ids.size} statement matches checked`); }
+    try {
+      if (await commit({ ...data, transactions: data.transactions.map((transaction) => ids.has(transaction.id) ? { ...transaction, verified: true } : transaction) }, `${ids.size} statement matches checked`)) {
+        setSelectedMatches((current) => current.filter((id) => !ids.has(id)));
+      }
+    }
     finally { savingRef.current = false; setSaving(false); }
   }
   async function removeSource(id: string) {
@@ -256,7 +263,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   async function newDraft() {
     if (processingRef.current || savingRef.current) return;
     const next: ImportDraft = { id: uid(), owner, month, sources: [], rows: [], saved: [], createdAt: Date.now() };
-    try { await save(next); setDrafts(await listImportDrafts(owner)); setInfo(""); setPreviewId(""); setDeleteConfirmationId(""); }
+    try { await save(next); setDrafts(await listImportDrafts(owner)); setSelectedMatches([]); setInfo(""); setPreviewId(""); setDeleteConfirmationId(""); }
     catch { /* save explains the local storage problem */ }
   }
   async function deleteDraft() {
@@ -266,7 +273,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     if (draftRef.current?.id !== id || processingRef.current || savingRef.current) return;
     try {
       await deleteImportDraft(id); persisted.current.delete(id);
-      const next = await listImportDrafts(owner); setDrafts(next); setDraft(next[0] || null); draftRef.current = next[0] || null;
+      const next = await listImportDrafts(owner); setDrafts(next); setDraft(next[0] || null); setSelectedMatches([]); draftRef.current = next[0] || null;
       setInfo(""); setPreviewId(""); setDeleteConfirmationId("");
     } catch { setInfo("Could not remove the local draft. Check available device storage and try again."); }
   }
@@ -274,7 +281,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     <header className="catchup-hero"><div><p className="catchup-eyebrow">SAKU · {statementMode ? "MONTHLY CHECK" : "CATCH UP"}</p><h2>{statementMode ? "Check what you recorded." : "Missed a day? Add it together."}</h2><p>{statementMode ? "Compare a statement or transaction screenshot with your ledger. Confirm exact matches and review the rest." : "Choose screenshots or statements from your banks and wallets. Review one list, then save the clear rows in a batch."}</p></div><div className="catchup-hero-count"><strong>{statementMode ? exactMatches.length : draft?.rows.length || "—"}</strong><span>{statementMode ? "exact statement matches" : draft?.rows.length ? "transactions found in this draft" : "Your review starts when you add a file"}</span></div></header>
     <div className="catchup-steps"><span>Choose files</span><ArrowRight size={13} /><span>Check the list</span><ArrowRight size={13} /><span>Add to Saku</span></div>
     <section className="catchup-panel"><div className="catchup-panel-head"><div><h3>Your sources</h3><p>Up to ten files per draft · screenshots and PDFs</p></div><label className="button primary"><Upload size={16} /> Add files<input hidden disabled={!userId || processing || saving} type="file" accept=".pdf,image/png,image/jpeg,image/webp" multiple onChange={(event) => { void addFiles(event.target.files); event.target.value = ""; }} /></label></div>
-      {drafts.length > 1 && <label className="field">Local draft<select disabled={processing || saving} value={draft?.id || ""} onChange={(event) => { const next = drafts.find((item) => item.id === event.target.value) || null; setDraft(next); draftRef.current = next; setInfo(""); setPreviewId(""); setDeleteConfirmationId(""); }}><option value="">Select draft</option>{drafts.map((item) => <option key={item.id} value={item.id}>{new Date(item.createdAt).toLocaleDateString("id-ID")} · {item.sources.length} sources · {item.rows.length} rows</option>)}</select></label>}
+      {drafts.length > 1 && <label className="field">Local draft<select disabled={processing || saving} value={draft?.id || ""} onChange={(event) => { const next = drafts.find((item) => item.id === event.target.value) || null; setDraft(next); setSelectedMatches([]); draftRef.current = next; setInfo(""); setPreviewId(""); setDeleteConfirmationId(""); }}><option value="">Select draft</option>{drafts.map((item) => <option key={item.id} value={item.id}>{new Date(item.createdAt).toLocaleDateString("id-ID")} · {item.sources.length} sources · {item.rows.length} rows</option>)}</select></label>}
       {!!draft?.sources.length && <div className="catchup-sources">{draft.sources.map((source) => <div className="catchup-source" key={source.id}>{/\.pdf$/i.test(source.name) ? <FileText size={20} /> : <FileImage size={20} />}<div><strong>{source.name}</strong><small className={source.error ? "catchup-source-error" : undefined}>{activePage?.sourceId === source.id ? `Extracting page ${activePage.page} of ${activePage.total}` : source.error ? `Needs attention · ${source.error}` : source.pageCount ? `${source.processedPages} of ${source.pageCount} pages` : "Ready to process"}</small></div><button className="text-button" onClick={() => setPreviewId(source.id)}>Preview</button><label>Account<select disabled={processing || saving || source.mixedAccounts || sourceHasSavedRows(source.id)} value={source.mixedAccounts ? "" : confirmedImportAccount(source, data)} onChange={(event) => void updateAccount(source.id, event.target.value)}><option value="">{source.mixedAccounts ? "Choose on each row" : "Choose account"}</option>{[...data.accounts, ...data.creditCards.map((card) => card.name)].map((account) => <option key={account}>{account}</option>)}</select></label><label className="catchup-mixed"><input type="checkbox" disabled={processing || saving || sourceHasSavedRows(source.id)} checked={!!source.mixedAccounts} onChange={(event) => void updateMixedAccounts(source.id, event.target.checked)} /> This file shows multiple Saku accounts</label><button className="catchup-icon" disabled={processing || saving || sourceHasSavedRows(source.id)} title={sourceHasSavedRows(source.id) ? "Undo saved entries before removing this source" : "Remove source"} aria-label={`Remove ${source.name}`} onClick={() => void removeSource(source.id)}><X size={16} /></button></div>)}</div>}
       {!!draft?.sources.some((source) => sourceHasSavedRows(source.id)) && <p className="import-note">Source account choices are locked after saving. Undo unchanged entries before changing them.</p>}
       <label className="catchup-consent"><input type="checkbox" checked={consent} onChange={(event) => { const allowed = event.target.checked; setConsent(allowed); if (allowed) localStorage.setItem(importConsentKey(owner), "yes"); else localStorage.removeItem(importConsentKey(owner)); }} /><span>Send selected page text and images to Cloudflare AI. Original files and review drafts stay on this device; saved transactions follow your existing backup and Sheet sync.</span></label>
@@ -284,7 +291,10 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       {draft && deleteConfirmationId === draft.id && <div className="catchup-delete-confirm" role="group" aria-label="Confirm draft removal"><p>Remove this local draft and its source files? Transactions already added to Activity will stay there.</p><div><button className="button secondary" type="button" onClick={() => setDeleteConfirmationId("")}>Keep draft</button><button className="button danger" type="button" disabled={processing || saving} onClick={() => void deleteDraft()}>Remove this draft</button></div></div>}
       {!userId && <p className="catchup-message">Sign in to use cloud extraction.</p>}{info && <p className="catchup-message" role="status">{info}</p>}
     </section>
-    {statementMode && !!draft?.rows.length && <section className="catchup-panel"><div className="catchup-panel-head"><div><h3>Statement comparison</h3><p>{exactMatches.length} exact matches · {comparisons.filter((row) => row.status === "missing").length} only in source · {comparisons.filter((row) => row.status === "different" || row.status === "review").length} to inspect</p></div><button className="button secondary" disabled={!exactMatches.length || busy || processing || saving || exactMatches.every((row) => data.transactions.find((transaction) => transaction.id === row.matchId)?.verified)} onClick={() => void confirmExactMatches()}>Confirm exact matches</button></div><p className="import-note">Incomplete screenshots and partial statements cannot prove a ledger entry is missing. No deletions are suggested.</p></section>}
+    {statementMode && !!draft?.rows.length && <section className="catchup-panel"><div className="catchup-panel-head"><div><h3>Statement comparison</h3><p>{exactMatches.length} exact matches · {comparisons.filter((row) => row.status === "missing").length} only in source · {comparisons.filter((row) => row.status === "different" || row.status === "review").length} to inspect</p></div></div>
+      {!!unverifiedMatches.length && <details className="catchup-match-review"><summary>Review {unverifiedMatches.length} exact {unverifiedMatches.length === 1 ? "match" : "matches"} before confirming</summary><p>Choose the Saku entries you recognize from the source. Only selected entries will be marked checked.</p><div className="catchup-match-list">{unverifiedMatches.map((row) => <label className="catchup-match" key={row.id}><input type="checkbox" checked={selectedMatches.includes(row.matchId)} disabled={busy || processing || saving} onChange={(event) => setSelectedMatches((current) => event.target.checked ? [...current, row.matchId] : current.filter((id) => id !== row.matchId))} /><span><strong>{row.name}</strong><small>{row.date} · {row.account} · {row.file}</small></span><b>{row.type === "expense" ? "−" : "+"}{money(row.amount)}</b></label>)}</div><button className="button secondary" disabled={!matchesToConfirm.length || busy || processing || saving} onClick={() => void confirmExactMatches()}>Confirm {matchesToConfirm.length} selected {matchesToConfirm.length === 1 ? "match" : "matches"}</button></details>}
+      {!unverifiedMatches.length && !!exactMatches.length && <p className="catchup-match-done"><Check size={16} /> All exact matches are already checked.</p>}
+      <p className="import-note">Incomplete screenshots and partial statements cannot prove a ledger entry is missing. No deletions are suggested.</p></section>}
     {!!draft?.rows.length && <section className="catchup-panel catchup-review"><div className="catchup-panel-head"><div><h3>Make this list yours</h3><p>Check the uncertain ones. You can add the clear transactions now and return to the rest later.</p></div><span className="catchup-private"><LockKeyhole size={13} /> Saved on this device</span></div>
       <div className="catchup-review-overview"><div><strong>{ready.length}</strong><span>to add to Saku</span></div><div><strong>{needsReview.length}</strong><span>need a closer look</span></div><div><strong>{setAside.length}</strong><span>won't be imported</span></div></div><p className="catchup-review-guide">Account = where money moved. Pocket = optional budget for spending.</p>
       <div className="catchup-review-tabs" role="group" aria-label="Show transactions"><button type="button" aria-pressed={reviewView === "attention"} onClick={() => setReviewView("attention")}>Needs a look <span>{needsReview.length}</span></button><button type="button" aria-pressed={reviewView === "adding"} onClick={() => setReviewView("adding")}>Adding <span>{ready.length}</span></button><button type="button" aria-pressed={reviewView === "setAside"} onClick={() => setReviewView("setAside")}>Not importing <span>{setAside.length}</span></button><button type="button" aria-pressed={reviewView === "all"} onClick={() => setReviewView("all")}>All <span>{draft.rows.length}</span></button></div>

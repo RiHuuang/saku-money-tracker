@@ -22,6 +22,8 @@ An unreadable source or failed page now records its error on that source and let
 
 The source loop is now a small shared function with no-network tests for continuation after a bad source, a fatal stop, and pause before the next source. All 40 core local tests pass. These tests cover sequencing and error policy, while the end-to-end browser extraction remains pending separate authorization.
 
+Statement comparison now lists each unverified exact match with its source file, account, date, description, and amount. Checking a row and pressing Confirm marks only those selected ledger entries verified; changing drafts clears the selection. This prevents a single unexplained button from verifying every AI-extracted exact match. The 40 local tests and staging-mode build pass. This interaction still needs a signed-in browser check before production release.
+
 A route-level Worker test now uses an in-memory D1 database and a stub AI binding to verify that the production gate, account identity, browser CSRF, and malformed inputs reject requests before inference. It also verifies one fabricated successful response settles to 12 app neurons and a near-cap counter returns 429 without another stub invocation. This test makes no Cloudflare AI request.
 
 Deleting a Saku account now clears its remembered AI-processing consent together with its local import drafts and ledger key. An isolated browser check with a fabricated File confirmed zero drafts, null consent, and null ledger after `removeUserData`; the temporary harness and browser were removed. This check made no AI request and touched no real account.
