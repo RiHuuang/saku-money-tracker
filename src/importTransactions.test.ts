@@ -51,6 +51,7 @@ test("a wallet top-up becomes one balanced transfer and does not count as spendi
   const transactions = importedTransactions(row, "BCA", "bca.png", ledger);
   assert.equal(transactions.length, 2);
   assert.equal(transactions[0].transferId, transactions[1].transferId);
+  assert.deepEqual(transactions.map((transaction) => transaction.verified), [true, false]);
   assert.equal(validateData({ ...ledger, transactions }).transactions.length, 2);
   assert.equal(summary({ ...ledger, transactions }, "2026-10").expenses, 0);
 });
@@ -116,10 +117,12 @@ test("both sides of a paired top-up remain recognizable if the local draft write
   const staleDraft: ImportDraft = { id: "draft", owner: "synthetic", month: "2026-10", createdAt: 1, sources: [], rows: [outgoing, incoming], saved: [] };
   const savedLedger = { ...ledger, transactions };
   assert.deepEqual(transactions.map((transaction) => transaction.id), [outgoing.id, incoming.id]);
+  assert.deepEqual(transactions.map((transaction) => transaction.verified), [true, true]);
   assert.equal(validateData(savedLedger).transactions.length, 2);
   assert.equal(importRowAlreadySaved(outgoing, staleDraft, savedLedger), true);
   assert.equal(importRowAlreadySaved(incoming, staleDraft, savedLedger), true);
   const walletFirst = importedTransactions(incoming, "GoPay", "wallet.png", ledger, outgoing.id);
   assert.deepEqual(walletFirst.map((transaction) => transaction.id), [outgoing.id, incoming.id]);
+  assert.deepEqual(walletFirst.map((transaction) => transaction.verified), [true, true]);
   assert.equal(validateData({ ...ledger, transactions: walletFirst }).transactions.length, 2);
 });
