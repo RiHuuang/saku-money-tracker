@@ -77,14 +77,14 @@ for group_index, (title, rows) in enumerate(groups, start=1):
         draw.text((595, y + 37), amount, font=font(25, True), fill="#23805c" if amount.startswith("+") else "#2d423c")
         draw.line((55, y + 118, 845, y + 118), fill="#e3eae6", width=1)
         expected.append({
-            "file": f"screen-{group_index}.png",
+            "file": f"screen-{group_index}.jpg",
             "date": f"2026-10-{int(date.split()[0]):02d}",
             "name": name,
             "amount": int(amount.removeprefix("+").removeprefix("-").removeprefix("Rp").replace(".", "")) if "Rp" in amount else 0,
             "direction": "income" if amount.startswith("+") else "expense",
             "activity": activity,
         })
-    image.save(OUT / f"screen-{group_index}.png", optimize=True)
+    image.save(OUT / f"screen-{group_index}.jpg", "JPEG", quality=75, optimize=True)
 
 (OUT / "expected.json").write_text(json.dumps(expected, ensure_ascii=False, indent=2), encoding="utf-8")
 print(f"Wrote 3 synthetic screenshots and {len(expected)} expected rows to {OUT}")

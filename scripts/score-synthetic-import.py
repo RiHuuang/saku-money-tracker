@@ -17,7 +17,7 @@ for number in range(1, 4):
     rows = json.loads(path.read_text(encoding="utf-8"))["rows"]
     if not isinstance(rows, list):
         raise ValueError(f"{path} does not contain a rows array")
-    actual.extend({**row, "file": f"screen-{number}.png"} for row in rows)
+    actual.extend({**row, "file": f"screen-{number}.jpg"} for row in rows)
 
 
 def key(row):
