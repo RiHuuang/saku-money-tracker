@@ -63,7 +63,9 @@ async function downsizeImage(file: File): Promise<string> {
     const factor = Math.min(1, 1900 / Math.max(image.width, image.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(image.width * factor); canvas.height = Math.ceil(image.height * factor);
-    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not prepare this image. Try a smaller screenshot.");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const data = encodeImportImage(canvas);
     canvas.width = canvas.height = 0;
     return data;

@@ -34,6 +34,9 @@ test("out-of-month rows wait for an explicit decision before batch save", () => 
   assert.equal(suggestImportDecision({ ...base, date: "2026-09-30" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, activity: "pending" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "Move Money", activity: "transfer" }, "2026-10"), "later");
+  assert.equal(suggestImportDecision({ ...base, name: "Top Up GoPay", activity: "purchase" }, "2026-10"), "later");
+  assert.equal(suggestImportDecision({ ...base, name: "Pindah Dana antar Kantong", activity: "purchase" }, "2026-10"), "later");
+  assert.equal(suggestImportDecision({ ...base, name: "TRSF E-BANKING CR", direction: "income", activity: "refund" }, "2026-10"), "later");
 });
 
 test("thirty clear purchases can be committed together without duplicating IDs", () => {
