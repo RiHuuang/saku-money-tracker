@@ -18,6 +18,8 @@ for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar K
   assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name, amount: 28000, direction: "expense", activity: "purchase" }] }) })[0].activity, "transfer");
 }
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Bunga Tabungan", amount: "Rp 332", direction: "income", activity: "interest" }] }) })[0].activity, "interest");
+assert.equal(importMessages(input)[0].content.includes("Completed can still contain expired payments"), true);
+assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Pembayaran kedaluwarsa", amount: "Rp 22.000", direction: "expense", activity: "purchase" }] }) })[0].activity, "failed");
 assert.equal(importMessages(input)[0].content.includes("Use income for salary"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Gaji dari Contoh Studio", amount: "Rp 3.500.000", direction: "income", activity: "income" }] }) })[0].activity, "income");
 const deferred = parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Fabricated cafe", paymentMethod: "Example PayLater", amount: 39200, direction: "expense", activity: "purchase" }] }) })[0];

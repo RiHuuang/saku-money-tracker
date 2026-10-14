@@ -12,9 +12,10 @@ export function importRowAccount(row: Pick<ImportRow, "account">, source: Pick<I
 
 export const usesDeferredFunding = (row: Pick<ImportRow, "name" | "paymentMethod">) => /pay[\s-]?later/i.test(`${row.name} ${row.paymentMethod || ""}`);
 const looksLikeTransfer = (name: string) => /\b(?:top[\s-]?up|isi saldo|pindah dana|move money|antar[\s-]?kantong|transfer|trsf|trf)\b/i.test(name);
+const looksUnsettled = (name: string) => /\b(?:expired|kedaluwarsa|kadaluarsa|dibatalkan|cancelled|canceled|pending|tertunda|gagal)\b/i.test(name);
 
 export function suggestImportDecision(row: Pick<ImportRow, "date" | "name" | "paymentMethod" | "amount" | "direction" | "activity">, month: string): ImportRow["decision"] {
-  return validDate(row.date) && row.date.startsWith(month) && validAmount(row.amount) && row.name.trim() && !usesDeferredFunding(row) && !looksLikeTransfer(row.name) &&
+  return validDate(row.date) && row.date.startsWith(month) && validAmount(row.amount) && row.name.trim() && !usesDeferredFunding(row) && !looksLikeTransfer(row.name) && !looksUnsettled(row.name) &&
     (["refund", "interest"].includes(row.activity) ? row.direction === "income" : row.direction === "expense" && ["purchase", "fee"].includes(row.activity))
     ? "ready" : "later";
 }

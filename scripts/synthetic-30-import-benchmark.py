@@ -55,7 +55,7 @@ groups = [
         ("13 Oct", "Bunga tabungan", "+Rp330", "interest"),
         ("12 Oct", "Tiket perjalanan contoh", "-Rp64.000", "purchase"),
         ("12 Oct", "Transfer masuk tidak dikenal", "+Rp55.000", "income"),
-        ("12 Oct", "Pembayaran dibatalkan", "-Rp18.000", "failed"),
+        ("12 Oct", "Pembayaran kedaluwarsa", "-Rp18.000", "failed"),
         ("11 Oct", "QRIS Kios Contoh", "-Rp11.000", "purchase"),
         ("11 Oct", "Tarik tunai ATM", "-Rp100.000", "unknown"),
     ]),
@@ -73,7 +73,8 @@ for group_index, (title, rows) in enumerate(groups, start=1):
         y = 206 + (row_index - 1) * 137
         draw.text((60, y), date + " 2026", font=font(21), fill="#63766f")
         draw.text((60, y + 35), name, font=font(28, True), fill="#173b35")
-        draw.text((60, y + 78), "Selesai" if activity not in {"pending", "failed"} else activity.title(), font=font(19), fill="#657870")
+        status = "Pending" if activity == "pending" else "Expired" if "kedaluwarsa" in name else "Failed" if activity == "failed" else "Selesai"
+        draw.text((60, y + 78), status, font=font(19), fill="#657870")
         draw.text((595, y + 37), amount, font=font(25, True), fill="#23805c" if amount.startswith("+") else "#2d423c")
         draw.line((55, y + 118, 845, y + 118), fill="#e3eae6", width=1)
         expected.append({
