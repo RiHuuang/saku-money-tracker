@@ -76,7 +76,14 @@ for group_index, (title, rows) in enumerate(groups, start=1):
         draw.text((60, y + 78), "Selesai" if activity not in {"pending", "failed"} else activity.title(), font=font(19), fill="#657870")
         draw.text((595, y + 37), amount, font=font(25, True), fill="#23805c" if amount.startswith("+") else "#2d423c")
         draw.line((55, y + 118, 845, y + 118), fill="#e3eae6", width=1)
-        expected.append({"file": f"screen-{group_index}.png", "date": date + " 2026", "name": name, "amount": amount, "activity": activity})
+        expected.append({
+            "file": f"screen-{group_index}.png",
+            "date": f"2026-10-{int(date.split()[0]):02d}",
+            "name": name,
+            "amount": int(amount.removeprefix("+").removeprefix("-").removeprefix("Rp").replace(".", "")) if "Rp" in amount else 0,
+            "direction": "income" if amount.startswith("+") else "expense",
+            "activity": activity,
+        })
     image.save(OUT / f"screen-{group_index}.png", optimize=True)
 
 (OUT / "expected.json").write_text(json.dumps(expected, ensure_ascii=False, indent=2), encoding="utf-8")
