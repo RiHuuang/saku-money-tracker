@@ -14,6 +14,7 @@ try {
   process.exitCode = code ?? 1;
   if (process.exitCode === 0) {
     await import("../worker/import-ai.test.mjs");
+    await import("../worker/import-ai-route.test.mjs");
     await import("./cloud-refresh.test.mjs");
     await import("../worker/avatar.test.mjs");
     await import("../worker/google-token.test.mjs");
