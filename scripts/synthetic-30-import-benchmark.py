@@ -50,7 +50,7 @@ groups = [
     ("Contoh pocket activity", [
         ("14 Oct", "Pindah dana antar kantong", "-Rp75.000", "transfer"),
         ("14 Oct", "Pembayaran toko contoh", "-Rp46.000", "purchase"),
-        ("13 Oct", "Belanja dengan PayLater", "-Rp39.200", "pay_later"),
+        ("13 Oct", "Beli pakai PayLater", "-Rp39.200", "pay_later"),
         ("13 Oct", "Pajak bunga", "-Rp66", "fee"),
         ("13 Oct", "Bunga tabungan", "+Rp330", "interest"),
         ("12 Oct", "Tiket perjalanan contoh", "-Rp64.000", "purchase"),
