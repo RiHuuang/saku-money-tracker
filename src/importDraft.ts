@@ -8,7 +8,7 @@ export type ImportRow = {
   paymentMethod?: string;
   amount: number;
   direction: "expense" | "income" | "unknown";
-  activity: "purchase" | "transfer" | "topup" | "card_payment" | "refund" | "fee" | "interest" | "pay_later" | "reward" | "pending" | "failed" | "unknown";
+  activity: "purchase" | "transfer" | "topup" | "card_payment" | "refund" | "income" | "fee" | "interest" | "pay_later" | "reward" | "pending" | "failed" | "unknown";
   decision: "ready" | "later" | "skip";
   pocketId: string;
   counterparty?: string;

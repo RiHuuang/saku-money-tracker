@@ -93,6 +93,19 @@ test("bank interest is rupiah income while points and fractional amounts wait fo
   assert.equal(suggestImportDecision({ ...interest, amount: 0 }, "2026-10"), "later");
 });
 
+test("ordinary money received waits for review and saves as income only after confirmation", () => {
+  const salary: ImportRow = { ...base, name: "Gaji dari Contoh Studio", amount: 3_500_000, direction: "income", activity: "income", decision: "later" };
+  assert.equal(suggestImportDecision(salary, "2026-10"), "later");
+  assert.equal(importRowReady(salary, "BCA", ledger), false);
+  const approved = { ...salary, decision: "ready" as const };
+  assert.equal(importRowReady(approved, "BCA", ledger), true);
+  assert.equal(importRowReady({ ...approved, direction: "expense" }, "BCA", ledger), false);
+  assert.equal(importRowReady(approved, "BCA Visa", ledger), false);
+  const transaction = importedTransactions(approved, "BCA", "bank.png", ledger)[0];
+  assert.equal(transaction.type, "income");
+  assert.equal(summary({ ...ledger, transactions: [transaction] }, "2026-10").income, 3_500_000);
+});
+
 test("PayLater funding waits until a matching card account is chosen", () => {
   const deferred: ImportRow = { ...base, name: "Fabricated cafe", paymentMethod: "Example PayLater", activity: "pay_later", decision: "later" };
   assert.equal(suggestImportDecision({ ...deferred, activity: "purchase" }, "2026-10"), "later");

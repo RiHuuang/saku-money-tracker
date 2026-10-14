@@ -13,7 +13,7 @@ const similarKey = (row: Pick<ImportRow, "date" | "amount" | "direction">, accou
 const consentTargetFor = (draft: ImportDraft | null, owner: string) => draft?.owner === owner && draft.sources.length ? JSON.stringify([owner, draft.id, draft.sources.map((source) => source.id)]) : "";
 const activityOptions: { value: ImportRow["activity"]; label: string }[] = [
   { value: "purchase", label: "Purchase or payment" }, { value: "fee", label: "Bank or service fee" },
-  { value: "refund", label: "Refund received" }, { value: "interest", label: "Interest earned" },
+  { value: "refund", label: "Refund received" }, { value: "income", label: "Other money received" }, { value: "interest", label: "Interest earned" },
   { value: "transfer", label: "Transfer between my accounts" }, { value: "topup", label: "Top up my wallet" },
   { value: "card_payment", label: "Pay a credit card bill" }, { value: "pay_later", label: "PayLater purchase" },
   { value: "reward", label: "Points or rewards" }, { value: "pending", label: "Payment still pending" },
@@ -26,6 +26,8 @@ function reviewIssue(row: ImportRow, account: string, data: Data, duplicate: boo
   if (!validAmount(row.amount)) return "Enter a valid whole-rupiah amount.";
   if (!row.name.trim()) return "Add a description.";
   if (row.direction === "unknown") return "Choose whether money came in or went out.";
+  if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return "Choose ‘Money in’ for this type of receipt.";
+  if (["purchase", "fee", "card_payment"].includes(row.activity) && row.direction !== "expense") return "Choose ‘Money out’ for this type of payment.";
   if (["pending", "failed", "reward", "pay_later", "unknown"].includes(row.activity)) return "This type needs a closer look before it can be added to Saku.";
   if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return "Choose the other Saku account for this transfer.";
   if (row.activity === "card_payment" && !row.cardId) return "Choose the credit card that was paid.";
@@ -104,7 +106,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const needsSeparateConfirmation = (row: ImportRow, account: string) => existingSimilar.has(similarKey(row, account)) || (similarCounts.get(similarKey(row, account)) || 0) > 1 || existing.has(possibleKey(row, account)) || (repetitions.get(possibleKey(row, account)) || 0) > 1;
   const ready = (draft?.rows || []).filter((row) => importRowReady(row, accountForRow(row), data) && !rowSaved(row) && (!needsSeparateConfirmation(row, accountForRow(row)) || row.confirmedSeparate));
   const readySpending = ready.filter((row) => row.direction === "expense" && ["purchase", "fee"].includes(row.activity)).reduce((total, row) => total + row.amount, 0);
-  const readyIncome = ready.filter((row) => row.direction === "income" && ["refund", "interest"].includes(row.activity)).reduce((total, row) => total + row.amount, 0);
+  const readyIncome = ready.filter((row) => row.direction === "income" && ["refund", "income", "interest"].includes(row.activity)).reduce((total, row) => total + row.amount, 0);
   const readyMovementCount = ready.filter((row) => ["transfer", "topup", "card_payment"].includes(row.activity)).length;
   const needsReview = (draft?.rows || []).filter((row) => !rowSaved(row) && (row.decision === "later" || (row.decision === "ready" && !ready.includes(row))));
   const setAside = (draft?.rows || []).filter((row) => !rowSaved(row) && row.decision === "skip");
@@ -340,7 +342,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           })}
         </div> : null;
       })}
-      <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? "source row" : "source rows"} can be added now</strong><span>{readySpending > 0 && `Purchases and fees: ${money(readySpending)}. `}{readyIncome > 0 && `Refunds and interest: ${money(readyIncome)}. `}{readyMovementCount > 0 && `${readyMovementCount} transfer or card-payment ${readyMovementCount === 1 ? "row" : "rows"}. `}{needsReview.length} kept for later in this local draft.</span></div><button className="button primary" disabled={!ready.length || busy || processing || saving} onClick={() => void saveReady()}>Add {ready.length} to Saku <ArrowRight size={16} /></button></div></section>}
+      <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? "source row" : "source rows"} can be added now</strong><span>{readySpending > 0 && `Purchases and fees: ${money(readySpending)}. `}{readyIncome > 0 && `Money received: ${money(readyIncome)}. `}{readyMovementCount > 0 && `${readyMovementCount} transfer or card-payment ${readyMovementCount === 1 ? "row" : "rows"}. `}{needsReview.length} kept for later in this local draft.</span></div><button className="button primary" disabled={!ready.length || busy || processing || saving} onClick={() => void saveReady()}>Add {ready.length} to Saku <ArrowRight size={16} /></button></div></section>}
     {!!draft?.saved.length && <section className="catchup-finish"><div><strong>{draft.saved.length} saved from this draft</strong><span>They are in Activity and follow your existing sync.</span></div><button className="button secondary" disabled={busy || processing || saving} onClick={() => void undo()}><RotateCcw size={15} /> Undo unchanged entries</button></section>}
     {preview && previewUrl && <Modal title={preview.name} subtitle="Source file on this device" onClose={() => setPreviewId("")}><div className="catchup-preview">{/\.pdf$/i.test(preview.name) ? <iframe title={preview.name} src={previewUrl} /> : <img alt={`Preview of ${preview.name}`} src={previewUrl} />}</div></Modal>}
   </div>;

@@ -29,8 +29,8 @@ export function importRowReady(row: ImportRow, account: string, data: Data, curr
   if (["pending", "failed", "reward", "pay_later", "unknown"].includes(row.activity)) return false;
   if (["transfer", "topup"].includes(row.activity)) return data.accounts.includes(account) && !!row.counterparty && row.counterparty !== account && data.accounts.includes(row.counterparty);
   if (row.activity === "card_payment") return row.direction === "expense" && data.accounts.includes(account) && !!data.creditCards.find((card) => card.id === row.cardId);
-  if (!["purchase", "fee", "refund", "interest"].includes(row.activity)) return false;
-  if (["refund", "interest"].includes(row.activity) ? row.direction !== "income" : row.direction !== "expense") return false;
+  if (!["purchase", "fee", "refund", "income", "interest"].includes(row.activity)) return false;
+  if (["refund", "income", "interest"].includes(row.activity) ? row.direction !== "income" : row.direction !== "expense") return false;
   const card = data.creditCards.find((item) => item.name === account);
   if (usesDeferredFunding(row) && !card) return false;
   if (card) return row.direction === "expense" && row.activity === "purchase" && !!row.firstDueMonth && validDate(`${row.firstDueMonth}-01`) && row.firstDueMonth >= row.date.slice(0, 7);
