@@ -60,7 +60,9 @@ export async function openImportPages(file: File, password = ""): Promise<{ coun
 async function downsizeImage(file: File): Promise<string> {
   const image = await createImageBitmap(file);
   try {
-    const factor = Math.min(1, 1900 / Math.max(image.width, image.height));
+    // Preserve readable text in tall phone captures; the encoder still enforces
+    // the Worker's data-URL limit after this pixel-count bound.
+    const factor = Math.min(1, 1900 / image.width, Math.sqrt(4_000_000 / (image.width * image.height)));
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(image.width * factor); canvas.height = Math.ceil(image.height * factor);
     const context = canvas.getContext("2d");
