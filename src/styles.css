@@ -134,9 +134,14 @@
 .catchup-match-review > .button { margin: 0 18px 18px; }
 .catchup-match-done { display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 12px; }
 @media (max-width: 700px) {
-  .catchup-hero { grid-template-columns: 1fr; gap: 15px; padding: 25px 22px; }
-  .catchup-hero-count strong { font-size: 44px; }
-  .catchup-panel { padding: 18px; }
+  .catchup-hero { grid-template-columns: 1fr; gap: 9px; padding: 20px; border-radius: 20px; }
+  .catchup-eyebrow { margin-bottom: 8px; }
+  .catchup-hero h2 { font-size: clamp(30px, 8vw, 40px); }
+  .catchup-hero p:not(.catchup-eyebrow) { margin-top: 9px; line-height: 1.45; }
+  .catchup-hero-count strong { font-size: 36px; }
+  .catchup-hero-count span { max-width: none; }
+  .catchup-steps { margin: 15px 2px; }
+  .catchup-panel { padding: 18px; margin: 12px 0; }
   .catchup-panel-head { align-items: start; flex-wrap: wrap; }
   .catchup-source { display: grid; grid-template-columns: 24px minmax(0, 1fr) 36px; gap: 8px 10px; }
   .catchup-source > svg { grid-column: 1; grid-row: 1; }
