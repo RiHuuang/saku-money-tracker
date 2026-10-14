@@ -63,3 +63,8 @@ CREATE TABLE IF NOT EXISTS snapshot_upload_parts (
   size INTEGER NOT NULL,
   PRIMARY KEY(id,part_index)
 );
+
+CREATE TABLE IF NOT EXISTS import_ai_budget (
+  day TEXT PRIMARY KEY,
+  neurons INTEGER NOT NULL DEFAULT 0
+);

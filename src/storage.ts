@@ -5,6 +5,7 @@ import { Share } from "@capacitor/share";
 import { type Data, emptyData, validateData } from "./domain";
 import { markCloudDirty } from "./cloud";
 import { refreshHomeWidgets, scheduleCloudSync } from "./homeWidget";
+import { deleteOwnerImportDrafts, importConsentKey } from "./importDraft";
 const key = "saku-ledger-v1";
 const userKey = (userId?: string) => userId ? `saku-ledger-v3-${userId}` : "saku-ledger-browser-v3";
 let activeUserId = "";
@@ -31,6 +32,8 @@ export async function hasUserData(userId: string) {
   return Boolean((await Preferences.get({ key: userKey(userId) })).value);
 }
 export async function removeUserData(userId: string) {
+  await deleteOwnerImportDrafts(userId);
+  localStorage.removeItem(importConsentKey(userId));
   await Preferences.remove({ key: userKey(userId) });
   if (activeUserId === userId) activeUserId = "";
   await refreshHomeWidgets();

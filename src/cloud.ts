@@ -157,6 +157,10 @@ function requestsFor(userId: string | undefined): SnapshotRequest {
     return response;
   };
 }
+export async function extractImportPage(userId: string, page: { month: string } & ({ kind: "text"; text: string } | { kind: "image"; image: string })): Promise<{ rows: { date: string; name: string; paymentMethod: string; amount: number; direction: "expense" | "income" | "unknown"; activity: "purchase" | "transfer" | "topup" | "card_payment" | "refund" | "fee" | "interest" | "pay_later" | "reward" | "pending" | "failed" | "unknown" }[] }> {
+  const send = requestsFor(userId);
+  return (await send("/v1/import/extract", { method: "POST", body: JSON.stringify(page) })).json();
+}
 export async function signInGoogle(agreementVersion = AGREEMENT_VERSION): Promise<CloudState> {
   if (!native()) {
     window.location.assign("/auth/google/start");
