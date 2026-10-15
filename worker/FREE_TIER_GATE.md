@@ -1,6 +1,8 @@
 # Cloudflare Free-tier cutover gate — 2026-10-05
 
-## Catch-up import status — October 15
+## Catch-up import status — October 16
+
+Text-PDF rows with a printed day and month but no year now use the selected review month only when its month agrees with the printed month. A conflicting printed month stays undated for review, and a labeled transaction date still takes precedence over a posting date even when only the latter prints a year. Focused cases and all 45 app unit tests plus Worker tests passed; staging and production builds passed. Isolated staging version `a006e8c4-c6d2-4166-b594-f077217e558c` returned `/health` 200. No AI inference or ledger write was made for this rule. Production assets were rebuilt locally afterward; production was not deployed.
 
 [BRI's March 2025 card guide](https://bri.co.id/documents/36855/0/Buku%2BPanduan%2BVCC%2BBRI%2B-%2BMaret%2B2025.pdf/91e124d3-8807-508e-334e-c0f0c1ffd2ce?t=1742271159096) describes separate transaction and posting dates in card e-Statement detail. The extraction prompt now asks for the transaction date, and the Worker deterministically chooses a labeled transaction date over a posting date if both appear in `dateEvidence`. Posting-only evidence leaves the date empty for review, including on text pages. This is source-backed field handling, not validation on an actual card-statement PDF or a new Gemma response. All 45 app unit tests and Worker tests passed, along with production and staging builds. Isolated staging version `e854e13c-c86e-453a-b9c5-36d25ac5f3f3` returned `/health` 200. No AI call or ledger write was made, and local production assets were rebuilt afterward.
 

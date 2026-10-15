@@ -20,12 +20,22 @@ assert.equal(dateFromPrintedEvidence("Tanggal Pembukuan 14/10/2026; Tanggal Tran
 assert.equal(dateFromPrintedEvidence("Transaction date 13 Oct 2026; Posting date 14 Oct 2026"), "2026-10-13");
 assert.equal(dateFromPrintedEvidence("Posting date 14 Oct 2026"), "");
 assert.equal(dateFromPrintedEvidence("Transaction date 13 Oct; Posting date 14 Oct 2026"), "");
+assert.equal(dateFromPrintedEvidence("Tanggal Transaksi 13 Okt; Tanggal Pembukuan 14 Okt", "2026-10"), "2026-10-13");
+assert.equal(dateFromPrintedEvidence("13/10", "2026-10"), "2026-10-13");
+assert.equal(dateFromPrintedEvidence("13 Oct", "2026-09"), "");
+assert.equal(dateFromPrintedEvidence("31/10", "2026-10"), "2026-10-31");
+assert.equal(dateFromPrintedEvidence("31/02", "2026-02"), "");
 assert.equal(dateFromPrintedEvidence("31 Feb 2026"), "");
 const screenshotRow = (dateEvidence) => parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-12", dateEvidence, name: "Fabricated wallet payment", amount: 39200, direction: "expense", activity: "purchase" }] }) }, "image")[0];
 assert.equal(screenshotRow("Kemarin 05 Sep 2025").date, "2025-09-05", "printed group date overrides an incorrect model-converted date");
 assert.equal(screenshotRow("").date, "", "an image row without a full printed date waits for review");
 assert.equal(screenshotRow("Kemarin").date, "", "relative labels alone are not calendar evidence");
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-14", dateEvidence: "Posting date 14 Oct 2026", name: "Fabricated card purchase", amount: 28000, direction: "expense", activity: "purchase" }] }) })[0].date, "", "posting-only evidence cannot validate a text statement date");
+const textRow = (dateEvidence, date = "2025-10-13") => parseImportAnswer({ response: JSON.stringify({ rows: [{ date, dateEvidence, name: "Fabricated text-PDF purchase", amount: 28000, direction: "expense", activity: "purchase" }] }) }, "text", "2026-10")[0];
+assert.equal(textRow("13 Oct").date, "2026-10-13", "printed day and month use the selected review year");
+assert.equal(textRow("13/10").date, "2026-10-13", "numeric day and month override a wrong model year");
+assert.equal(textRow("13 Sep").date, "", "a different printed month waits for review");
+assert.equal(textRow("Transaction date 13 Oct; Posting date 14 Oct 2026").date, "2026-10-13", "a yearless transaction date outranks a full posting date");
 assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[0].content.includes("dateEvidence"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "QRIS WARUNG CONTOH", amount: 28000, direction: "expense", activity: "card_payment" }] }) })[0].activity, "purchase");
 for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar Kantong"]) {

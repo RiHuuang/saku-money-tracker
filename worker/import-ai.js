@@ -35,17 +35,23 @@ function calendarDate(year, month, day) {
   return year >= 2000 && year <= 2100 && date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month && date.getUTCDate() === day
     ? `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}` : "";
 }
-export function dateFromPrintedEvidence(value) {
+export function dateFromPrintedEvidence(value, reviewMonth = "") {
   if (typeof value !== "string" || value.length > 80) return "";
   const transactionLabel = value.match(/\b(?:tanggal transaksi|transaction date)\s*[:\-]?\s*/i);
-  if (transactionLabel) return dateFromPrintedEvidence(value.slice(transactionLabel.index + transactionLabel[0].length).split(/\b(?:tanggal pembukuan|posting date)\b/i)[0].trim());
+  if (transactionLabel) return dateFromPrintedEvidence(value.slice(transactionLabel.index + transactionLabel[0].length).split(/\b(?:tanggal pembukuan|posting date)\b/i)[0].trim(), reviewMonth);
   if (/\b(?:tanggal pembukuan|posting date)\b/i.test(value)) return "";
   const iso = value.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
   if (iso) return calendarDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
   const numeric = value.match(/\b(\d{1,2})[./-](\d{1,2})[./-](20\d{2})\b/);
   if (numeric) return calendarDate(Number(numeric[3]), Number(numeric[2]), Number(numeric[1]));
   const named = value.match(/\b(\d{1,2})\s+([a-z]+)\s+(20\d{2})\b/i);
-  return named ? calendarDate(Number(named[3]), monthNumbers.get(named[2].toLowerCase()) || 0, Number(named[1])) : "";
+  if (named) return calendarDate(Number(named[3]), monthNumbers.get(named[2].toLowerCase()) || 0, Number(named[1]));
+  if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(reviewMonth)) return "";
+  const partialNumeric = value.match(/\b(\d{1,2})[./-](\d{1,2})(?![./-]\d)\b/);
+  const partialNamed = value.match(/\b(\d{1,2})\s+([a-z]+)\b/i);
+  const day = partialNumeric ? Number(partialNumeric[1]) : partialNamed ? Number(partialNamed[1]) : 0;
+  const month = partialNumeric ? Number(partialNumeric[2]) : partialNamed ? monthNumbers.get(partialNamed[2].toLowerCase()) || 0 : 0;
+  return month === Number(reviewMonth.slice(5)) ? calendarDate(Number(reviewMonth.slice(0, 4)), month, day) : "";
 }
 function wholeRupiah(value) {
   if (typeof value === "number") return Number.isSafeInteger(value) && value > 0 ? value : 0;
@@ -59,7 +65,7 @@ function wholeRupiah(value) {
   const amount = Number(digits);
   return Number.isSafeInteger(amount) && amount > 0 ? amount : 0;
 }
-export function parseImportAnswer(answer, kind = "text") {
+export function parseImportAnswer(answer, kind = "text", reviewMonth = "") {
   const choice = answer?.choices?.[0];
   if (choice?.finish_reason === "length") throw new Error("AI response was cut off; split this page and retry");
   const raw = choice?.message?.content ?? answer?.response;
@@ -71,9 +77,10 @@ export function parseImportAnswer(answer, kind = "text") {
     if (!row || typeof row !== "object") throw new Error("AI returned an invalid transaction");
     const modelDate = typeof row.date === "string" ? row.date.trim() : "";
     const dateEvidence = typeof row.dateEvidence === "string" ? row.dateEvidence.trim().slice(0, 80) : "";
-    const printedDate = dateFromPrintedEvidence(dateEvidence);
+    const printedDate = dateFromPrintedEvidence(dateEvidence, reviewMonth);
     const includesPostingDate = /\b(?:tanggal pembukuan|posting date)\b/i.test(dateEvidence);
-    const date = printedDate || (kind === "image" || includesPostingDate ? "" : modelDate);
+    const hasPartialDate = /\b\d{1,2}[./-]\d{1,2}(?![./-]\d)\b|\b\d{1,2}\s+[a-z]+\b/i.test(dateEvidence);
+    const date = printedDate || (kind === "image" || includesPostingDate || hasPartialDate ? "" : modelDate);
     const name = typeof row.name === "string" ? row.name.trim().slice(0, 100) : "";
     const paymentMethod = typeof row.paymentMethod === "string" ? row.paymentMethod.trim().slice(0, 60) : "";
     const amount = wholeRupiah(row.amount);
