@@ -59,7 +59,10 @@ export function importRowReviewIssue(row: ImportRow, account: string, data: Data
   if (row.activity === "pending") return "Payment appears pending. Recheck it when your account shows a final result.";
   if (row.activity === "failed") return "Payment appears failed or expired. Check before recording a charge.";
   if (row.activity === "reward") return "Points or rewards are not a rupiah transaction.";
-  if (row.activity === "pay_later") return "Check which PayLater or credit account funded this purchase.";
+  if (row.activity === "pay_later") {
+    if (!data.creditCards.some((card) => card.name === account)) return "Choose the PayLater or credit account that funded this purchase. Add it in Cards first if needed.";
+    if (!row.firstDueMonth || !validDate(`${row.firstDueMonth}-01`) || validDate(row.date) && row.firstDueMonth < row.date.slice(0, 7)) return "Choose a valid first due month for this PayLater purchase.";
+  }
   if (!account) return "Choose the Saku account used for this transaction.";
   if (!validDate(row.date)) return "Check the transaction date.";
   if (row.date > currentDay) return "This date is in the future. Check the source.";
@@ -67,7 +70,7 @@ export function importRowReviewIssue(row: ImportRow, account: string, data: Data
   if (!row.name.trim()) return "Add a description.";
   if (row.direction === "unknown") return "Choose whether money came in or went out.";
   if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return "Choose ‘Money in’ for this type of receipt.";
-  if (["purchase", "fee", "card_payment"].includes(row.activity) && row.direction !== "expense") return "Choose ‘Money out’ for this type of payment.";
+  if (["purchase", "fee", "card_payment", "pay_later"].includes(row.activity) && row.direction !== "expense") return "Choose ‘Money out’ for this type of payment.";
   if (row.activity === "unknown") return "Choose what happened before adding this row.";
   if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return "Choose the other Saku account for this transfer.";
   if (row.activity === "card_payment" && !row.cardId) return "Choose the credit card that was paid.";
@@ -84,14 +87,15 @@ export function importRowAlreadySaved(row: ImportRow, draft: ImportDraft | null,
 
 export function importRowReady(row: ImportRow, account: string, data: Data, currentDay = today()): boolean {
   if (row.decision !== "ready" || !validDate(row.date) || row.date > currentDay || !validAmount(row.amount) || !row.name.trim() || row.direction === "unknown") return false;
-  if (["pending", "failed", "reward", "pay_later", "unknown"].includes(row.activity)) return false;
+  if (["pending", "failed", "reward", "unknown"].includes(row.activity)) return false;
   if (["transfer", "topup"].includes(row.activity)) return data.accounts.includes(account) && !!row.counterparty && row.counterparty !== account && data.accounts.includes(row.counterparty);
   if (row.activity === "card_payment") return row.direction === "expense" && data.accounts.includes(account) && !!data.creditCards.find((card) => card.id === row.cardId);
-  if (!["purchase", "fee", "refund", "income", "interest"].includes(row.activity)) return false;
+  if (!["purchase", "fee", "refund", "income", "interest", "pay_later"].includes(row.activity)) return false;
   if (["refund", "income", "interest"].includes(row.activity) ? row.direction !== "income" : row.direction !== "expense") return false;
   const card = data.creditCards.find((item) => item.name === account);
+  if (row.activity === "pay_later" && !card) return false;
   if (usesDeferredFunding(row) && !card) return false;
-  if (card) return row.direction === "expense" && row.activity === "purchase" && !!row.firstDueMonth && validDate(`${row.firstDueMonth}-01`) && row.firstDueMonth >= row.date.slice(0, 7);
+  if (card) return row.direction === "expense" && ["purchase", "pay_later"].includes(row.activity) && !!row.firstDueMonth && validDate(`${row.firstDueMonth}-01`) && row.firstDueMonth >= row.date.slice(0, 7);
   if (!data.accounts.includes(account)) return false;
   return row.direction === "income" || !row.pocketId || data.pockets.some((pocket) => pocket.id === row.pocketId && pocket.createdMonth <= row.date.slice(0, 7));
 }

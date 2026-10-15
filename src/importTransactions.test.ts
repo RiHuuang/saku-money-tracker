@@ -177,7 +177,18 @@ test("PayLater funding waits until a matching card account is chosen", () => {
   assert.equal(suggestImportDecision({ ...deferred, activity: "purchase" }, "2026-10"), "later");
   assert.equal(importRowReady({ ...deferred, activity: "purchase", decision: "ready" }, "GoPay", ledger), false);
   assert.equal(importRowReady({ ...deferred, activity: "purchase", decision: "ready", firstDueMonth: "2026-11" }, "BCA Visa", ledger), true);
-  assert.equal(importRowReady({ ...deferred, activity: "pay_later", decision: "ready", firstDueMonth: "2026-11" }, "BCA Visa", ledger), false);
+  const approved = { ...deferred, decision: "ready" as const, firstDueMonth: "2026-11" };
+  assert.equal(importRowReady(approved, "GoPay", ledger), false);
+  assert.equal(importRowReady({ ...approved, paymentMethod: "" }, "GoPay", ledger), false);
+  assert.equal(importRowReady({ ...approved, firstDueMonth: "2026-09" }, "BCA Visa", ledger), false);
+  assert.equal(importRowReady(approved, "BCA Visa", ledger), true);
+  assert.match(importRowReviewIssue({ ...approved, firstDueMonth: "" }, "BCA Visa", ledger, false), /first due month/);
+  assert.match(importRowReviewIssue({ ...approved, direction: "income" }, "BCA Visa", ledger, false), /Money out/);
+  const transaction = importedTransactions(approved, "BCA Visa", "wallet.png", ledger)[0];
+  assert.equal(transaction.kind, "card_purchase");
+  assert.equal(transaction.cardId, "visa");
+  assert.equal(transaction.firstDueMonth, "2026-11");
+  validateData({ ...ledger, transactions: [transaction] });
 });
 
 test("only the explicitly paired screenshot row is treated as saved", () => {
