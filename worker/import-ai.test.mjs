@@ -16,11 +16,16 @@ assert.deepEqual(parseImportAnswer(response)[0], { date: "2026-10-10", dateEvide
 assert.equal(dateFromPrintedEvidence("Kemarin 05 Sep 2025"), "2025-09-05");
 assert.equal(dateFromPrintedEvidence("Jumat 9 Okt 2026"), "2026-10-09");
 assert.equal(dateFromPrintedEvidence("14/10/2026 · 08:12"), "2026-10-14");
+assert.equal(dateFromPrintedEvidence("Tanggal Pembukuan 14/10/2026; Tanggal Transaksi 13/10/2026"), "2026-10-13");
+assert.equal(dateFromPrintedEvidence("Transaction date 13 Oct 2026; Posting date 14 Oct 2026"), "2026-10-13");
+assert.equal(dateFromPrintedEvidence("Posting date 14 Oct 2026"), "");
+assert.equal(dateFromPrintedEvidence("Transaction date 13 Oct; Posting date 14 Oct 2026"), "");
 assert.equal(dateFromPrintedEvidence("31 Feb 2026"), "");
 const screenshotRow = (dateEvidence) => parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-12", dateEvidence, name: "Fabricated wallet payment", amount: 39200, direction: "expense", activity: "purchase" }] }) }, "image")[0];
 assert.equal(screenshotRow("Kemarin 05 Sep 2025").date, "2025-09-05", "printed group date overrides an incorrect model-converted date");
 assert.equal(screenshotRow("").date, "", "an image row without a full printed date waits for review");
 assert.equal(screenshotRow("Kemarin").date, "", "relative labels alone are not calendar evidence");
+assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-14", dateEvidence: "Posting date 14 Oct 2026", name: "Fabricated card purchase", amount: 28000, direction: "expense", activity: "purchase" }] }) })[0].date, "", "posting-only evidence cannot validate a text statement date");
 assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[0].content.includes("dateEvidence"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "QRIS WARUNG CONTOH", amount: 28000, direction: "expense", activity: "card_payment" }] }) })[0].activity, "purchase");
 for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar Kantong"]) {
@@ -28,6 +33,7 @@ for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar K
 }
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Bunga Tabungan", amount: "Rp 332", direction: "income", activity: "interest" }] }) })[0].activity, "interest");
 assert.equal(importMessages(input)[0].content.includes("Completed can still contain expired payments"), true);
+assert.equal(importMessages(input)[0].content.includes("use the transaction date for date and dateEvidence"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Pembayaran kedaluwarsa", amount: "Rp 22.000", direction: "expense", activity: "purchase" }] }) })[0].activity, "failed");
 assert.equal(importMessages(input)[0].content.includes("Use income for salary"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Gaji dari Contoh Studio", amount: "Rp 3.500.000", direction: "income", activity: "income" }] }) })[0].activity, "income");
