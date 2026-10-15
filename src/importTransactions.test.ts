@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -76,6 +76,22 @@ test("same-value purchases at different merchants avoid duplicate prompts, overl
   assert.equal(duplicates.has("saved"), false);
   const withExistingMatch = importRowsNeedingDuplicateConfirmation(rows, [{ ...existing[0], name: "Example Shop", account: "GoPay" }], accountFor, (row) => row.id === "saved");
   assert.equal(withExistingMatch.has("shop"), true);
+});
+
+test("statement matches cannot be marked checked before their own source dates are checked", () => {
+  const draft: ImportDraft = {
+    id: "draft", owner: "synthetic", month: "2026-10", createdAt: 1, saved: [],
+    rows: [{ ...base, id: "checked", sourceId: "screen-1" }, { ...base, id: "unchecked", sourceId: "screen-2" }],
+    sources: [
+      { id: "screen-1", name: "first.jpg", account: "BCA", file: {} as File, processedPages: 1, pageCount: 1, datesChecked: true },
+      { id: "screen-2", name: "second.jpg", account: "BCA", file: {} as File, processedPages: 1, pageCount: 1, datesChecked: false },
+    ],
+  };
+  assert.equal(importMatchesNeedSourceDateCheck(draft, [{ id: "checked" }]), false);
+  assert.equal(importMatchesNeedSourceDateCheck(draft, [{ id: "checked" }, { id: "unchecked" }]), true);
+  assert.equal(importMatchesNeedSourceDateCheck(draft, [{ id: "missing" }]), true);
+  assert.equal(importMatchesNeedSourceDateCheck(null, [{ id: "checked" }]), true);
+  assert.equal(importMatchesNeedSourceDateCheck(draft, []), false);
 });
 
 test("thirty clear purchases can be committed together without duplicating IDs", () => {

@@ -48,6 +48,13 @@ export function importRowsNeedingDuplicateConfirmation(rows: readonly ImportRow[
   }).map((row) => row.id));
 }
 
+export function importMatchesNeedSourceDateCheck(draft: ImportDraft | null, matches: readonly { id: string }[]): boolean {
+  return matches.some((match) => {
+    const sourceId = draft?.rows.find((row) => row.id === match.id)?.sourceId;
+    return !sourceId || !draft?.sources.find((source) => source.id === sourceId)?.datesChecked;
+  });
+}
+
 export function importRowAlreadySaved(row: ImportRow, draft: ImportDraft | null, data: Data): boolean {
   if (data.transactions.some((transaction) => transaction.id === row.id || transaction.transferId === row.id)) return true;
   return !!draft?.saved.some((item) => item.pairedRowId === row.id && data.transactions.some((transaction) => transaction.id === item.id));
