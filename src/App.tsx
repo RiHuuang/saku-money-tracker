@@ -75,6 +75,7 @@ import {
   TransactionList,
 } from "./components";
 const Statements = lazy(() => import("./Statements"));
+const CsvStatements = lazy(() => import("./CsvStatements"));
 const CatchUp = lazy(() => import("./CatchUp"));
 const Plans = lazy(() => import("./Plans"));
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
@@ -620,7 +621,7 @@ export default function App() {
           </section>
           {view === "more" && <section className="more-list" aria-label="More destinations">
             <button onClick={() => go("insights")}><BarChart3 /><span><strong>Insights</strong><small>See trends and spending breakdowns</small></span><ChevronRight /></button>
-            <button onClick={() => go("check")}><FileCheck2 /><span><strong>{cloudImportEnabled ? "Catch up" : "Check"}</strong><small>{cloudImportEnabled ? "Import screenshots and statements" : "Compare a CSV with your records"}</small></span><ChevronRight /></button>
+            <button onClick={() => go("check")}><FileCheck2 /><span><strong>{cloudImportEnabled ? "Catch up" : "Check"}</strong><small>{cloudImportEnabled ? "Import screenshots and statements" : "Review CSV and PDF statements"}</small></span><ChevronRight /></button>
             <button onClick={() => go("settings")}><Settings /><span><strong>Settings</strong><small>Accounts, appearance, backup and privacy</small></span><ChevronRight /></button>
           </section>}
           {view === "overview" && (
@@ -1004,7 +1005,7 @@ export default function App() {
             <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>
               {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>Catch up</button><button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>Statement check</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>CSV on device</button></div>}
               {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
-              <div hidden={cloudImportEnabled && checkTab !== "csv"}><Statements cloudImportEnabled={cloudImportEnabled} data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div>
+              {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
           )}
           {view === "plans" && <Suspense fallback={<p className="loading-view">Loading plans...</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} /></Suspense>}
@@ -2177,7 +2178,7 @@ function SettingsView({
       </section>
       <section className="connection-section">
         <span className="connection-icon"><CheckCheck size={25} /></span>
-        <div><h2>Offline first</h2><p>{cloudImportEnabled ? "Your ledger works without internet. AI import sends selected statement text or images to Cloudflare for processing. Original files and review drafts stay on this device; accepted transactions follow your existing cloud and Sheet sync." : "Your ledger works without internet. CSV checking stays on this device; screenshot and PDF catch-up is still being tested."}</p></div>
+        <div><h2>Offline first</h2><p>{cloudImportEnabled ? "Your ledger works without internet. AI import sends selected statement text or images to Cloudflare for processing. Original files and review drafts stay on this device; accepted transactions follow your existing cloud and Sheet sync." : "Your ledger works without internet. CSV and PDF statement checking stay on this device while cloud catch-up is being tested."}</p></div>
       </section>
       <footer className="settings-footer">
         Saku 2.0 <span>·</span> Made for a more mindful month.
