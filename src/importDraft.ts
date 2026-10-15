@@ -4,6 +4,7 @@ export type ImportRow = {
   account?: string;
   page: number;
   date: string;
+  dateEvidence?: string;
   name: string;
   paymentMethod?: string;
   amount: number;

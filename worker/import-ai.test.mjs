@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { DAILY_CAP, RESERVATION, aiImportAvailable, importMessages, neuronsUsed, parseImportAnswer, validateImportInput } from "./import-ai.js";
+import { DAILY_CAP, RESERVATION, aiImportAvailable, dateFromPrintedEvidence, importMessages, neuronsUsed, parseImportAnswer, validateImportInput } from "./import-ai.js";
 
 assert.equal(aiImportAvailable({ AI_IMPORT_ENABLED: "true", AI: {} }), true);
 assert.equal(aiImportAvailable({ AI_IMPORT_ENABLED: "false", AI: {} }), false);
@@ -12,7 +12,16 @@ assert.equal(DAILY_CAP, 4000);
 assert.equal(RESERVATION, 2500);
 assert.equal(DAILY_CAP * 2, 8000);
 const response = { choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Tokopedia", amount: 41244, direction: "expense", activity: "purchase" }] }) } }], usage: { prompt_tokens: 1000, completion_tokens: 100 } };
-assert.deepEqual(parseImportAnswer(response)[0], { date: "2026-10-10", name: "Tokopedia", paymentMethod: "", amount: 41244, direction: "expense", activity: "purchase" });
+assert.deepEqual(parseImportAnswer(response)[0], { date: "2026-10-10", dateEvidence: "", name: "Tokopedia", paymentMethod: "", amount: 41244, direction: "expense", activity: "purchase" });
+assert.equal(dateFromPrintedEvidence("Kemarin 05 Sep 2025"), "2025-09-05");
+assert.equal(dateFromPrintedEvidence("Jumat 9 Okt 2026"), "2026-10-09");
+assert.equal(dateFromPrintedEvidence("14/10/2026 · 08:12"), "2026-10-14");
+assert.equal(dateFromPrintedEvidence("31 Feb 2026"), "");
+const screenshotRow = (dateEvidence) => parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-12", dateEvidence, name: "Fabricated wallet payment", amount: 39200, direction: "expense", activity: "purchase" }] }) }, "image")[0];
+assert.equal(screenshotRow("Kemarin 05 Sep 2025").date, "2025-09-05", "printed group date overrides an incorrect model-converted date");
+assert.equal(screenshotRow("").date, "", "an image row without a full printed date waits for review");
+assert.equal(screenshotRow("Kemarin").date, "", "relative labels alone are not calendar evidence");
+assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[0].content.includes("dateEvidence"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "QRIS WARUNG CONTOH", amount: 28000, direction: "expense", activity: "card_payment" }] }) })[0].activity, "purchase");
 for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar Kantong"]) {
   assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name, amount: 28000, direction: "expense", activity: "purchase" }] }) })[0].activity, "transfer");

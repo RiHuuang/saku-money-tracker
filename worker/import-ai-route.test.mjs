@@ -42,10 +42,18 @@ try {
   assert.equal(response.status, 200, await response.clone().text());
   assert.equal((await response.json()).rows[0].amount, 28000);
   assert.equal(aiCalls, 1);
+  env.AI.run = async () => {
+    aiCalls++;
+    return { response: JSON.stringify({ rows: [{ date: "2026-10-12", dateEvidence: "Kemarin 05 Sep 2025", name: "Synthetic wallet payment", amount: 39200, direction: "expense", activity: "purchase" }] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } };
+  };
+  const imageResponse = await request(JSON.stringify({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }));
+  assert.equal(imageResponse.status, 200);
+  assert.equal((await imageResponse.json()).rows[0].date, "2025-09-05", "the HTTP image route must use printed date evidence");
+  assert.equal(aiCalls, 2);
   const day = new Date().toISOString().slice(0, 10);
-  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_budget WHERE day=?").get(day).neurons, 12);
+  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_budget WHERE day=?").get(day).neurons, 24);
   sqlite.prepare("UPDATE import_ai_budget SET neurons=3990 WHERE day=?").run(day);
   assert.equal((await request()).status, 429, "the app allowance must stop another call");
-  assert.equal(aiCalls, 1);
+  assert.equal(aiCalls, 2);
   console.log("AI import route: auth, release gate, input validation and quota passed with a stub binding");
 } finally { delete crypto.subtle.timingSafeEqual; sqlite.close(); }

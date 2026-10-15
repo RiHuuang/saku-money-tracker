@@ -564,7 +564,7 @@ async function route(request, env) {
     try {
       answer = await env.AI.run(MODEL, { messages: importMessages(input), max_completion_tokens: 4096, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, store: false, n: 1 });
       await settleImport(env.DB, day, answer);
-      return reply({ rows: parseImportAnswer(answer) }, 200, cors);
+      return reply({ rows: parseImportAnswer(answer, input.kind) }, 200, cors);
     } catch {
       throw fault(502, "Could not extract this page. It remains in your local draft for retry.");
     }
