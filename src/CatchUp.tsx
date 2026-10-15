@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, FileImage, FileText, LockKeyhole, RotateCcw, Upload, X } from "lucide-react";
 import { extractImportPage } from "./cloud";
-import { money, reconcile, uid, validAmount, validDate, type BankRow, type Data, type Transaction } from "./domain";
+import { money, reconcile, today, uid, validAmount, validDate, type BankRow, type Data, type Transaction } from "./domain";
 import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, type ImportDraft, type ImportRow } from "./importDraft";
 import { runImportSources } from "./importFlow";
 import { openImportPages } from "./importPages";
@@ -23,17 +23,23 @@ class LocalDraftWriteError extends Error {}
 function reviewIssue(row: ImportRow, account: string, data: Data, duplicate: boolean): string {
   if (!account) return "Choose the Saku account used for this transaction.";
   if (!validDate(row.date)) return "Check the transaction date.";
+  if (row.date > today()) return "This date is in the future. Check the source.";
   if (!validAmount(row.amount)) return "Enter a valid whole-rupiah amount.";
   if (!row.name.trim()) return "Add a description.";
   if (row.direction === "unknown") return "Choose whether money came in or went out.";
   if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return "Choose ‘Money in’ for this type of receipt.";
   if (["purchase", "fee", "card_payment"].includes(row.activity) && row.direction !== "expense") return "Choose ‘Money out’ for this type of payment.";
-  if (["pending", "failed", "reward", "pay_later", "unknown"].includes(row.activity)) return "This type needs a closer look before it can be added to Saku.";
+  if (row.activity === "pending") return "Payment appears pending. Recheck it when your account shows a final result.";
+  if (row.activity === "failed") return "Payment appears failed or expired. Check before recording a charge.";
+  if (row.activity === "reward") return "Points or rewards are not a rupiah transaction.";
+  if (row.activity === "pay_later") return "Check which PayLater or credit account funded this purchase.";
+  if (row.activity === "unknown") return "Choose what happened before adding this row.";
   if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return "Choose the other Saku account for this transfer.";
   if (row.activity === "card_payment" && !row.cardId) return "Choose the credit card that was paid.";
   if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !row.firstDueMonth) return "Choose the first due month for this card purchase.";
   if (duplicate && !row.confirmedSeparate) return "Confirm that this really is a separate transaction.";
-  return "Check the details above before adding this transaction.";
+  if (row.activity === "income") return "Confirm this came from someone else, not another account of yours.";
+  return "Review the details and choose Add to Saku when you are sure.";
 }
 export default function CatchUp({ data, month, userId, commit, busy, notify, statementMode = false }: {
   data: Data; month: string; userId?: string;
@@ -105,6 +111,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   }, [draft, data.transactions]);
   const needsSeparateConfirmation = (row: ImportRow, account: string) => existingSimilar.has(similarKey(row, account)) || (similarCounts.get(similarKey(row, account)) || 0) > 1 || existing.has(possibleKey(row, account)) || (repetitions.get(possibleKey(row, account)) || 0) > 1;
   const ready = (draft?.rows || []).filter((row) => importRowReady(row, accountForRow(row), data) && !rowSaved(row) && (!needsSeparateConfirmation(row, accountForRow(row)) || row.confirmedSeparate));
+  const uncheckedDateSources = (draft?.sources || []).filter((source) => !source.datesChecked && ready.some((row) => row.sourceId === source.id));
   const readySpending = ready.filter((row) => row.direction === "expense" && ["purchase", "fee"].includes(row.activity)).reduce((total, row) => total + row.amount, 0);
   const readyIncome = ready.filter((row) => row.direction === "income" && ["refund", "income", "interest"].includes(row.activity)).reduce((total, row) => total + row.amount, 0);
   const readyMovementCount = ready.filter((row) => ["transfer", "topup", "card_payment"].includes(row.activity)).length;
@@ -168,7 +175,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
             return { ...row, decision: suggestImportDecision(row, reviewMonth) };
           });
           const latest = draftRef.current;
-          await save({ ...latest, rows: [...latest.rows, ...rows], sources: latest.sources.map((item) => item.id === current.id ? { ...item, processedPages: page.number, pageCount: documentPages.count, error: undefined } : item) });
+          await save({ ...latest, rows: [...latest.rows, ...rows], sources: latest.sources.map((item) => item.id === current.id ? { ...item, processedPages: page.number, pageCount: documentPages.count, datesChecked: false, error: undefined } : item) });
         }
       }, async (source, error) => {
         if (error instanceof LocalDraftWriteError) throw error;
@@ -184,7 +191,13 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   }
   async function updateRow(id: string, patch: Partial<ImportRow>) {
     if (!draftRef.current || savingRef.current) return;
-    try { await save({ ...draftRef.current, rows: draftRef.current.rows.map((row) => row.id === id ? { ...row, ...patch, confirmedSeparate: patch.confirmedSeparate ?? ("date" in patch || "amount" in patch || "direction" in patch || "name" in patch || "paymentMethod" in patch || "account" in patch ? false : row.confirmedSeparate) } : row) }); }
+    const row = draftRef.current.rows.find((item) => item.id === id);
+    try { await save({ ...draftRef.current, sources: "date" in patch && row ? draftRef.current.sources.map((source) => source.id === row.sourceId ? { ...source, datesChecked: false } : source) : draftRef.current.sources, rows: draftRef.current.rows.map((item) => item.id === id ? { ...item, ...patch, confirmedSeparate: patch.confirmedSeparate ?? ("date" in patch || "amount" in patch || "direction" in patch || "name" in patch || "paymentMethod" in patch || "account" in patch ? false : item.confirmedSeparate) } : item) }); }
+    catch { /* save explains the local storage problem */ }
+  }
+  async function updateDatesChecked(id: string, checked: boolean) {
+    if (!draftRef.current || processingRef.current || savingRef.current) return;
+    try { await save({ ...draftRef.current, sources: draftRef.current.sources.map((source) => source.id === id ? { ...source, datesChecked: checked } : source) }); }
     catch { /* save explains the local storage problem */ }
   }
   async function updateAccount(id: string, account: string) {
@@ -200,7 +213,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     catch { /* save explains the local storage problem */ }
   }
   async function saveReady() {
-    if (!draftRef.current || busy || processingRef.current || savingRef.current || !ready.length) return;
+    if (!draftRef.current || busy || processingRef.current || savingRef.current || !ready.length || uncheckedDateSources.length) return;
     const draftId = draftRef.current.id;
     savingRef.current = true; setSaving(true);
     try {
@@ -301,6 +314,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       <p className="import-note">Incomplete screenshots and partial statements cannot prove a ledger entry is missing. No deletions are suggested.</p></section>}
     {!!draft?.rows.length && <section className="catchup-panel catchup-review"><div className="catchup-panel-head"><div><h3>Make this list yours</h3><p>Check the uncertain ones. You can add the clear transactions now and return to the rest later.</p></div><span className="catchup-private"><LockKeyhole size={13} /> Saved on this device</span></div>
       <div className="catchup-review-overview"><div><strong>{ready.length}</strong><span>to add to Saku</span></div><div><strong>{needsReview.length}</strong><span>need a closer look</span></div><div><strong>{setAside.length}</strong><span>won't be imported</span></div></div><p className="catchup-review-guide">Account = where money moved. Pocket = optional budget for spending.</p>
+      {!!ready.length && <div className="catchup-date-check"><strong>Check dates before adding</strong><p>Compare each source with the dates below. A screenshot header can be read a day off; confirming the file once is enough.</p>{draft.sources.filter((source) => ready.some((row) => row.sourceId === source.id)).map((source) => <div key={source.id}><label><input type="checkbox" checked={!!source.datesChecked} disabled={processing || saving} onChange={(event) => void updateDatesChecked(source.id, event.target.checked)} /><span>Dates checked in {source.name}</span></label><button className="text-button" type="button" onClick={() => setPreviewId(source.id)}>Preview source</button></div>)}</div>}
       <div className="catchup-review-tabs" role="group" aria-label="Show transactions"><button type="button" aria-pressed={reviewView === "attention"} onClick={() => setReviewView("attention")}>Needs a look <span>{needsReview.length}</span></button><button type="button" aria-pressed={reviewView === "adding"} onClick={() => setReviewView("adding")}>Adding <span>{ready.length}</span></button><button type="button" aria-pressed={reviewView === "setAside"} onClick={() => setReviewView("setAside")}>Not importing <span>{setAside.length}</span></button><button type="button" aria-pressed={reviewView === "all"} onClick={() => setReviewView("all")}>All <span>{draft.rows.length}</span></button></div>
       {reviewView === "attention" && !needsReview.length && <p className="catchup-review-empty"><Check size={18} /> Nothing needs your attention. Check “Adding” or save the clear transactions below.</p>}
       {draft.sources.map((source) => {
@@ -314,11 +328,12 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
             const pair = ["transfer", "topup"].includes(row.activity) ? draft.rows.find((candidate) => candidate.id !== row.id && ["transfer", "topup"].includes(candidate.activity) && candidate.date === row.date && candidate.amount === row.amount && candidate.direction !== row.direction && accountForRow(candidate) && accountForRow(candidate) !== account) : undefined;
             const card = data.creditCards.find((item) => item.name === account);
             const rowReady = ready.includes(row);
-            const expanded = expandedRows[row.id] ?? (!alreadySaved && row.decision !== "skip" && !rowReady);
-            const status = alreadySaved ? "In Activity" : row.decision === "skip" ? "Not importing" : rowReady ? "Will add" : "Check before adding";
+            const expanded = expandedRows[row.id] ?? false;
+            const status = alreadySaved ? "In Activity" : row.decision === "skip" ? "Not importing" : rowReady ? "Will add" : "Open to review";
+            const hint = !alreadySaved && !rowReady && row.decision !== "skip" ? reviewIssue(row, account, data, duplicate) : "";
             return <div className="catchup-row" key={row.id}>
               <button type="button" className="catchup-row-summary" aria-expanded={expanded} aria-controls={expanded ? `catchup-details-${row.id}` : undefined} onClick={() => setExpandedRows((current) => ({ ...current, [row.id]: !expanded }))}>
-                <span className="catchup-row-identity"><small>{row.date || "Check date"} · {activityOptions.find((item) => item.value === row.activity)?.label}</small><strong>{row.name || "Unnamed transaction"}</strong></span>
+                <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date || undefined}>{row.date || "Check date"}</time><small>{activityOptions.find((item) => item.value === row.activity)?.label}</small></span><strong>{row.name || "Unnamed transaction"}</strong>{hint && <small className="catchup-row-hint">{hint}</small>}</span>
                 <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : row.direction === "income" ? "+" : "?"}{money(row.amount || 0)}</strong><small className={rowReady ? "is-ready" : alreadySaved ? "is-saved" : ""}>{status}</small></span>
                 <ChevronDown size={16} aria-hidden="true" />
               </button>
@@ -342,7 +357,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           })}
         </div> : null;
       })}
-      <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? "source row" : "source rows"} can be added now</strong><span>{readySpending > 0 && `Purchases and fees: ${money(readySpending)}. `}{readyIncome > 0 && `Money received: ${money(readyIncome)}. `}{readyMovementCount > 0 && `${readyMovementCount} transfer or card-payment ${readyMovementCount === 1 ? "row" : "rows"}. `}{needsReview.length} kept for later in this local draft.</span></div><button className="button primary" disabled={!ready.length || busy || processing || saving} onClick={() => void saveReady()}>Add {ready.length} to Saku <ArrowRight size={16} /></button></div></section>}
+      <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? "source row" : "source rows"} {uncheckedDateSources.length ? "ready after date check" : "can be added now"}</strong><span>{readySpending > 0 && `Purchases and fees: ${money(readySpending)}. `}{readyIncome > 0 && `Money received: ${money(readyIncome)}. `}{readyMovementCount > 0 && `${readyMovementCount} transfer or card-payment ${readyMovementCount === 1 ? "row" : "rows"}. `}{needsReview.length} kept for later in this local draft.</span></div><button className="button primary" disabled={!ready.length || !!uncheckedDateSources.length || busy || processing || saving} onClick={() => void saveReady()}>Add {ready.length} to Saku <ArrowRight size={16} /></button></div></section>}
     {!!draft?.saved.length && <section className="catchup-finish"><div><strong>{draft.saved.length} saved from this draft</strong><span>They are in Activity and follow your existing sync.</span></div><button className="button secondary" disabled={busy || processing || saving} onClick={() => void undo()}><RotateCcw size={15} /> Undo unchanged entries</button></section>}
     {preview && previewUrl && <Modal title={preview.name} subtitle="Source file on this device" onClose={() => setPreviewId("")}><div className="catchup-preview">{/\.pdf$/i.test(preview.name) ? <iframe title={preview.name} src={previewUrl} /> : <img alt={`Preview of ${preview.name}`} src={previewUrl} />}</div></Modal>}
   </div>;

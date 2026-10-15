@@ -89,6 +89,15 @@
 .catchup-review-overview > div { display: grid; gap: 4px; padding: 15px 18px; background: #f8fbfa; }
 .catchup-review-overview strong { color: var(--ink); font: 600 27px/1 "Fraunces", Georgia, serif; }
 .catchup-review-overview span { color: var(--muted); font-size: 11px; }
+.catchup-date-check { margin: 0 0 19px; padding: 16px 18px; border: 1px solid #d7e6dd; border-radius: 15px; background: #f5faf6; }
+.catchup-date-check > strong { color: var(--ink); font-size: 14px; }
+.catchup-date-check > p { margin: 5px 0 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.catchup-date-check > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 9px; border-top: 1px solid #e1ede6; }
+.catchup-date-check > div + div { margin-top: 9px; }
+.catchup-date-check label { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--ink); font-size: 12px; font-weight: 650; }
+.catchup-date-check label span { overflow-wrap: anywhere; }
+.catchup-date-check input { flex: none; accent-color: var(--teal); }
+.catchup-date-check .text-button { flex: none; }
 .catchup-review-guide { margin: -4px 0 15px; color: #667b75; font-size: 11px; line-height: 1.5; }
 .catchup-review-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 7px; scrollbar-width: none; }
 .catchup-review-tabs::-webkit-scrollbar { display: none; }
@@ -100,6 +109,10 @@
 .catchup-row-summary { min-height: 76px; padding: 12px 15px; }
 .catchup-row-identity small { font-size: 11px; }
 .catchup-row-identity strong { font-size: 14px; }
+.catchup-row-kicker { display: flex; align-items: center; gap: 7px; min-width: 0; color: #58736b; font-size: 11px; font-weight: 700; }
+.catchup-row-kicker time { flex: none; font-variant-numeric: tabular-nums; }
+.catchup-row-kicker small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catchup-row-identity .catchup-row-hint { overflow: visible; text-overflow: clip; white-space: normal; color: #667b75; font-size: 11px; font-weight: 500; line-height: 1.4; }
 .catchup-row-figure small { font-size: 10px; }
 .catchup-row-details { padding: 3px 15px 16px; border-top: 1px solid var(--line); }
 .catchup-row-main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 11px; padding-top: 14px; }
@@ -156,7 +169,8 @@
   .catchup-review-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; padding: 0; }
   .catchup-review-tabs button { min-width: 0; text-align: center; }
   .catchup-row-summary { grid-template-columns: minmax(0, 1fr) 103px 14px; gap: 8px; padding: 12px; }
-  .catchup-row-identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .catchup-row-kicker { display: grid; gap: 2px; }
+  .catchup-row-kicker small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .catchup-row-figure strong { font-size: 12px; }
   .catchup-row-main, .catchup-row-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .catchup-row-main .catchup-field:first-child, .catchup-row-meta .catchup-field:nth-child(3) { grid-column: 1 / -1; }

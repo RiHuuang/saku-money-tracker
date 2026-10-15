@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 if (process.env.SAKU_APPROVED_SINGLE_AI_TEST !== "yes") throw new Error("Set SAKU_APPROVED_SINGLE_AI_TEST=yes only for an approved single staging call");
 const mode = process.argv[2] || "text";
-if (!["text", "screenshot", "scan", "benchmark-1", "benchmark-2", "benchmark-3"].includes(mode)) throw new Error("Choose text, screenshot, scan, or benchmark-1 through benchmark-3");
+if (!["text", "screenshot", "scan", "benchmark-1", "benchmark-2", "benchmark-3", "private-image"].includes(mode)) throw new Error("Choose text, screenshot, scan, benchmark-1 through benchmark-3, or private-image");
 const root = process.cwd();
 const wrangler = join(root, "node_modules", "wrangler", "bin", "wrangler.js");
 const uid = `synthetic-import-${randomUUID()}`;
@@ -24,6 +24,10 @@ const execute = (sql) => {
 async function inputForMode() {
   if (mode === "text") return { kind: "text", month: "2026-10", text: "CONTOH MUTASI REKENING - DATA SINTETIS\n10/10/2026 QRIS WARUNG CONTOH DB 28.000,00\n10/10/2026 TOP UP GOPAY DB 37.000,00\nSALDO AKHIR 500.000,00" };
   if (mode === "screenshot") return { kind: "image", month: "2026-10", image: `data:image/png;base64,${readFileSync(join(root, "output", "synthetic-wallet-history.png")).toString("base64")}` };
+  if (mode === "private-image") {
+    if (!process.env.SAKU_PRIVATE_IMAGE_PATH) throw new Error("Set SAKU_PRIVATE_IMAGE_PATH to the approved local image");
+    return { kind: "image", month: "2026-10", image: `data:image/jpeg;base64,${readFileSync(process.env.SAKU_PRIVATE_IMAGE_PATH).toString("base64")}` };
+  }
   if (mode.startsWith("benchmark-")) return { kind: "image", month: "2026-10", image: `data:image/jpeg;base64,${readFileSync(join(root, "output", "import-benchmark-30", `screen-${mode.slice(-1)}.jpg`)).toString("base64")}` };
   const [{ getDocument }, { createCanvas }] = await Promise.all([import("pdfjs-dist/legacy/build/pdf.mjs"), import("@napi-rs/canvas")]);
   const task = getDocument({ data: new Uint8Array(readFileSync(join(root, "output", "synthetic-scanned-statement.pdf"))), useSystemFonts: true, disableFontFace: true });
@@ -46,7 +50,10 @@ INSERT INTO sessions(id,uid,access_hash,refresh_hash,access_expires_at,refresh_e
   });
   const result = await response.json();
   if (response.ok && mode.startsWith("benchmark-")) writeFileSync(join(root, "output", "import-benchmark-30", `screen-${mode.slice(-1)}.json`), JSON.stringify(result, null, 2));
-  process.stdout.write(`${JSON.stringify({ mode, status: response.status, result })}\n`);
+  if (mode === "private-image") {
+    writeFileSync(join(root, "output", "private-image-stage-result.json"), JSON.stringify(result, null, 2));
+    process.stdout.write(`${JSON.stringify({ mode, status: response.status, rowCount: result.rows?.length ?? 0 })}\n`);
+  } else process.stdout.write(`${JSON.stringify({ mode, status: response.status, result })}\n`);
 } finally {
   execute(`DELETE FROM sessions WHERE id='${id}';
 DELETE FROM users WHERE uid='${uid}';`);

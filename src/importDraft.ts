@@ -22,6 +22,7 @@ export type ImportSource = {
   account: string;
   accountConfirmed?: boolean;
   mixedAccounts?: boolean;
+  datesChecked?: boolean;
   file: File;
   processedPages: number;
   pageCount: number;
