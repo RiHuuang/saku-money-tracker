@@ -48,6 +48,7 @@ for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar K
 }
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Bunga Tabungan", amount: "Rp 332", direction: "income", activity: "interest" }] }) })[0].activity, "interest");
 assert.equal(importMessages(input)[0].content.includes("Completed can still contain expired payments"), true);
+assert.equal(importMessages(input)[0].content.includes("a category total is not an individual payment"), true);
 assert.equal(importMessages(input)[0].content.includes("use the transaction date for date and dateEvidence"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Pembayaran kedaluwarsa", amount: "Rp 22.000", direction: "expense", activity: "purchase" }] }) })[0].activity, "failed");
 assert.equal(importMessages(input)[0].content.includes("Use income for salary"), true);
