@@ -6,7 +6,7 @@ import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, 
 import { runImportSources } from "./importFlow";
 import { openImportPages } from "./importPages";
 import { Modal } from "./components";
-import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowsNeedingDuplicateConfirmation, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
 
 const consentTargetFor = (draft: ImportDraft | null, owner: string) => draft?.owner === owner && draft.sources.length ? JSON.stringify([owner, draft.id, draft.sources.map((source) => source.id)]) : "";
 const activityOptions: { value: ImportRow["activity"]; label: string }[] = [
@@ -18,27 +18,6 @@ const activityOptions: { value: ImportRow["activity"]; label: string }[] = [
   { value: "failed", label: "Failed or cancelled payment" }, { value: "unknown", label: "I'm not sure yet" },
 ];
 class LocalDraftWriteError extends Error {}
-function reviewIssue(row: ImportRow, account: string, data: Data, duplicate: boolean): string {
-  if (!account) return "Choose the Saku account used for this transaction.";
-  if (!validDate(row.date)) return "Check the transaction date.";
-  if (row.date > today()) return "This date is in the future. Check the source.";
-  if (!validAmount(row.amount)) return "Enter a valid whole-rupiah amount.";
-  if (!row.name.trim()) return "Add a description.";
-  if (row.direction === "unknown") return "Choose whether money came in or went out.";
-  if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return "Choose ‘Money in’ for this type of receipt.";
-  if (["purchase", "fee", "card_payment"].includes(row.activity) && row.direction !== "expense") return "Choose ‘Money out’ for this type of payment.";
-  if (row.activity === "pending") return "Payment appears pending. Recheck it when your account shows a final result.";
-  if (row.activity === "failed") return "Payment appears failed or expired. Check before recording a charge.";
-  if (row.activity === "reward") return "Points or rewards are not a rupiah transaction.";
-  if (row.activity === "pay_later") return "Check which PayLater or credit account funded this purchase.";
-  if (row.activity === "unknown") return "Choose what happened before adding this row.";
-  if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return "Choose the other Saku account for this transfer.";
-  if (row.activity === "card_payment" && !row.cardId) return "Choose the credit card that was paid.";
-  if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !row.firstDueMonth) return "Choose the first due month for this card purchase.";
-  if (duplicate && !row.confirmedSeparate) return "Confirm that this really is a separate transaction.";
-  if (row.activity === "income") return "Confirm this came from someone else, not another account of yours.";
-  return "Review the details and choose Add to Saku when you are sure.";
-}
 export default function CatchUp({ data, month, userId, commit, busy, notify, statementMode = false }: {
   data: Data; month: string; userId?: string;
   commit: (data: Data, message: string) => Promise<boolean>;
@@ -337,7 +316,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
             const rowReady = ready.includes(row);
             const expanded = expandedRows[row.id] ?? false;
             const status = alreadySaved ? "In Activity" : row.decision === "skip" ? "Not importing" : rowReady ? "Will add" : "Open to review";
-            const hint = !alreadySaved && !rowReady && row.decision !== "skip" ? reviewIssue(row, account, data, duplicate) : "";
+            const hint = !alreadySaved && !rowReady && row.decision !== "skip" ? importRowReviewIssue(row, account, data, duplicate) : "";
             return <div className="catchup-row" key={row.id}>
               <button type="button" className="catchup-row-summary" aria-expanded={expanded} aria-controls={expanded ? `catchup-details-${row.id}` : undefined} onClick={() => setExpandedRows((current) => ({ ...current, [row.id]: !expanded }))}>
                 <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date || undefined}>{row.date || "Check date"}</time><small>{activityOptions.find((item) => item.value === row.activity)?.label}</small></span><strong>{row.name || "Unnamed transaction"}</strong>{hint && <small className="catchup-row-hint">{hint}</small>}</span>
@@ -357,7 +336,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
                 {row.direction === "expense" && !card && !["transfer", "topup", "card_payment"].includes(row.activity) && <label className="catchup-field">Budget pocket (optional)<select value={row.pocketId} disabled={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { pocketId: event.target.value })}><option value="">No pocket</option>{data.pockets.map((pocket) => <option key={pocket.id} value={pocket.id}>{pocket.name}</option>)}</select></label>}
                 <p className="catchup-row-note">From page {row.page}{row.dateEvidence ? ` · Printed date: ${row.dateEvidence}` : ""}{alreadySaved ? " · Saved to Activity; edit it there." : ""}{row.date && !row.date.startsWith(draft.month) && !alreadySaved ? " · This date is outside the selected month." : ""}{pair && !alreadySaved ? ` · This might be the other side of a transfer from ${accountForRow(pair)}.` : ""}{duplicate && !alreadySaved ? " · A similar transaction exists. Confirm below only if both happened." : ""}</p>
                 {duplicate && !alreadySaved && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => void updateRow(row.id, { confirmedSeparate: event.target.checked })} /> This is a separate transaction</label>}
-                {row.decision === "ready" && !rowReady && !alreadySaved && <p className="catchup-issue" role="status">{reviewIssue(row, account, data, duplicate)}</p>}
+                {row.decision === "ready" && !rowReady && !alreadySaved && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
                 {!alreadySaved && <div className="catchup-decision"><strong>What should Saku do with this?</strong><div role="group" aria-label={`Import choice for ${row.name || "transaction"}`}><button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} disabled={saving} onClick={() => void updateRow(row.id, { decision: "ready" })}>Add to Saku<small>Include when details are complete</small></button><button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} disabled={saving} onClick={() => void updateRow(row.id, { decision: "later" })}>Review later<small>Keep in this local draft</small></button><button type="button" className={row.decision === "skip" ? "selected" : ""} aria-pressed={row.decision === "skip"} disabled={saving} onClick={() => void updateRow(row.id, { decision: "skip" })}>Don't import<small>Leave out of Saku</small></button></div></div>}
               </div></div>}
             </div>;

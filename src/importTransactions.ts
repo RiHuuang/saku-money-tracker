@@ -55,6 +55,28 @@ export function importMatchesNeedSourceDateCheck(draft: ImportDraft | null, matc
   });
 }
 
+export function importRowReviewIssue(row: ImportRow, account: string, data: Data, duplicate: boolean, currentDay = today()): string {
+  if (row.activity === "pending") return "Payment appears pending. Recheck it when your account shows a final result.";
+  if (row.activity === "failed") return "Payment appears failed or expired. Check before recording a charge.";
+  if (row.activity === "reward") return "Points or rewards are not a rupiah transaction.";
+  if (row.activity === "pay_later") return "Check which PayLater or credit account funded this purchase.";
+  if (!account) return "Choose the Saku account used for this transaction.";
+  if (!validDate(row.date)) return "Check the transaction date.";
+  if (row.date > currentDay) return "This date is in the future. Check the source.";
+  if (!validAmount(row.amount)) return "Enter a valid whole-rupiah amount.";
+  if (!row.name.trim()) return "Add a description.";
+  if (row.direction === "unknown") return "Choose whether money came in or went out.";
+  if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return "Choose ‘Money in’ for this type of receipt.";
+  if (["purchase", "fee", "card_payment"].includes(row.activity) && row.direction !== "expense") return "Choose ‘Money out’ for this type of payment.";
+  if (row.activity === "unknown") return "Choose what happened before adding this row.";
+  if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return "Choose the other Saku account for this transfer.";
+  if (row.activity === "card_payment" && !row.cardId) return "Choose the credit card that was paid.";
+  if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !row.firstDueMonth) return "Choose the first due month for this card purchase.";
+  if (duplicate && !row.confirmedSeparate) return "Confirm that this really is a separate transaction.";
+  if (row.activity === "income") return "Confirm this came from someone else, not another account of yours.";
+  return "Review the details and choose Add to Saku when you are sure.";
+}
+
 export function importRowAlreadySaved(row: ImportRow, draft: ImportDraft | null, data: Data): boolean {
   if (data.transactions.some((transaction) => transaction.id === row.id || transaction.transferId === row.id)) return true;
   return !!draft?.saved.some((item) => item.pairedRowId === row.id && data.transactions.some((transaction) => transaction.id === item.id));

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -92,6 +92,16 @@ test("statement matches cannot be marked checked before their own source dates a
   assert.equal(importMatchesNeedSourceDateCheck(draft, [{ id: "missing" }]), true);
   assert.equal(importMatchesNeedSourceDateCheck(null, [{ id: "checked" }]), true);
   assert.equal(importMatchesNeedSourceDateCheck(draft, []), false);
+});
+
+test("review explains non-rupiah and unsettled rows before asking for missing amounts", () => {
+  const incomplete = { ...base, date: "", amount: 0, account: "" };
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "reward" }, "", ledger, false), /Points or rewards/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "pending" }, "", ledger, false), /pending/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "failed" }, "", ledger, false), /failed or expired/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "pay_later" }, "", ledger, false), /PayLater or credit account/);
+  assert.match(importRowReviewIssue({ ...base, amount: 0 }, "BCA", ledger, false, "2026-10-15"), /whole-rupiah amount/);
+  assert.match(importRowReviewIssue({ ...base, date: "" }, "BCA", ledger, false, "2026-10-15"), /transaction date/);
 });
 
 test("thirty clear purchases can be committed together without duplicating IDs", () => {
