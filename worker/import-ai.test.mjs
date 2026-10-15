@@ -30,6 +30,7 @@ const screenshotRow = (dateEvidence) => parseImportAnswer({ response: JSON.strin
 assert.equal(screenshotRow("Kemarin 05 Sep 2025").date, "2025-09-05", "printed group date overrides an incorrect model-converted date");
 assert.equal(screenshotRow("").date, "", "an image row without a full printed date waits for review");
 assert.equal(screenshotRow("Kemarin").date, "", "relative labels alone are not calendar evidence");
+assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-13", dateEvidence: "13 Oct", name: "Fabricated screenshot purchase", amount: 28000, direction: "expense", activity: "purchase" }] }) }, "image", "2026-10")[0].date, "", "screenshot dates need a printed year even when the selected month matches");
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-14", dateEvidence: "Posting date 14 Oct 2026", name: "Fabricated card purchase", amount: 28000, direction: "expense", activity: "purchase" }] }) })[0].date, "", "posting-only evidence cannot validate a text statement date");
 const textRow = (dateEvidence, date = "2025-10-13") => parseImportAnswer({ response: JSON.stringify({ rows: [{ date, dateEvidence, name: "Fabricated text-PDF purchase", amount: 28000, direction: "expense", activity: "purchase" }] }) }, "text", "2026-10")[0];
 assert.equal(textRow("13 Oct").date, "2026-10-13", "printed day and month use the selected review year");

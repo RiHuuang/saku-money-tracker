@@ -77,7 +77,7 @@ export function parseImportAnswer(answer, kind = "text", reviewMonth = "") {
     if (!row || typeof row !== "object") throw new Error("AI returned an invalid transaction");
     const modelDate = typeof row.date === "string" ? row.date.trim() : "";
     const dateEvidence = typeof row.dateEvidence === "string" ? row.dateEvidence.trim().slice(0, 80) : "";
-    const printedDate = dateFromPrintedEvidence(dateEvidence, reviewMonth);
+    const printedDate = dateFromPrintedEvidence(dateEvidence, kind === "text" ? reviewMonth : "");
     const includesPostingDate = /\b(?:tanggal pembukuan|posting date)\b/i.test(dateEvidence);
     const hasPartialDate = /\b\d{1,2}[./-]\d{1,2}(?![./-]\d)\b|\b\d{1,2}\s+[a-z]+\b/i.test(dateEvidence);
     const date = printedDate || (kind === "image" || includesPostingDate || hasPartialDate ? "" : modelDate);
