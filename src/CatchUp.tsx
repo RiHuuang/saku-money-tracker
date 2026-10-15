@@ -6,7 +6,7 @@ import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, 
 import { runImportSources } from "./importFlow";
 import { openImportPages } from "./importPages";
 import { Modal } from "./components";
-import { confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
 
 const possibleKey = (row: Pick<ImportRow, "date" | "name" | "amount" | "direction">, account: string) => JSON.stringify([account, row.date, row.amount, row.direction, row.name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim()]);
 const similarKey = (row: Pick<ImportRow, "date" | "amount" | "direction">, account: string) => JSON.stringify([account, row.date, row.amount, row.direction]);
@@ -58,6 +58,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const [previewUrl, setPreviewUrl] = useState("");
   const [deleteConfirmationId, setDeleteConfirmationId] = useState("");
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [sharedDates, setSharedDates] = useState<Record<string, string>>({});
   const [reviewView, setReviewView] = useState<"attention" | "adding" | "setAside" | "all">("attention");
   const [selectedMatches, setSelectedMatches] = useState<string[]>([]);
   const cancelled = useRef(false);
@@ -116,6 +117,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const readyIncome = ready.filter((row) => row.direction === "income" && ["refund", "income", "interest"].includes(row.activity)).reduce((total, row) => total + row.amount, 0);
   const readyMovementCount = ready.filter((row) => ["transfer", "topup", "card_payment"].includes(row.activity)).length;
   const needsReview = (draft?.rows || []).filter((row) => !rowSaved(row) && (row.decision === "later" || (row.decision === "ready" && !ready.includes(row))));
+  const undatedSources = (draft?.sources || []).filter((source) => draft?.rows.some((row) => row.sourceId === source.id && !row.date && row.decision !== "skip" && !rowSaved(row)));
   const setAside = (draft?.rows || []).filter((row) => !rowSaved(row) && row.decision === "skip");
   const statementRows: BankRow[] = (draft?.rows || []).filter((row) => row.decision !== "skip" && !!accountForRow(row) && validDate(row.date) && validAmount(row.amount) && row.direction !== "unknown" && !["pending", "failed", "reward", "pay_later", "unknown"].includes(row.activity) && (!usesDeferredFunding(row) || data.creditCards.some((card) => card.name === accountForRow(row)))).map((row) => ({ id: row.id, file: draft?.sources.find((source) => source.id === row.sourceId)?.name || "", account: accountForRow(row), date: row.date, name: row.name, amount: row.amount, type: row.direction as "income" | "expense" }));
   const comparisons = reconcile(statementRows, data.transactions, draft?.month || month);
@@ -199,6 +201,19 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     if (!draftRef.current || processingRef.current || savingRef.current) return;
     try { await save({ ...draftRef.current, sources: draftRef.current.sources.map((source) => source.id === id ? { ...source, datesChecked: checked } : source) }); }
     catch { /* save explains the local storage problem */ }
+  }
+  async function applySharedDate(sourceId: string) {
+    if (!draftRef.current || processingRef.current || savingRef.current) return;
+    const date = sharedDates[sourceId] || "";
+    if (!validDate(date) || date > today()) { setInfo("Choose a valid transaction date that is not in the future."); return; }
+    const rows = applySharedSourceDate(draftRef.current.rows, sourceId, date, draftRef.current.month, (row) => importRowAlreadySaved(row, draftRef.current, data));
+    const changed = rows.filter((row, index) => row !== draftRef.current?.rows[index]).length;
+    if (!changed) return;
+    try {
+      await save({ ...draftRef.current, rows, sources: draftRef.current.sources.map((source) => source.id === sourceId ? { ...source, datesChecked: false } : source) });
+      setSharedDates((current) => ({ ...current, [sourceId]: "" }));
+      setInfo(`Date set for ${changed} ${changed === 1 ? "row" : "rows"}. Compare them with the source before confirming its dates.`);
+    } catch { /* save explains the local storage problem */ }
   }
   async function updateAccount(id: string, account: string) {
     if (!draftRef.current || processingRef.current || savingRef.current) return;
@@ -314,6 +329,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       <p className="import-note">Incomplete screenshots and partial statements cannot prove a ledger entry is missing. No deletions are suggested.</p></section>}
     {!!draft?.rows.length && <section className="catchup-panel catchup-review"><div className="catchup-panel-head"><div><h3>Make this list yours</h3><p>Check the uncertain ones. You can add the clear transactions now and return to the rest later.</p></div><span className="catchup-private"><LockKeyhole size={13} /> Saved on this device</span></div>
       <div className="catchup-review-overview"><div><strong>{ready.length}</strong><span>to add to Saku</span></div><div><strong>{needsReview.length}</strong><span>need a closer look</span></div><div><strong>{setAside.length}</strong><span>won't be imported</span></div></div><p className="catchup-review-guide">Account = where money moved. Pocket = optional budget for spending.</p>
+      {!!undatedSources.length && <div className="catchup-missing-dates"><strong>Some dates could not be read</strong><p>If every undated row in a source happened on one day, set that date here. Otherwise, open those rows and set their dates separately.</p>{undatedSources.map((source) => { const count = draft.rows.filter((row) => row.sourceId === source.id && !row.date && row.decision !== "skip" && !rowSaved(row)).length; return <div key={source.id}><b>{source.name} · {count} {count === 1 ? "row" : "rows"}</b><div><label>Shared date<input type="date" value={sharedDates[source.id] || ""} max={today()} disabled={processing || saving} onChange={(event) => setSharedDates((current) => ({ ...current, [source.id]: event.target.value }))} /></label><button type="button" className="button secondary" disabled={!validDate(sharedDates[source.id] || "") || (sharedDates[source.id] || "") > today() || processing || saving} onClick={() => void applySharedDate(source.id)}>Set date for {count} {count === 1 ? "row" : "rows"}</button></div></div>; })}</div>}
       {!!ready.length && <div className="catchup-date-check"><strong>Check dates before adding</strong><p>Compare the listed dates with each source. When they all look right, confirm that file once.</p>{draft.sources.filter((source) => ready.some((row) => row.sourceId === source.id)).map((source) => <div key={source.id}><label><input type="checkbox" checked={!!source.datesChecked} disabled={processing || saving} onChange={(event) => void updateDatesChecked(source.id, event.target.checked)} /><span>Dates checked in {source.name}</span></label><button className="text-button" type="button" onClick={() => setPreviewId(source.id)}>Preview source</button></div>)}</div>}
       <div className="catchup-review-tabs" role="group" aria-label="Show transactions"><button type="button" aria-pressed={reviewView === "attention"} onClick={() => setReviewView("attention")}>Needs a look <span>{needsReview.length}</span></button><button type="button" aria-pressed={reviewView === "adding"} onClick={() => setReviewView("adding")}>Adding <span>{ready.length}</span></button><button type="button" aria-pressed={reviewView === "setAside"} onClick={() => setReviewView("setAside")}>Not importing <span>{setAside.length}</span></button><button type="button" aria-pressed={reviewView === "all"} onClick={() => setReviewView("all")}>All <span>{draft.rows.length}</span></button></div>
       {reviewView === "attention" && !needsReview.length && <p className="catchup-review-empty"><Check size={18} /> Nothing needs your attention. Check “Adding” or save the clear transactions below.</p>}

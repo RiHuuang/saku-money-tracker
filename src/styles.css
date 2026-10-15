@@ -89,6 +89,16 @@
 .catchup-review-overview > div { display: grid; gap: 4px; padding: 15px 18px; background: #f8fbfa; }
 .catchup-review-overview strong { color: var(--ink); font: 600 27px/1 "Fraunces", Georgia, serif; }
 .catchup-review-overview span { color: var(--muted); font-size: 11px; }
+.catchup-missing-dates { margin: 0 0 18px; padding: 16px 18px; border: 1px solid #eddcbe; border-radius: 15px; background: #fffbf3; }
+.catchup-missing-dates > strong { color: var(--ink); font-size: 14px; }
+.catchup-missing-dates > p { margin: 5px 0 13px; color: #735f42; font-size: 12px; line-height: 1.5; }
+.catchup-missing-dates > div { padding-top: 11px; border-top: 1px solid #f0e4d0; }
+.catchup-missing-dates > div + div { margin-top: 13px; }
+.catchup-missing-dates b { display: block; margin-bottom: 8px; color: var(--ink); font-size: 12px; overflow-wrap: anywhere; }
+.catchup-missing-dates > div > div { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; }
+.catchup-missing-dates label { display: grid; gap: 5px; color: #735f42; font-size: 11px; font-weight: 700; }
+.catchup-missing-dates input { min-height: 42px; padding: 7px 10px; border: 1px solid #ddcfb6; border-radius: 9px; background: #fff; color: var(--ink); }
+.catchup-missing-dates .button { min-height: 42px; }
 .catchup-date-check { margin: 0 0 19px; padding: 16px 18px; border: 1px solid #d7e6dd; border-radius: 15px; background: #f5faf6; }
 .catchup-date-check > strong { color: var(--ink); font-size: 14px; }
 .catchup-date-check > p { margin: 5px 0 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }

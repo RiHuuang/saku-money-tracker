@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -39,6 +39,25 @@ test("out-of-month rows wait for an explicit decision before batch save", () => 
   assert.equal(suggestImportDecision({ ...base, name: "TRSF E-BANKING CR", direction: "income", activity: "refund" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "Pembayaran kedaluwarsa", activity: "purchase" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "Payment cancelled", activity: "purchase" }, "2026-10"), "later");
+});
+
+test("one shared date updates only undated unsaved source rows and keeps uncertain payments for review", () => {
+  const rows: ImportRow[] = [
+    { ...base, id: "missing", date: "", decision: "later" },
+    { ...base, id: "pending", date: "", activity: "pending", decision: "later" },
+    { ...base, id: "already-dated", date: "2026-10-09" },
+    { ...base, id: "excluded", date: "", decision: "skip" },
+    { ...base, id: "saved", date: "", decision: "later" },
+    { ...base, id: "other-source", sourceId: "screen-2", date: "", decision: "later" },
+  ];
+  const dated = applySharedSourceDate(rows, "screen-1", "2026-10-14", "2026-10", (row) => row.id === "saved", "2026-10-15");
+  assert.equal(dated[0].date, "2026-10-14");
+  assert.equal(dated[0].decision, "ready");
+  assert.equal(dated[1].date, "2026-10-14");
+  assert.equal(dated[1].decision, "later");
+  for (const index of [2, 3, 4, 5]) assert.strictEqual(dated[index], rows[index]);
+  assert.deepEqual(applySharedSourceDate(rows, "screen-1", "2026-02-30", "2026-10", () => false, "2026-10-15"), rows);
+  assert.deepEqual(applySharedSourceDate(rows, "screen-1", "2026-10-16", "2026-10", () => false, "2026-10-15"), rows);
 });
 
 test("thirty clear purchases can be committed together without duplicating IDs", () => {

@@ -20,6 +20,15 @@ export function suggestImportDecision(row: Pick<ImportRow, "date" | "name" | "pa
     ? "ready" : "later";
 }
 
+export function applySharedSourceDate(rows: readonly ImportRow[], sourceId: string, date: string, month: string, wasSaved: (row: ImportRow) => boolean, currentDay = today()): ImportRow[] {
+  if (!validDate(date) || date > currentDay) return [...rows];
+  return rows.map((row) => {
+    if (row.sourceId !== sourceId || row.date || row.decision === "skip" || wasSaved(row)) return row;
+    const dated = { ...row, date, confirmedSeparate: false };
+    return { ...dated, decision: suggestImportDecision(dated, month) };
+  });
+}
+
 export function importRowAlreadySaved(row: ImportRow, draft: ImportDraft | null, data: Data): boolean {
   if (data.transactions.some((transaction) => transaction.id === row.id || transaction.transferId === row.id)) return true;
   return !!draft?.saved.some((item) => item.pairedRowId === row.id && data.transactions.some((transaction) => transaction.id === item.id));
