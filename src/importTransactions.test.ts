@@ -78,6 +78,18 @@ test("same-value purchases at different merchants avoid duplicate prompts, overl
   assert.equal(withExistingMatch.has("shop"), true);
 });
 
+test("matching history rows from separate apps need review even when mapped to different accounts", () => {
+  const bank = { ...base, id: "bank", sourceId: "bank-screen", name: "Example Cafe" };
+  const wallet = { ...base, id: "wallet", sourceId: "wallet-screen", name: "example cafe!" };
+  const accountFor = (row: ImportRow) => row.id === "bank" ? "BCA" : "GoPay";
+  const duplicates = importRowsNeedingDuplicateConfirmation([bank, wallet], [], accountFor, () => false);
+  assert.deepEqual([...duplicates].sort(), ["bank", "wallet"]);
+  assert.deepEqual([...importRowsNeedingDuplicateConfirmation([bank, wallet], [], accountFor, (row) => row.id === "bank")], ["wallet"]);
+  assert.equal(importRowsNeedingDuplicateConfirmation([bank, { ...wallet, decision: "skip" }], [], accountFor, () => false).size, 0);
+  assert.equal(importRowsNeedingDuplicateConfirmation([bank, { ...wallet, name: "Another Cafe" }], [], accountFor, () => false).size, 0);
+  assert.equal(importRowsNeedingDuplicateConfirmation([bank, { ...wallet, sourceId: "bank-screen" }], [], accountFor, () => false).size, 0);
+});
+
 test("statement matches cannot be marked checked before their own source dates are checked", () => {
   const draft: ImportDraft = {
     id: "draft", owner: "synthetic", month: "2026-10", createdAt: 1, saved: [],

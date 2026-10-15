@@ -36,15 +36,21 @@ function duplicateKey(row: Pick<ImportRow, "date" | "name" | "amount" | "directi
 export function importRowsNeedingDuplicateConfirmation(rows: readonly ImportRow[], transactions: readonly Transaction[], accountFor: (row: ImportRow) => string, wasSaved: (row: ImportRow) => boolean): Set<string> {
   const existing = new Set(transactions.map((transaction) => duplicateKey({ ...transaction, direction: transaction.type }, transaction.account)));
   const counts = new Map<string, number>();
+  const sources = new Map<string, Set<string>>();
   for (const row of rows) {
-    if (row.decision === "skip" || wasSaved(row)) continue;
+    if (row.decision === "skip") continue;
+    const crossSourceKey = duplicateKey(row, "");
+    const seenSources = sources.get(crossSourceKey) || new Set<string>();
+    seenSources.add(row.sourceId);
+    sources.set(crossSourceKey, seenSources);
+    if (wasSaved(row)) continue;
     const key = duplicateKey(row, accountFor(row));
     counts.set(key, (counts.get(key) || 0) + 1);
   }
   return new Set(rows.filter((row) => {
     if (row.decision === "skip" || wasSaved(row)) return false;
     const key = duplicateKey(row, accountFor(row));
-    return existing.has(key) || (counts.get(key) || 0) > 1;
+    return existing.has(key) || (counts.get(key) || 0) > 1 || (sources.get(duplicateKey(row, ""))?.size || 0) > 1;
   }).map((row) => row.id));
 }
 
