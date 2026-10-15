@@ -43,6 +43,7 @@
 .catchup-icon:hover { background: var(--surface); }
 .catchup-consent { display: flex; align-items: start; gap: 10px; margin: 20px 0 14px; max-width: 650px; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .catchup-consent input { margin-top: 3px; }
+.catchup-processed { display: flex; align-items: center; gap: 8px; margin: 16px 0 12px; color: var(--teal); font-size: 12px; font-weight: 600; line-height: 1.5; }
 .catchup-actions { justify-content: flex-start; flex-wrap: wrap; }
 .catchup-delete-confirm { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 14px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .catchup-delete-confirm p { margin: 0; max-width: 48ch; font-size: 13px; line-height: 1.5; }
