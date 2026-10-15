@@ -5,6 +5,8 @@ then run: python scripts/score-synthetic-import.py
 """
 
 import json
+import re
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
@@ -24,6 +26,11 @@ def key(row):
     return row["file"], row["date"], row["amount"], row["direction"]
 
 
+def normalized_name(row):
+    name = unicodedata.normalize("NFKC", str(row.get("name", ""))).casefold()
+    return " ".join(re.findall(r"\w+", name))
+
+
 remaining = defaultdict(list)
 for row in actual:
     remaining[key(row)].append(row)
@@ -32,7 +39,10 @@ missing = []
 for row in expected:
     identity = key(row)
     if remaining[identity]:
-        matched.append((row, remaining[identity].pop(0)))
+        candidates = remaining[identity]
+        exact_name = next((index for index, candidate in enumerate(candidates)
+                           if normalized_name(candidate) == normalized_name(row)), None)
+        matched.append((row, candidates.pop(exact_name if exact_name is not None else 0)))
     else:
         missing.append(row)
 
@@ -42,11 +52,19 @@ wrong_activity = [
     {"file": expected_row["file"], "name": expected_row["name"], "expected": expected_row["activity"], "actual": actual_row.get("activity")}
     for expected_row, actual_row in matched if expected_row["activity"] != actual_row.get("activity")
 ]
+wrong_name = [
+    {"file": expected_row["file"], "date": expected_row["date"], "amount": expected_row["amount"],
+     "expected": expected_row["name"], "actual": actual_row.get("name", "")}
+    for expected_row, actual_row in matched
+    if normalized_name(expected_row) != normalized_name(actual_row)
+]
 print(json.dumps({
     "expected_rows": len(expected),
     "returned_rows": len(actual),
     "matched_date_amount_direction": len(matched),
+    "matched_date_amount_direction_name": len(matched) - len(wrong_name),
     "missing": missing,
     "unexpected": extras,
+    "wrong_name": wrong_name,
     "wrong_activity": wrong_activity,
 }, ensure_ascii=False, indent=2))
