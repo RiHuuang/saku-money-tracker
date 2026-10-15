@@ -6,10 +6,8 @@ import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, 
 import { runImportSources } from "./importFlow";
 import { openImportPages } from "./importPages";
 import { Modal } from "./components";
-import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, importRowsNeedingDuplicateConfirmation, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
 
-const possibleKey = (row: Pick<ImportRow, "date" | "name" | "amount" | "direction">, account: string) => JSON.stringify([account, row.date, row.amount, row.direction, row.name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim()]);
-const similarKey = (row: Pick<ImportRow, "date" | "amount" | "direction">, account: string) => JSON.stringify([account, row.date, row.amount, row.direction]);
 const consentTargetFor = (draft: ImportDraft | null, owner: string) => draft?.owner === owner && draft.sources.length ? JSON.stringify([owner, draft.id, draft.sources.map((source) => source.id)]) : "";
 const activityOptions: { value: ImportRow["activity"]; label: string }[] = [
   { value: "purchase", label: "Purchase or payment" }, { value: "fee", label: "Bank or service fee" },
@@ -98,20 +96,9 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const accountForRow = (row: ImportRow) => importRowAccount(row, draft?.sources.find((source) => source.id === row.sourceId), data);
   const rowSaved = (row: ImportRow) => importRowAlreadySaved(row, draft, data);
   const sourceHasSavedRows = (sourceId: string) => (draft?.rows || []).some((row) => row.sourceId === sourceId && rowSaved(row));
-  const existing = useMemo(() => new Set(data.transactions.map((transaction) => possibleKey({ ...transaction, direction: transaction.type }, transaction.account))), [data.transactions]);
-  const existingSimilar = useMemo(() => new Set(data.transactions.map((transaction) => similarKey({ ...transaction, direction: transaction.type }, transaction.account))), [data.transactions]);
-  const repetitions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of draft?.rows || []) { if (row.decision === "skip" || rowSaved(row)) continue; const key = possibleKey(row, accountForRow(row)); counts.set(key, (counts.get(key) || 0) + 1); }
-    return counts;
-  }, [draft, data.transactions]);
-  const similarCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of draft?.rows || []) { if (row.decision === "skip" || rowSaved(row)) continue; const key = similarKey(row, accountForRow(row)); counts.set(key, (counts.get(key) || 0) + 1); }
-    return counts;
-  }, [draft, data.transactions]);
-  const needsSeparateConfirmation = (row: ImportRow, account: string) => existingSimilar.has(similarKey(row, account)) || (similarCounts.get(similarKey(row, account)) || 0) > 1 || existing.has(possibleKey(row, account)) || (repetitions.get(possibleKey(row, account)) || 0) > 1;
-  const ready = (draft?.rows || []).filter((row) => importRowReady(row, accountForRow(row), data) && !rowSaved(row) && (!needsSeparateConfirmation(row, accountForRow(row)) || row.confirmedSeparate));
+  const duplicateRows = useMemo(() => importRowsNeedingDuplicateConfirmation(draft?.rows || [], data.transactions, (row) => importRowAccount(row, draft?.sources.find((source) => source.id === row.sourceId), data), (row) => importRowAlreadySaved(row, draft, data)), [draft, data]);
+  const needsSeparateConfirmation = (row: ImportRow) => duplicateRows.has(row.id);
+  const ready = (draft?.rows || []).filter((row) => importRowReady(row, accountForRow(row), data) && !rowSaved(row) && (!needsSeparateConfirmation(row) || row.confirmedSeparate));
   const uncheckedDateSources = (draft?.sources || []).filter((source) => !source.datesChecked && ready.some((row) => row.sourceId === source.id));
   const readySpending = ready.filter((row) => row.direction === "expense" && ["purchase", "fee"].includes(row.activity)).reduce((total, row) => total + row.amount, 0);
   const readyIncome = ready.filter((row) => row.direction === "income" && ["refund", "income", "interest"].includes(row.activity)).reduce((total, row) => total + row.amount, 0);
@@ -340,7 +327,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           {rows.map((row) => {
             const alreadySaved = rowSaved(row);
             const account = accountForRow(row);
-            const duplicate = needsSeparateConfirmation(row, account);
+            const duplicate = needsSeparateConfirmation(row);
             const pair = ["transfer", "topup"].includes(row.activity) ? draft.rows.find((candidate) => candidate.id !== row.id && ["transfer", "topup"].includes(candidate.activity) && candidate.date === row.date && candidate.amount === row.amount && candidate.direction !== row.direction && accountForRow(candidate) && accountForRow(candidate) !== account) : undefined;
             const card = data.creditCards.find((item) => item.name === account);
             const rowReady = ready.includes(row);

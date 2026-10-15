@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importRowAccount, importRowAlreadySaved, importRowReady, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -60,8 +60,27 @@ test("one shared date updates only undated unsaved source rows and keeps uncerta
   assert.deepEqual(applySharedSourceDate(rows, "screen-1", "2026-10-16", "2026-10", () => false, "2026-10-15"), rows);
 });
 
+test("same-value purchases at different merchants avoid duplicate prompts, overlapping rows do not", () => {
+  const rows: ImportRow[] = [
+    { ...base, id: "cafe", name: "Example Cafe" },
+    { ...base, id: "shop", name: "Example Shop" },
+    { ...base, id: "overlap", sourceId: "screen-2", name: " example  cafe! " },
+    { ...base, id: "saved", name: "Example Shop", decision: "ready" },
+    { ...base, id: "skipped", name: "Another Shop", decision: "skip" },
+  ];
+  const accountFor = (row: ImportRow) => row.id === "shop" || row.id === "saved" ? "GoPay" : "BCA";
+  const existing = [{ ...importedTransactions({ ...base, id: "existing", name: "Existing Cafe" }, "BCA", "example.jpg", ledger)[0], id: "existing" }];
+  const duplicates = importRowsNeedingDuplicateConfirmation(rows, existing, accountFor, (row) => row.id === "saved");
+  assert.deepEqual([...duplicates].sort(), ["cafe", "overlap"]);
+  assert.equal(duplicates.has("shop"), false);
+  assert.equal(duplicates.has("saved"), false);
+  const withExistingMatch = importRowsNeedingDuplicateConfirmation(rows, [{ ...existing[0], name: "Example Shop", account: "GoPay" }], accountFor, (row) => row.id === "saved");
+  assert.equal(withExistingMatch.has("shop"), true);
+});
+
 test("thirty clear purchases can be committed together without duplicating IDs", () => {
   const rows = Array.from({ length: 30 }, (_, index) => ({ ...base, id: `row-${index}`, name: `Merchant ${index}` }));
+  assert.equal(importRowsNeedingDuplicateConfirmation(rows, [], () => "BCA", () => false).size, 0);
   const transactions = rows.flatMap((row) => importedTransactions(row, "BCA", "bca.png", ledger));
   assert.equal(transactions.length, 30);
   assert.equal(validateData({ ...ledger, transactions }).transactions.length, 30);
