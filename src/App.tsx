@@ -621,7 +621,7 @@ export default function App() {
           </section>
           {view === "more" && <section className="more-list" aria-label="More destinations">
             <button onClick={() => go("insights")}><BarChart3 /><span><strong>Insights</strong><small>See trends and spending breakdowns</small></span><ChevronRight /></button>
-            <button onClick={() => go("check")}><FileCheck2 /><span><strong>{cloudImportEnabled ? "Catch up" : "Check"}</strong><small>{cloudImportEnabled ? "Import screenshots and statements" : "Review CSV and PDF statements"}</small></span><ChevronRight /></button>
+            <button onClick={() => go("check")}><FileCheck2 /><span><strong>{cloudImportEnabled ? "Catch up" : "Check"}</strong><small>{cloudImportEnabled ? "Import screenshots and statements" : nativeAIAvailable ? "Review CSV and PDF statements" : "Compare CSV with your records"}</small></span><ChevronRight /></button>
             <button onClick={() => go("settings")}><Settings /><span><strong>Settings</strong><small>Accounts, appearance, backup and privacy</small></span><ChevronRight /></button>
           </section>}
           {view === "overview" && (
@@ -2178,7 +2178,7 @@ function SettingsView({
       </section>
       <section className="connection-section">
         <span className="connection-icon"><CheckCheck size={25} /></span>
-        <div><h2>Offline first</h2><p>{cloudImportEnabled ? "Your ledger works without internet. AI import sends selected statement text or images to Cloudflare for processing. Original files and review drafts stay on this device; accepted transactions follow your existing cloud and Sheet sync." : "Your ledger works without internet. CSV and PDF statement checking stay on this device while cloud catch-up is being tested."}</p></div>
+        <div><h2>Offline first</h2><p>{cloudImportEnabled ? "Your ledger works without internet. AI import sends selected statement text or images to Cloudflare for processing. Original files and review drafts stay on this device; accepted transactions follow your existing cloud and Sheet sync." : nativeAIAvailable ? "Your ledger works without internet. CSV and PDF statement checking stay on this device while cloud catch-up is being tested." : "Your ledger works without internet. CSV checking stays on this device; PDF checking is available in the Android app while cloud catch-up is being tested."}</p></div>
       </section>
       <footer className="settings-footer">
         Saku 2.0 <span>·</span> Made for a more mindful month.
