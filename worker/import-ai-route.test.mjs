@@ -40,8 +40,16 @@ try {
   assert.equal(browserWithoutCsrf.status, 403);
   const response = await request();
   assert.equal(response.status, 200, await response.clone().text());
-  assert.equal((await response.json()).rows[0].amount, 28000);
+  const firstRow = (await response.json()).rows[0];
+  assert.equal(firstRow.amount, 28000);
+  assert.equal(firstRow.date, "", "the HTTP route must not trust a model date without printed evidence");
   assert.equal(aiCalls, 1);
+  env.AI.run = async () => {
+    aiCalls++;
+    return { response: JSON.stringify({ rows: [{ date: "2026-10-12", dateEvidence: "10/10/2026", name: "Synthetic cafe", amount: 28000, direction: "expense", activity: "purchase" }] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } };
+  };
+  const evidencedResponse = await request();
+  assert.equal((await evidencedResponse.json()).rows[0].date, "2026-10-10", "the HTTP route must check text-PDF evidence against its page");
   env.AI.run = async () => {
     aiCalls++;
     return { response: JSON.stringify({ rows: [{ date: "2026-10-12", dateEvidence: "Kemarin 05 Sep 2025", name: "Synthetic wallet payment", amount: 39200, direction: "expense", activity: "purchase" }] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } };
@@ -49,11 +57,11 @@ try {
   const imageResponse = await request(JSON.stringify({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }));
   assert.equal(imageResponse.status, 200);
   assert.equal((await imageResponse.json()).rows[0].date, "2025-09-05", "the HTTP image route must use printed date evidence");
-  assert.equal(aiCalls, 2);
+  assert.equal(aiCalls, 3);
   const day = new Date().toISOString().slice(0, 10);
-  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_budget WHERE day=?").get(day).neurons, 24);
+  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_budget WHERE day=?").get(day).neurons, 36);
   sqlite.prepare("UPDATE import_ai_budget SET neurons=3990 WHERE day=?").run(day);
   assert.equal((await request()).status, 429, "the app allowance must stop another call");
-  assert.equal(aiCalls, 2);
+  assert.equal(aiCalls, 3);
   console.log("AI import route: auth, release gate, input validation and quota passed with a stub binding");
 } finally { delete crypto.subtle.timingSafeEqual; sqlite.close(); }

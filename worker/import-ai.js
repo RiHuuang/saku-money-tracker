@@ -65,7 +65,12 @@ function wholeRupiah(value) {
   const amount = Number(digits);
   return Number.isSafeInteger(amount) && amount > 0 ? amount : 0;
 }
-export function parseImportAnswer(answer, kind = "text", reviewMonth = "") {
+function printedDateAppearsInText(dateEvidence, sourceText) {
+  const normalize = (value) => value.replace(/\s+/g, " ").trim().toLocaleLowerCase("id-ID");
+  return Boolean(dateEvidence) && normalize(sourceText).includes(normalize(dateEvidence));
+}
+
+export function parseImportAnswer(answer, kind = "text", reviewMonth = "", sourceText = "") {
   const choice = answer?.choices?.[0];
   if (choice?.finish_reason === "length") throw new Error("AI response was cut off; split this page and retry");
   const raw = choice?.message?.content ?? answer?.response;
@@ -75,12 +80,9 @@ export function parseImportAnswer(answer, kind = "text", reviewMonth = "") {
   if (!parsed || !Array.isArray(parsed.rows) || parsed.rows.length > 100) throw new Error("AI returned an invalid transaction list");
   return parsed.rows.map((row) => {
     if (!row || typeof row !== "object") throw new Error("AI returned an invalid transaction");
-    const modelDate = typeof row.date === "string" ? row.date.trim() : "";
     const dateEvidence = typeof row.dateEvidence === "string" ? row.dateEvidence.trim().slice(0, 80) : "";
     const printedDate = dateFromPrintedEvidence(dateEvidence, kind === "text" ? reviewMonth : "");
-    const includesPostingDate = /\b(?:tanggal pembukuan|posting date)\b/i.test(dateEvidence);
-    const hasPartialDate = /\b\d{1,2}[./-]\d{1,2}(?![./-]\d)\b|\b\d{1,2}\s+[a-z]+\b/i.test(dateEvidence);
-    const date = printedDate || (kind === "image" || includesPostingDate || hasPartialDate ? "" : modelDate);
+    const date = kind === "text" && sourceText && !printedDateAppearsInText(dateEvidence, sourceText) ? "" : printedDate;
     const name = typeof row.name === "string" ? row.name.trim().slice(0, 100) : "";
     const paymentMethod = typeof row.paymentMethod === "string" ? row.paymentMethod.trim().slice(0, 60) : "";
     const amount = wholeRupiah(row.amount);

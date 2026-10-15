@@ -12,7 +12,7 @@ assert.equal(DAILY_CAP, 4000);
 assert.equal(RESERVATION, 2500);
 assert.equal(DAILY_CAP * 2, 8000);
 const response = { choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Tokopedia", amount: 41244, direction: "expense", activity: "purchase" }] }) } }], usage: { prompt_tokens: 1000, completion_tokens: 100 } };
-assert.deepEqual(parseImportAnswer(response)[0], { date: "2026-10-10", dateEvidence: "", name: "Tokopedia", paymentMethod: "", amount: 41244, direction: "expense", activity: "purchase" });
+assert.deepEqual(parseImportAnswer(response)[0], { date: "", dateEvidence: "", name: "Tokopedia", paymentMethod: "", amount: 41244, direction: "expense", activity: "purchase" });
 assert.equal(dateFromPrintedEvidence("Kemarin 05 Sep 2025"), "2025-09-05");
 assert.equal(dateFromPrintedEvidence("Jumat 9 Okt 2026"), "2026-10-09");
 assert.equal(dateFromPrintedEvidence("14/10/2026 · 08:12"), "2026-10-14");
@@ -37,6 +37,10 @@ assert.equal(textRow("13 Oct").date, "2026-10-13", "printed day and month use th
 assert.equal(textRow("13/10").date, "2026-10-13", "numeric day and month override a wrong model year");
 assert.equal(textRow("13 Sep").date, "", "a different printed month waits for review");
 assert.equal(textRow("Transaction date 13 Oct; Posting date 14 Oct 2026").date, "2026-10-13", "a yearless transaction date outranks a full posting date");
+const evidencedTextRow = (dateEvidence, sourceText) => parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-13", dateEvidence, name: "Fabricated text-PDF purchase", amount: 28000, direction: "expense", activity: "purchase" }] }) }, "text", "2026-10", sourceText)[0];
+assert.equal(evidencedTextRow("13 Oct", " 13  Oct   Fabricated text-PDF purchase 28.000").date, "2026-10-13", "a printed text date can be used despite whitespace differences");
+assert.equal(evidencedTextRow("13 Oct", "14 Oct Fabricated text-PDF purchase 28.000").date, "", "a model date unsupported by the page waits for review");
+assert.equal(evidencedTextRow("", "13 Oct Fabricated text-PDF purchase 28.000").date, "", "a date without printed evidence waits for review");
 assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[0].content.includes("dateEvidence"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "QRIS WARUNG CONTOH", amount: 28000, direction: "expense", activity: "card_payment" }] }) })[0].activity, "purchase");
 for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar Kantong"]) {
