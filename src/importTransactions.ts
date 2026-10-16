@@ -75,8 +75,8 @@ export function importRowReviewIssue(row: ImportRow, account: string, data: Data
   if (!validAmount(row.amount)) return "Enter a valid whole-rupiah amount.";
   if (!row.name.trim()) return "Add a description.";
   if (row.direction === "unknown") return "Choose whether money came in or went out.";
-  if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return "Choose ‘Money in’ for this type of receipt.";
-  if (["purchase", "fee", "card_payment", "pay_later"].includes(row.activity) && row.direction !== "expense") return "Choose ‘Money out’ for this type of payment.";
+  if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return "This row is marked Money out, but its activity is money received. Check the source and correct whichever field is wrong.";
+  if (["purchase", "fee", "card_payment", "pay_later"].includes(row.activity) && row.direction !== "expense") return "This row is marked Money in, but its activity is a payment. Check the source and correct whichever field is wrong.";
   if (row.activity === "unknown") return "Choose what happened before adding this row.";
   if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return "Choose the other Saku account for this transfer.";
   if (row.activity === "card_payment" && !row.cardId) return "Choose the credit card that was paid.";

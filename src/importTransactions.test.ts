@@ -195,7 +195,8 @@ test("PayLater funding waits until a matching card account is chosen", () => {
   assert.equal(importRowReady({ ...approved, firstDueMonth: "2026-09" }, "BCA Visa", ledger), false);
   assert.equal(importRowReady(approved, "BCA Visa", ledger), true);
   assert.match(importRowReviewIssue({ ...approved, firstDueMonth: "" }, "BCA Visa", ledger, false), /first due month/);
-  assert.match(importRowReviewIssue({ ...approved, direction: "income" }, "BCA Visa", ledger, false), /Money out/);
+  assert.match(importRowReviewIssue({ ...approved, direction: "income" }, "BCA Visa", ledger, false), /marked Money in, but its activity is a payment/);
+  assert.match(importRowReviewIssue({ ...base, activity: "income", direction: "expense" }, "BCA", ledger, false), /marked Money out, but its activity is money received/);
   const transaction = importedTransactions(approved, "BCA Visa", "wallet.png", ledger)[0];
   assert.equal(transaction.kind, "card_purchase");
   assert.equal(transaction.cardId, "visa");
