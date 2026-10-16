@@ -43,6 +43,12 @@ assert.equal(evidencedTextRow("13 Oct", "14 Oct Fabricated text-PDF purchase 28.
 assert.equal(evidencedTextRow("", "13 Oct Fabricated text-PDF purchase 28.000").date, "", "a date without printed evidence waits for review");
 assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[0].content.includes("dateEvidence"), true);
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "QRIS WARUNG CONTOH", amount: 28000, direction: "expense", activity: "card_payment" }] }) })[0].activity, "purchase");
+const bcaCredit = parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-13", dateEvidence: "13 Oct 2026", name: "1310/FTSCY/WS95271 9000.00 EXAMPLE NAME TRSF E-BANKING CR", amount: 9000, direction: "expense", activity: "purchase" }] }) })[0];
+assert.equal(bcaCredit.direction, "income", "a printed BCA CR credit cannot enter a spending batch");
+assert.equal(bcaCredit.activity, "income", "the credit needs review as possible own-account money");
+assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ name: "EXAMPLE NAME", paymentMethod: "TRSF E-BANKING CR", amount: 9000, direction: "expense", activity: "purchase" }] }) })[0].activity, "income", "the code may appear in either extracted field");
+assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ name: "TRSF E-BANKING DB EXAMPLE", amount: 9000, direction: "expense", activity: "purchase" }] }) })[0].activity, "purchase", "the CR safeguard does not rewrite debits");
+assert.equal(importMessages(input)[0].content.includes("TRSF E-BANKING CR is an incoming credit"), true);
 for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar Kantong"]) {
   assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name, amount: 28000, direction: "expense", activity: "purchase" }] }) })[0].activity, "transfer");
 }
