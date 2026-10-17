@@ -126,6 +126,9 @@ test("CSV parsing and conservative one-to-one reconciliation across accounts and
     "review",
   );
   assert.equal(reconcile([{ ...rows[0], amount: rows[0].amount + 1000 }], data.transactions, "2026-09")[0].status, "different");
+  const sameAmountDifferentMerchant = reconcile([{ ...rows[0], name: "Different merchant" }], data.transactions, "2026-09")[0];
+  assert.equal(sameAmountDifferentMerchant.status, "different");
+  assert.equal(sameAmountDifferentMerchant.matchId, result[0].matchId);
 });
 test("signed CSV amounts, type columns and date orders are explicit", () => {
   const s: Statement = {

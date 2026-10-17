@@ -22,10 +22,11 @@ class GoogleAuthorizationActivity : Activity() {
         if (savedInstanceState != null) return
         val scopes = mutableListOf(Scope("openid"), Scope("email"), Scope("profile"))
         if (intent.getBooleanExtra(DRIVE, false)) scopes.add(Scope("https://www.googleapis.com/auth/drive.file"))
-        val request = AuthorizationRequest.builder()
+        val requestBuilder = AuthorizationRequest.builder()
             .setRequestedScopes(scopes)
             .requestOfflineAccess(BuildConfig.SAKU_GOOGLE_WEB_CLIENT_ID, true)
-            .build()
+        if (BuildConfig.APPLICATION_ID == "id.saku.money.stage") requestBuilder.setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
+        val request = requestBuilder.build()
         Identity.getAuthorizationClient(this).authorize(request)
             .addOnSuccessListener { result ->
                 if (result.hasResolution()) {

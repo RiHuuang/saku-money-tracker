@@ -19,6 +19,7 @@ object WidgetCloudSync {
     const val JOB_ID = 0x53414b55
 
     fun schedule(context: Context) {
+        if (!BuildConfig.SAKU_WIDGETS_ENABLED) return
         if (BuildConfig.SAKU_API_URL.isBlank()) return
         val job = JobInfo.Builder(JOB_ID, ComponentName(context, WidgetCloudSyncJob::class.java))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
