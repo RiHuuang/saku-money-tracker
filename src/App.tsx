@@ -1156,6 +1156,7 @@ export default function App() {
       {edit?.type === "start" && (
         <StartProfile
           busy={busy}
+          suggestedName={cloud?.user?.name}
           onClose={() => setEdit(null)}
           onStart={async (next) => {
             if (await commit(next, "Your own little fresh start.")) {
@@ -1871,14 +1872,16 @@ function WorkspaceChoice({ local, remote, onChoose, onBackup }: { local: Data; r
 
 function StartProfile({
   busy,
+  suggestedName,
   onClose,
   onStart,
 }: {
   busy: boolean;
+  suggestedName?: string;
   onClose: () => void;
   onStart: (data: Data) => Promise<void>;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(suggestedName?.trim().slice(0, 40) || "");
   const [accounts, setAccounts] = useState([{ name: "BCA", balance: "" }, { name: "Jago", balance: "" }]);
   const [pockets, setPockets] = useState([{ name: "Food & coffee", budget: "", icon: "utensils" }, { name: "Bills", budget: "", icon: "home" }, { name: "Fun", budget: "", icon: "game" }]);
   const [hasCard, setHasCard] = useState(false), [cardName, setCardName] = useState(""), [cardLimit, setCardLimit] = useState(""), [cardDebt, setCardDebt] = useState("0"), [dueDay, setDueDay] = useState("15");
@@ -1910,7 +1913,7 @@ function StartProfile({
       <form onSubmit={submit}>
         <fieldset disabled={busy}>
           <div className="setup-progress" aria-label={`Setup step ${step + 1} of 3`}><span className={step === 0 ? "active" : ""}>1 Accounts</span><span className={step === 1 ? "active" : ""}>2 Pockets</span><span className={step === 2 ? "active" : ""}>3 Cards</span></div>
-          {step === 0 && <><label className="field">Your name<input autoFocus required value={name} maxLength={40} pattern=".*\S.*" onChange={(e) => setName(e.target.value)} placeholder="What should we call you?" /></label>
+          {step === 0 && <><label className="field">Your name<input autoFocus required value={name} maxLength={40} pattern=".*\S.*" onChange={(e) => setName(e.target.value)} placeholder={suggestedName?.trim() || "What should we call you?"} /></label>
           <h3>Where your money lives</h3>{accounts.map((item, index) => <div className="setup-row" key={index}><input aria-label={`Account ${index + 1} name`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /><div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Account"} opening balance`} placeholder="Opening balance" value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div></div>)}
           <button type="button" className="button secondary" onClick={() => setAccounts([...accounts, { name: "", balance: "" }])}><Plus size={16} />Add bank, cash, or e-wallet</button></>}
           {step === 1 && <>
