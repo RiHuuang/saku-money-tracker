@@ -1329,8 +1329,11 @@ main {
   gap: 14px;
   margin-bottom: 24px;
 }
+.modal-title > div { min-width: 0; }
+.modal-title > .icon-button { flex: none; }
 .modal-title h2 {
   font-size: 21px;
+  overflow-wrap: anywhere;
 }
 .modal-title p {
   font-size: 11px;

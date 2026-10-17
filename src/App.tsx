@@ -302,6 +302,11 @@ export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const listener = NativeApp.addListener("backButton", () => {
+      const dialog = document.querySelector<HTMLDialogElement>("dialog[open]");
+      if (dialog) {
+        dialog.querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')?.click();
+        return;
+      }
       if (edit) setEdit(null);
       else if (selectedPocketId) setSelectedPocketId(null);
       else {
