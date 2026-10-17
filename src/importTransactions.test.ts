@@ -31,6 +31,8 @@ test("a mixed-history row may use another explicitly selected Saku account", () 
 
 test("out-of-month rows wait for an explicit decision before batch save", () => {
   assert.equal(suggestImportDecision(base, "2026-10"), "ready");
+  assert.equal(suggestImportDecision({ ...base, amount: 1_000_000 }, "2026-10"), "later", "large outgoing rows need a second look before batch add");
+  assert.equal(suggestImportDecision({ ...base, amount: 999_999 }, "2026-10"), "ready");
   assert.equal(suggestImportDecision({ ...base, date: "2026-09-30" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, activity: "pending" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "Move Money", activity: "transfer" }, "2026-10"), "later");
