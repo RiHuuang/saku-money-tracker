@@ -9,9 +9,10 @@ ledger.accounts = ["BCA", "GoPay"];
 ledger.creditCards = [{ id: "visa", name: "BCA Visa", limit: 5_000_000, openingDebt: 0, dueDay: 15 }];
 const base: ImportRow = { id: "row-1", sourceId: "screen-1", page: 1, date: "2026-10-10", name: "Coffee", amount: 28000, direction: "expense", activity: "purchase", decision: "ready", pocketId: "" };
 
-test("source account needs explicit confirmation before extraction or saving", () => {
+test("source account needs explicit confirmation before saving", () => {
   assert.equal(confirmedImportAccount({ account: "BCA" }, ledger), "");
   assert.equal(confirmedImportAccount({ account: "BCA", accountConfirmed: false }, ledger), "");
+  assert.equal(importRowReady(base, importRowAccount(base, { account: "", accountConfirmed: false }, ledger), ledger), false, "an extracted row cannot be saved before account mapping");
   assert.equal(confirmedImportAccount({ account: "BCA", accountConfirmed: true }, ledger), "BCA");
   assert.equal(confirmedImportAccount({ account: "BCA Visa", accountConfirmed: true }, ledger), "BCA Visa");
   assert.equal(confirmedImportAccount({ account: "Missing", accountConfirmed: true }, ledger), "");
