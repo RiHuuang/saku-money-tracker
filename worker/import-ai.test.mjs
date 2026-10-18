@@ -43,6 +43,7 @@ assert.equal(evidencedTextRow("13 Oct", "14 Oct Fabricated text-PDF purchase 28.
 assert.equal(evidencedTextRow("", "13 Oct Fabricated text-PDF purchase 28.000").date, "", "a date without printed evidence waits for review");
 assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[0].content.includes("dateEvidence"), true);
 assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[0].content.includes("THIS MONTH"), true, "image histories must use row dates instead of a generic month heading");
+assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[0].content.includes("14 Apr 2025, 08:23"), true, "image histories may print small row dates with times under activity labels");
 assert.equal(importMessages(input)[0].content.includes("Rp1.234.567 means 1234567"), true, "the prompt must spell out Indonesian thousand separators with fabricated examples");
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "QRIS WARUNG CONTOH", amount: 28000, direction: "expense", activity: "card_payment" }] }) })[0].activity, "purchase");
 const bcaCredit = parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-13", dateEvidence: "13 Oct 2026", name: "1310/FTSCY/WS95271 9000.00 EXAMPLE NAME TRSF E-BANKING CR", amount: 9000, direction: "expense", activity: "purchase" }] }) })[0];

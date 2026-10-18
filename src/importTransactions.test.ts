@@ -37,6 +37,8 @@ test("out-of-month rows wait for an explicit decision before batch save", () => 
   assert.equal(suggestImportDecision({ ...base, activity: "pending" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "Move Money", activity: "transfer" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "Top Up GoPay", activity: "purchase" }, "2026-10"), "later");
+  assert.equal(suggestImportDecision({ ...base, name: "ShopeePay", activity: "purchase" }, "2026-10"), "later", "a wallet name alone does not prove spending rather than funding");
+  assert.equal(suggestImportDecision({ ...base, name: "GoPay Pembayaran", activity: "purchase" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "Pindah Dana antar Kantong", activity: "purchase" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "TRSF E-BANKING CR", direction: "income", activity: "refund" }, "2026-10"), "later");
   assert.equal(suggestImportDecision({ ...base, name: "Pembayaran kedaluwarsa", activity: "purchase" }, "2026-10"), "later");

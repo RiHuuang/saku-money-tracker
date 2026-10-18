@@ -13,9 +13,10 @@ export function importRowAccount(row: Pick<ImportRow, "account">, source: Pick<I
 export const usesDeferredFunding = (row: Pick<ImportRow, "name" | "paymentMethod">) => /pay[\s-]?later/i.test(`${row.name} ${row.paymentMethod || ""}`);
 const looksLikeTransfer = (name: string) => /\b(?:top[\s-]?up|isi saldo|pindah dana|move money|antar[\s-]?kantong|transfer|trsf|trf)\b/i.test(name);
 const looksUnsettled = (name: string) => /\b(?:expired|kedaluwarsa|kadaluarsa|dibatalkan|cancelled|canceled|pending|tertunda|gagal)\b/i.test(name);
+const namesOnlyWallet = (name: string) => /^(?:shopee\s*pay|gopay|ovo|dana|linkaja)(?:\s+(?:pembayaran|payment))?$/i.test(name.trim());
 
 export function suggestImportDecision(row: Pick<ImportRow, "date" | "name" | "paymentMethod" | "amount" | "direction" | "activity">, month: string): ImportRow["decision"] {
-  return validDate(row.date) && row.date.startsWith(month) && validAmount(row.amount) && row.name.trim() && !usesDeferredFunding(row) && !looksLikeTransfer(row.name) && !looksUnsettled(row.name) &&
+  return validDate(row.date) && row.date.startsWith(month) && validAmount(row.amount) && row.name.trim() && !usesDeferredFunding(row) && !looksLikeTransfer(row.name) && !looksUnsettled(row.name) && !namesOnlyWallet(row.name) &&
     (row.direction !== "expense" || row.amount < 1_000_000) &&
     (["refund", "interest"].includes(row.activity) ? row.direction === "income" : row.direction === "expense" && ["purchase", "fee"].includes(row.activity))
     ? "ready" : "later";
@@ -84,6 +85,7 @@ export function importRowReviewIssue(row: ImportRow, account: string, data: Data
   if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !row.firstDueMonth) return "Choose the first due month for this card purchase.";
   if (duplicate && !row.confirmedSeparate) return "Confirm that this really is a separate transaction.";
   if (row.activity === "income") return "Confirm this came from someone else, not another account of yours.";
+  if (namesOnlyWallet(row.name)) return "Check whether this wallet payment was spending or a transfer to your own wallet.";
   if (row.direction === "expense" && row.amount >= 1_000_000) return "Check this large amount and whether it was a purchase or a transfer.";
   return "Review the details and choose Add to Saku when you are sure.";
 }
