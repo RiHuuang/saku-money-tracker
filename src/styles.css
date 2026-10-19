@@ -123,6 +123,7 @@
 .catchup-row-kicker { display: flex; align-items: center; gap: 7px; min-width: 0; color: #58736b; font-size: 11px; font-weight: 700; }
 .catchup-row-kicker time { flex: none; font-variant-numeric: tabular-nums; }
 .catchup-row-kicker small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catchup-row-kicker .catchup-row-account { color: var(--teal); }
 .catchup-row-identity .catchup-row-hint { overflow: visible; text-overflow: clip; white-space: normal; color: #667b75; font-size: 11px; font-weight: 500; line-height: 1.4; }
 .catchup-row-figure small { font-size: 10px; }
 .catchup-row-details { padding: 3px 15px 16px; border-top: 1px solid var(--line); }

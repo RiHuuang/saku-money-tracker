@@ -310,6 +310,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           {rows.map((row) => {
             const alreadySaved = rowSaved(row);
             const account = accountForRow(row);
+            const accountHint = !account ? "Choose account" : account !== confirmedImportAccount(source, data) ? `Saku account: ${account}` : "";
             const duplicate = needsSeparateConfirmation(row);
             const pair = ["transfer", "topup"].includes(row.activity) ? draft.rows.find((candidate) => candidate.id !== row.id && ["transfer", "topup"].includes(candidate.activity) && candidate.date === row.date && candidate.amount === row.amount && candidate.direction !== row.direction && accountForRow(candidate) && accountForRow(candidate) !== account) : undefined;
             const card = data.creditCards.find((item) => item.name === account);
@@ -319,7 +320,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
             const hint = !alreadySaved && !rowReady && row.decision !== "skip" ? importRowReviewIssue(row, account, data, duplicate) : "";
             return <div className="catchup-row" key={row.id}>
               <button type="button" className="catchup-row-summary" aria-expanded={expanded} aria-controls={expanded ? `catchup-details-${row.id}` : undefined} onClick={() => setExpandedRows((current) => ({ ...current, [row.id]: !expanded }))}>
-                <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date || undefined}>{row.date || "Check date"}</time><small>{activityOptions.find((item) => item.value === row.activity)?.label}</small></span><strong>{row.name || "Unnamed transaction"}</strong>{hint && <small className="catchup-row-hint">{hint}</small>}</span>
+                <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date || undefined}>{row.date || "Check date"}</time>{accountHint && <small className="catchup-row-account">{accountHint}</small>}<small>{activityOptions.find((item) => item.value === row.activity)?.label}</small></span><strong>{row.name || "Unnamed transaction"}</strong>{hint && <small className="catchup-row-hint">{hint}</small>}</span>
                 <span className="catchup-row-figure"><strong>{row.activity === "reward" ? `${row.amount || 0} points / coins` : `${row.direction === "expense" ? "−" : row.direction === "income" ? "+" : "?"}${money(row.amount || 0)}`}</strong><small className={rowReady ? "is-ready" : alreadySaved ? "is-saved" : ""}>{status}</small></span>
                 <ChevronDown size={16} aria-hidden="true" />
               </button>
