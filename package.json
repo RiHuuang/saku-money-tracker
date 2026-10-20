@@ -1,12 +1,13 @@
 {
   "name": "saku-money-manager",
   "private": true,
-  "version": "2.1.2",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "test": "node scripts/test.mjs",
+    "android:publish": "node scripts/publish-android-release.mjs",
     "android:sync": "npm run build && node --require ./scripts/os-userinfo.cjs ./node_modules/@capacitor/cli/bin/capacitor sync android",
     "android:open": "cap open android"
   },

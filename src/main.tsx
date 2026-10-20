@@ -8,12 +8,13 @@ import "@fontsource/fraunces/600.css";
 import "@fontsource/plus-jakarta-sans/400.css";
 import "@fontsource/plus-jakarta-sans/600.css";
 import App from "./App";
+import { AppUpdateProvider } from "./appUpdate";
 import { loadTheme, paintTheme, watchSystemTheme } from "./appearance";
 import "./styles.css";
 void loadTheme().catch(() => "system" as const).then((preference) => {
   paintTheme(preference);
   watchSystemTheme();
   ReactDOM.createRoot(document.getElementById("root")!).render(
-    <React.StrictMode><App /></React.StrictMode>,
+    <React.StrictMode><AppUpdateProvider><App /></AppUpdateProvider></React.StrictMode>,
   );
 });

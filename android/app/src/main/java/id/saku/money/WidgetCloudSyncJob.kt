@@ -228,6 +228,7 @@ class WidgetCloudSyncJob : JobService() {
             readTimeout = 60_000
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("X-Saku-User-Id", expectedUserId)
+            setRequestProperty("X-Saku-App-Build", BuildConfig.VERSION_CODE.toString())
             if (path.startsWith("/v2/sync") && method == "PUT") setRequestProperty("X-Saku-Version", "3")
             if (!accessToken.isNullOrBlank()) setRequestProperty("Authorization", "Bearer $accessToken")
             doOutput = payload != null
