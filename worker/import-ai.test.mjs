@@ -52,6 +52,11 @@ assert.equal(bcaCredit.activity, "income", "the credit needs review as possible 
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ name: "EXAMPLE NAME", paymentMethod: "TRSF E-BANKING CR", amount: 9000, direction: "expense", activity: "purchase" }] }) })[0].activity, "income", "the code may appear in either extracted field");
 assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ name: "TRSF E-BANKING DB EXAMPLE", amount: 9000, direction: "expense", activity: "purchase" }] }) })[0].activity, "purchase", "the CR safeguard does not rewrite debits");
 assert.equal(importMessages(input)[0].content.includes("TRSF E-BANKING CR is an incoming credit"), true);
+assert.equal(importMessages(input)[0].content.includes("PEND is not a date"), true);
+assert.equal(importMessages(validateImportInput({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }))[1].content[0].text.includes("dated rows below any PEND entry"), true);
+const bcaPending = parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-13", dateEvidence: "13 Oct 2026", name: "PEND 1310/FTSCY/WS95271 TRSF E-BANKING CR", amount: 9000, direction: "income", activity: "income" }] }) })[0];
+assert.equal(bcaPending.activity, "pending", "a printed PEND marker cannot become settled income");
+assert.equal(bcaPending.date, "", "a pending row cannot inherit the following row's date");
 for (const name of ["Move Money", "Pindah Dana antar Kantong", "Transfer Antar Kantong"]) {
   assert.equal(parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name, amount: 28000, direction: "expense", activity: "purchase" }] }) })[0].activity, "transfer");
 }
