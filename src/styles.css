@@ -3586,6 +3586,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .summary-grid { grid-template-columns: 1.55fr 1fr 1fr; gap: 13px; }
 .balance-panel { position: relative; background: radial-gradient(circle at 95% -20%, #65ac8b 0, transparent 48%), linear-gradient(135deg, #104d3f 0%, #176b55 70%, #278163 100%); border-radius: 24px 24px 24px 8px; padding: 25px 26px 23px; box-shadow: 0 15px 32px #174e3930; }
 .balance-action { display: block; width: 100%; border: 0; text-align: left; color: inherit; cursor: pointer; }
+.balance-action.balance-panel { color: #fff; }
+.balance-action.balance-panel .balance-top,
+.balance-action.balance-panel > p,
+.balance-action.balance-panel .balance-footer > span { color: #d8eee5; }
+.balance-action.balance-panel .balance-number,
+.balance-action.balance-panel .balance-footer strong { color: #fff; }
 .balance-action:focus-visible { outline: 3px solid var(--teal); outline-offset: 4px; }
 .balance-cta { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; color: #e5fff3; font-weight: 700; }
 .pocket-activity { display: grid; gap: 18px; }
