@@ -1,6 +1,14 @@
 # Saku production release
 
-## Current direct APK release — October 9
+## Current direct APK release — October 21
+
+Saku 2.2.0 (versionCode 8) adds verified in-app Android updates, the redesigned adaptive choice picker, and corrected Home balance contrast. The app checks the signed production release manifest at most once every 24 hours, offers a three-day reminder for optional releases, shows a metered-network warning, and verifies the downloaded APK's size, SHA-256, package id, version code, and signing certificate before opening Android's installer. Critical releases keep the offline ledger available while requiring an update before cloud sync resumes.
+
+The release-signed APK is `output/saku-2.2.0-build8-release.apk`, 40,350,643 bytes, with SHA-256 `A87C6ACCE54EB7F61E1D76231967C4B61C09E089E57080270CC5DFD4BACE60C0`. APK v2 signature verification passed and its signer SHA-1 is `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`, matching the existing Saku release certificate. Release lint, release unit tests, `assembleRelease`, the web build, all application tests, and all Worker tests passed.
+
+The APK and manifest were published to the private production R2 bucket before production Worker version `b64fb51b-9699-4c69-a58a-6240b9265699` was deployed. The versioned download and `/download/saku.apk` both returned HTTP 200 with the exact byte count; a complete downloaded copy matched the APK SHA-256. The manifest reports 2.2.0/build 8 and minimum supported build 7, so the installed 2.1.2 release can continue syncing during the rollout. Build 8 still needs one manual install because build 7 predates the updater; physical upgrade, ledger-preservation, and Settings status checks remain pending.
+
+### Previous 2.1.2 release
 
 Saku 2.1.2 moves **Record payment** into a dialog and records payments above tracked card debt as card credit, increasing available credit by the full cash payment. The dialog previews the resulting credit and available limit before saving. The signed versionCode 7 APK passed release unit tests, release lint, and `assembleRelease`; it uses the existing release certificate and has SHA-256 `8ABDFA784DC956430881FEBE46F4FBDEA2FAF7C634AD61EBB21C41F2EB55B92B`. A browser check confirmed the production dialog and overpayment preview without submitting a financial transaction.
 
@@ -66,8 +74,8 @@ $env:SAKU_RELEASE_KEY_PASSWORD = [Net.NetworkCredential]::new("", $keySecret).Pa
 Set monotonically increasing release values in `%USERPROFILE%\.gradle\gradle.properties`, not the repository:
 
 ```properties
-SAKU_VERSION_CODE=5
-SAKU_VERSION_NAME=2.1.0
+SAKU_VERSION_CODE=8
+SAKU_VERSION_NAME=2.2.0
 ```
 
 Build and inspect the release:
