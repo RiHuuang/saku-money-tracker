@@ -95,6 +95,17 @@ test("matching history rows from separate apps need review even when mapped to d
   assert.equal(importRowsNeedingDuplicateConfirmation([bank, { ...wallet, sourceId: "bank-screen" }], [], accountFor, () => false).size, 0);
 });
 
+test("statement import asks before adding a same-value ledger entry with a different merchant", () => {
+  const source = { ...base, id: "statement-row", name: "Different merchant" };
+  const existing = importedTransactions({ ...base, id: "recorded-row", name: "Coffee" }, "BCA", "recorded.jpg", ledger);
+  const accountFor = () => "BCA";
+  assert.equal(importRowsNeedingDuplicateConfirmation([source], existing, accountFor, () => false).size, 0, "ordinary catch-up does not flag unrelated names");
+  assert.deepEqual([...importRowsNeedingDuplicateConfirmation([source], existing, accountFor, () => false, true)], [source.id]);
+  assert.equal(importRowsNeedingDuplicateConfirmation([{ ...source, amount: 29000 }], existing, accountFor, () => false, true).size, 0);
+  assert.equal(importRowsNeedingDuplicateConfirmation([source], existing, () => "GoPay", () => false, true).size, 0);
+  assert.equal(importRowsNeedingDuplicateConfirmation([source], existing, accountFor, () => true, true).size, 0);
+});
+
 test("statement matches cannot be marked checked before their own source dates are checked", () => {
   const draft: ImportDraft = {
     id: "draft", owner: "synthetic", month: "2026-10", createdAt: 1, saved: [],

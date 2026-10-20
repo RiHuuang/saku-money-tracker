@@ -35,8 +35,13 @@ function duplicateKey(row: Pick<ImportRow, "date" | "name" | "amount" | "directi
   return JSON.stringify([account, row.date, row.amount, row.direction, row.name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim()]);
 }
 
-export function importRowsNeedingDuplicateConfirmation(rows: readonly ImportRow[], transactions: readonly Transaction[], accountFor: (row: ImportRow) => string, wasSaved: (row: ImportRow) => boolean): Set<string> {
+function valueKey(row: Pick<ImportRow, "date" | "amount" | "direction">, account: string): string {
+  return JSON.stringify([account, row.date, row.amount, row.direction]);
+}
+
+export function importRowsNeedingDuplicateConfirmation(rows: readonly ImportRow[], transactions: readonly Transaction[], accountFor: (row: ImportRow) => string, wasSaved: (row: ImportRow) => boolean, statementMode = false): Set<string> {
   const existing = new Set(transactions.map((transaction) => duplicateKey({ ...transaction, direction: transaction.type }, transaction.account)));
+  const existingValues = statementMode ? new Set(transactions.map((transaction) => valueKey({ ...transaction, direction: transaction.type }, transaction.account))) : null;
   const counts = new Map<string, number>();
   const sources = new Map<string, Set<string>>();
   for (const row of rows) {
@@ -52,7 +57,7 @@ export function importRowsNeedingDuplicateConfirmation(rows: readonly ImportRow[
   return new Set(rows.filter((row) => {
     if (row.decision === "skip" || wasSaved(row)) return false;
     const key = duplicateKey(row, accountFor(row));
-    return existing.has(key) || (counts.get(key) || 0) > 1 || (sources.get(duplicateKey(row, ""))?.size || 0) > 1;
+    return existing.has(key) || !!existingValues?.has(valueKey(row, accountFor(row))) || (counts.get(key) || 0) > 1 || (sources.get(duplicateKey(row, ""))?.size || 0) > 1;
   }).map((row) => row.id));
 }
 

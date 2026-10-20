@@ -75,7 +75,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const accountForRow = (row: ImportRow) => importRowAccount(row, draft?.sources.find((source) => source.id === row.sourceId), data);
   const rowSaved = (row: ImportRow) => importRowAlreadySaved(row, draft, data);
   const sourceHasSavedRows = (sourceId: string) => (draft?.rows || []).some((row) => row.sourceId === sourceId && rowSaved(row));
-  const duplicateRows = useMemo(() => importRowsNeedingDuplicateConfirmation(draft?.rows || [], data.transactions, (row) => importRowAccount(row, draft?.sources.find((source) => source.id === row.sourceId), data), (row) => importRowAlreadySaved(row, draft, data)), [draft, data]);
+  const duplicateRows = useMemo(() => importRowsNeedingDuplicateConfirmation(draft?.rows || [], data.transactions, (row) => importRowAccount(row, draft?.sources.find((source) => source.id === row.sourceId), data), (row) => importRowAlreadySaved(row, draft, data), statementMode), [draft, data, statementMode]);
   const needsSeparateConfirmation = (row: ImportRow) => duplicateRows.has(row.id);
   const ready = (draft?.rows || []).filter((row) => importRowReady(row, accountForRow(row), data) && !rowSaved(row) && (!needsSeparateConfirmation(row) || row.confirmedSeparate));
   const uncheckedDateSources = (draft?.sources || []).filter((source) => !source.datesChecked && ready.some((row) => row.sourceId === source.id));
@@ -163,7 +163,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   async function updateRow(id: string, patch: Partial<ImportRow>) {
     if (!draftRef.current || savingRef.current) return;
     const row = draftRef.current.rows.find((item) => item.id === id);
-    try { await save({ ...draftRef.current, sources: "date" in patch && row ? draftRef.current.sources.map((source) => source.id === row.sourceId ? { ...source, datesChecked: false } : source) : draftRef.current.sources, rows: draftRef.current.rows.map((item) => item.id === id ? { ...item, ...patch, confirmedSeparate: patch.confirmedSeparate ?? ("date" in patch || "amount" in patch || "direction" in patch || "name" in patch || "paymentMethod" in patch || "account" in patch ? false : item.confirmedSeparate) } : item) }); }
+    try { await save({ ...draftRef.current, sources: "date" in patch && row ? draftRef.current.sources.map((source) => source.id === row.sourceId ? { ...source, datesChecked: false } : source) : draftRef.current.sources, rows: draftRef.current.rows.map((item) => item.id === id ? { ...item, ...patch, confirmedSeparate: patch.confirmedSeparate ?? ("date" in patch || "amount" in patch || "direction" in patch || "name" in patch || "paymentMethod" in patch || "account" in patch || "activity" in patch ? false : item.confirmedSeparate) } : item) }); }
     catch { /* save explains the local storage problem */ }
   }
   async function updateDatesChecked(id: string, checked: boolean) {
