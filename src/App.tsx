@@ -85,6 +85,7 @@ import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
 import { backDestination, moreViews, type View } from "./navigation";
 import { AppUpdateSettings } from "./appUpdate";
+import { version as appVersion } from "../package.json";
 import {
   connectGoogleDrive,
   adoptCloudSnapshot,
@@ -2160,7 +2161,7 @@ function SettingsView({
         <div><h2>Offline first</h2><p>{cloudImportEnabled ? "Your ledger works without internet. AI import sends selected statement text or images to Cloudflare for processing. Original files and review drafts stay on this device; accepted transactions follow your existing cloud and Sheet sync." : nativeAIAvailable ? "Your ledger works without internet. CSV and PDF statement checking stay on this device while cloud catch-up is being tested." : "Your ledger works without internet. CSV checking stays on this device; PDF checking is available in the Android app while cloud catch-up is being tested."}</p></div>
       </section>
       <footer className="settings-footer">
-        Saku 2.2.0 <span>·</span> Made for a more mindful month.
+        Saku {appVersion} <span>·</span> Made for a more mindful month.
       </footer>
       {restore && (
         <Modal
