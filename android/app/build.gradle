@@ -29,8 +29,8 @@ android {
         applicationId "id.saku.money"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '8')
-        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.2.0'
+        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '9')
+        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.2.1'
         ndk { abiFilters 'arm64-v8a' }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [

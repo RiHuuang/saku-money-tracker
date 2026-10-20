@@ -3,17 +3,8 @@ import { App as NativeApp } from "@capacitor/app";
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { Download, PackageCheck, RefreshCw, ShieldCheck, Wifi } from "lucide-react";
+import { cachedRelease, shouldShowRelease, UPDATE_CHECK_INTERVAL_MS, validRelease, type AndroidRelease } from "./appUpdateLogic";
 
-type AndroidRelease = {
-  versionCode: number;
-  versionName: string;
-  minimumSupportedVersionCode: number;
-  releasedAt: string;
-  apkUrl: string;
-  apkBytes: number;
-  sha256: string;
-  notes: string[];
-};
 type NativeStatus = { versionCode: number; versionName: string; metered: boolean; canInstallPackages: boolean };
 type UpdatePhase = "idle" | "downloading" | "permission" | "installer" | "error";
 type UpdateContextValue = {
@@ -45,17 +36,8 @@ const plugin = registerPlugin<AppUpdatePlugin>("AppUpdate");
 const Context = createContext<UpdateContextValue | null>(null);
 const apiUrl = (import.meta.env.VITE_SAKU_API_URL || "").replace(/\/$/, "");
 const checkedKey = "saku-update-checked-at";
+const releaseKey = "saku-update-release-v1";
 const dismissedKey = "saku-update-dismissed-v1";
-const day = 24 * 60 * 60 * 1000;
-
-function validRelease(value: unknown): value is AndroidRelease {
-  const item = value as AndroidRelease;
-  return Number.isSafeInteger(item?.versionCode) && item.versionCode > 0 && /^\d+\.\d+\.\d+$/.test(item.versionName) &&
-    Number.isSafeInteger(item.minimumSupportedVersionCode) && item.minimumSupportedVersionCode > 0 &&
-    !Number.isNaN(Date.parse(item.releasedAt)) && item.apkUrl === `/download/android/${item.versionCode}.apk` &&
-    Number.isSafeInteger(item.apkBytes) && item.apkBytes > 0 && /^[a-f0-9]{64}$/.test(item.sha256) &&
-    Array.isArray(item.notes) && item.notes.length <= 3 && item.notes.every((note) => typeof note === "string" && note.length > 0 && note.length <= 160);
-}
 
 export function AppUpdateProvider({ children }: { children: ReactNode }) {
   const native = Capacitor.isNativePlatform();
@@ -68,29 +50,37 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [meteredConfirmation, setMeteredConfirmation] = useState(false);
   const checkingRef = useRef(false);
+  const sessionDismissedVersion = useRef<number | null>(null);
   const available = !!installed && !!release && release.versionCode > installed.versionCode;
   const critical = available && release!.minimumSupportedVersionCode > installed!.versionCode;
 
+  const applyRelease = async (current: NativeStatus, next: AndroidRelease) => {
+    setRelease(next);
+    const dismissed = (await Preferences.get({ key: dismissedKey })).value;
+    setVisible(shouldShowRelease(current.versionCode, next, dismissed, sessionDismissedVersion.current));
+  };
+
   const check = async (force: boolean) => {
     if (!native || !apiUrl || checkingRef.current) return;
-    if (!force) {
-      const last = Number((await Preferences.get({ key: checkedKey })).value || 0);
-      if (Date.now() - last < day) return;
-    }
     checkingRef.current = true; setChecking(true);
     if (force) setError("");
     try {
       const current = await plugin.getStatus();
+      setInstalled(current);
+      if (!force) {
+        const [last, cached] = await Promise.all([Preferences.get({ key: checkedKey }), Preferences.get({ key: releaseKey })]);
+        const remembered = cachedRelease(last.value, cached.value);
+        if (remembered) { await applyRelease(current, remembered); return; }
+      }
       const response = await fetch(`${apiUrl}/v1/releases/android/latest`, { headers: { accept: "application/json" } });
       if (!response.ok) throw new Error("Could not check for a Saku update");
       const next: unknown = await response.json();
       if (!validRelease(next)) throw new Error("Saku received invalid update information");
-      await Preferences.set({ key: checkedKey, value: String(Date.now()) });
-      setInstalled(current); setRelease(next);
-      if (next.versionCode > current.versionCode) {
-        const dismissed = JSON.parse((await Preferences.get({ key: dismissedKey })).value || "{}") as { versionCode?: number; until?: number };
-        if (next.minimumSupportedVersionCode > current.versionCode || dismissed.versionCode !== next.versionCode || Number(dismissed.until || 0) <= Date.now()) setVisible(true);
-      } else setVisible(false);
+      await Promise.all([
+        Preferences.set({ key: checkedKey, value: String(Date.now()) }),
+        Preferences.set({ key: releaseKey, value: JSON.stringify(next) }),
+      ]);
+      await applyRelease(current, next);
     } catch (reason) {
       if (force) setError(reason instanceof Error ? reason.message : "Could not check for updates");
     } finally { checkingRef.current = false; setChecking(false); }
@@ -124,7 +114,8 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
   const cancel = async () => { await plugin.cancel(); setPhase("idle"); setProgress(0); };
   const dismiss = async () => {
     setVisible(false); setMeteredConfirmation(false); setError(""); setPhase("idle");
-    if (release && !critical) await Preferences.set({ key: dismissedKey, value: JSON.stringify({ versionCode: release.versionCode, until: Date.now() + 3 * day }) });
+    if (release && critical) sessionDismissedVersion.current = release.versionCode;
+    else if (release) await Preferences.set({ key: dismissedKey, value: JSON.stringify({ versionCode: release.versionCode, until: Date.now() + 3 * UPDATE_CHECK_INTERVAL_MS }) });
   };
   const value = useMemo<UpdateContextValue>(() => ({ native, installed, release, available, critical, checking, phase, progress, error, visible, meteredConfirmation, checkNow: () => check(true), install, cancel, dismiss }), [native, installed, release, available, critical, checking, phase, progress, error, visible, meteredConfirmation]);
   return <Context.Provider value={value}>{children}{visible && available && <UpdatePrompt />}</Context.Provider>;
