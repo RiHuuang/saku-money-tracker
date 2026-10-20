@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -63,6 +63,15 @@ test("one shared date updates only undated unsaved source rows and keeps uncerta
   for (const index of [2, 3, 4, 5]) assert.strictEqual(dated[index], rows[index]);
   assert.deepEqual(applySharedSourceDate(rows, "screen-1", "2026-02-30", "2026-10", () => false, "2026-10-15"), rows);
   assert.deepEqual(applySharedSourceDate(rows, "screen-1", "2026-10-16", "2026-10", () => false, "2026-10-15"), rows);
+});
+
+test("editing extracted source details requires comparing the source again", () => {
+  for (const patch of [{ date: "2026-10-11" }, { name: "Tea" }, { amount: 29000 }, { direction: "income" as const }, { activity: "refund" as const }, { paymentMethod: "QRIS" }]) {
+    assert.equal(importPatchNeedsSourceRecheck(patch), true);
+  }
+  for (const patch of [{ decision: "later" as const }, { account: "GoPay" }, { pocketId: "food" }, { confirmedSeparate: true }]) {
+    assert.equal(importPatchNeedsSourceRecheck(patch), false);
+  }
 });
 
 test("same-value purchases at different merchants avoid duplicate prompts, overlapping rows do not", () => {

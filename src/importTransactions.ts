@@ -15,6 +15,10 @@ const looksLikeTransfer = (name: string) => /\b(?:top[\s-]?up|isi saldo|pindah d
 const looksUnsettled = (name: string) => /\b(?:expired|kedaluwarsa|kadaluarsa|dibatalkan|cancelled|canceled|pending|tertunda|gagal)\b/i.test(name);
 const namesOnlyWallet = (name: string) => /^(?:shopee\s*pay|gopay|ovo|dana|linkaja)(?:\s+(?:pembayaran|payment))?$/i.test(name.trim());
 
+export function importPatchNeedsSourceRecheck(patch: Partial<ImportRow>): boolean {
+  return ["date", "name", "amount", "direction", "activity", "paymentMethod"].some((field) => field in patch);
+}
+
 export function suggestImportDecision(row: Pick<ImportRow, "date" | "name" | "paymentMethod" | "amount" | "direction" | "activity">, month: string): ImportRow["decision"] {
   return validDate(row.date) && row.date.startsWith(month) && validAmount(row.amount) && row.name.trim() && !usesDeferredFunding(row) && !looksLikeTransfer(row.name) && !looksUnsettled(row.name) && !namesOnlyWallet(row.name) &&
     (row.direction !== "expense" || row.amount < 1_000_000) &&
