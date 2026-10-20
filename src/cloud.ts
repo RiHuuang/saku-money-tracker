@@ -42,6 +42,7 @@ type AuthResponse = {
 
 const plugin = registerPlugin<GoogleAuthPlugin>("GoogleAuth");
 const stateKey = "saku-cloud-state-v1";
+export const SAKU_ANDROID_BUILD = 8;
 export const AGREEMENT_VERSION = "2026-10-03";
 const apiUrl = Capacitor.isNativePlatform() ? (import.meta.env.VITE_SAKU_API_URL || "").replace(/\/$/, "") : "";
 export const legalUrl = (page: "privacy" | "terms" | "account-deletion") => `${apiUrl}/${page}`;
@@ -109,6 +110,7 @@ async function refreshSession(session: NativeSession): Promise<boolean> {
   if (refreshing?.key === key) return refreshing.task;
   const task = (async () => {
     const headers = new Headers({ "content-type": "application/json" });
+    if (native()) headers.set("x-saku-app-build", String(SAKU_ANDROID_BUILD));
     if (!native()) headers.set("x-saku-csrf", csrf());
     const response = await fetch(`${apiUrl}/v1/auth/refresh`, { method: "POST", headers, credentials: native() ? "omit" : "same-origin", body: native() ? JSON.stringify({ refreshToken: session.refreshToken }) : "{}" });
     if (!response.ok) return false;
@@ -128,6 +130,7 @@ async function requestRaw(path: string, options: RequestInit = {}, retry = true)
   const session = native() ? await plugin.getSession() : { signedIn: false } as NativeSession;
   const headers = new Headers(options.headers);
   if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  if (native()) headers.set("x-saku-app-build", String(SAKU_ANDROID_BUILD));
   if (session.accessToken) headers.set("authorization", `Bearer ${session.accessToken}`);
   if (!native() && options.method && options.method !== "GET") headers.set("x-saku-csrf", csrf());
   let response = await fetch(`${apiUrl}${path}`, { ...options, headers, credentials: native() ? "omit" : "same-origin" });
@@ -175,11 +178,11 @@ export async function signInGoogle(agreementVersion = AGREEMENT_VERSION): Promis
   if (!config.deviceSecure) throw new Error("Set a screen lock before signing in so Saku can protect your session");
   if (!config.configured || !apiUrl) throw new Error("Google sign-in is not configured in this build");
   const auth = await plugin.authorize();
-  let response = await fetch(`${apiUrl}/v1/auth/google`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...auth, agreementVersion, bounded: true }) });
+  let response = await fetch(`${apiUrl}/v1/auth/google`, { method: "POST", headers: { "content-type": "application/json", "x-saku-app-build": String(SAKU_ANDROID_BUILD) }, body: JSON.stringify({ ...auth, agreementVersion, bounded: true }) });
   let result: AuthResponse & { error?: string; pendingToken?: string } = await response.json().catch(() => ({ error: "Cloud sign-in failed" }) as any);
   if (response.status === 202) {
     if (typeof result.pendingToken !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(result.pendingToken)) throw new Error("Invalid Google sign-in response");
-    response = await fetch(`${apiUrl}/v1/auth/google/finish`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pendingToken: result.pendingToken }) });
+    response = await fetch(`${apiUrl}/v1/auth/google/finish`, { method: "POST", headers: { "content-type": "application/json", "x-saku-app-build": String(SAKU_ANDROID_BUILD) }, body: JSON.stringify({ pendingToken: result.pendingToken }) });
     result = await response.json().catch(() => ({ error: "Cloud sign-in failed" }) as any);
   }
   if (!response.ok) throw new Error(result.error || "Cloud sign-in failed");

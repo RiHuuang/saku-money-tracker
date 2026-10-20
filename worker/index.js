@@ -16,6 +16,7 @@ const sheetNames = ["Transactions", "Pockets", "Accounts", "Cards", "Recurring",
 const sheetWidths = { Transactions: 18, Pockets: 7, Accounts: 1, Cards: 5, Recurring: 12, Quick_entries: 7, Pocket_transfers: 5, Existing_installments: 6 };
 const sheetRowLimits = { Transactions: 100001, Pockets: 1001, Accounts: 101, Cards: 31, Recurring: 501, Quick_entries: 31, Pocket_transfers: 10001, Existing_installments: 101 };
 const cookieOptions = "Secure; HttpOnly; SameSite=Lax; Path=/";
+const legacyAndroidBuild = 7;
 const liveRoom = async (env, uid) => env.LIVE_UPDATES.get(env.LIVE_UPDATES.idFromName(await hashToken(uid)));
 async function liveNotify(env, uid, notice) {
   if (!env.LIVE_UPDATES) return;
@@ -243,6 +244,13 @@ function checkBrowserMutation(request, env) {
 async function authenticate(request, env) {
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   const browser = !bearer;
+  if (!browser) {
+    const rawBuild = request.headers.get("x-saku-app-build");
+    const build = rawBuild === null ? legacyAndroidBuild : Number(rawBuild);
+    const minimum = Number(env.MINIMUM_ANDROID_BUILD || 0);
+    if (!Number.isSafeInteger(build) || build < 1) throw fault(400, "Invalid Saku app build");
+    if (Number.isSafeInteger(minimum) && minimum > build) throw fault(426, "Update Saku to continue cloud sync", { code: "UPDATE_REQUIRED", minimumBuild: minimum });
+  }
   if (browser && request.method !== "GET") checkBrowserMutation(request, env);
   const parsed = splitSessionToken(bearer || cookies(request).saku_access);
   if (!parsed) throw fault(401, "Sign in required");
@@ -250,6 +258,39 @@ async function authenticate(request, env) {
   if (!row || row.access_expires_at < Date.now() || !timingSafeEqual(row.access_hash, await hashToken(parsed.secret))) throw fault(401, "Session expired");
   const user = row.data ? { ...JSON.parse(row.data), revision: row.revision, snapshotPath: row.snapshot_path } : null;
   return { uid: row.uid, sessionId: parsed.id, browser, user };
+}
+
+async function androidReleaseManifest(env) {
+  if (env.ANDROID_RELEASE_ENABLED !== "true") throw fault(404, "Android release is not available yet");
+  const object = await env.BUCKET.get("releases/android/latest.json");
+  if (!object) throw fault(404, "Android release is not available yet");
+  let manifest;
+  try { manifest = await object.json(); }
+  catch { throw fault(503, "Android release metadata is unavailable"); }
+  const valid = Number.isSafeInteger(manifest?.versionCode) && manifest.versionCode > 0 &&
+    typeof manifest.versionName === "string" && /^\d+\.\d+\.\d+$/.test(manifest.versionName) &&
+    Number.isSafeInteger(manifest.minimumSupportedVersionCode) && manifest.minimumSupportedVersionCode > 0 &&
+    typeof manifest.releasedAt === "string" && !Number.isNaN(Date.parse(manifest.releasedAt)) &&
+    manifest.apkUrl === `/download/android/${manifest.versionCode}.apk` &&
+    Number.isSafeInteger(manifest.apkBytes) && manifest.apkBytes > 0 &&
+    typeof manifest.sha256 === "string" && /^[a-f0-9]{64}$/.test(manifest.sha256) &&
+    Array.isArray(manifest.notes) && manifest.notes.length <= 3 && manifest.notes.every((note) => typeof note === "string" && note.length >= 1 && note.length <= 160);
+  if (!valid) throw fault(503, "Android release metadata is unavailable");
+  return manifest;
+}
+
+async function androidReleaseResponse(request, env, manifest, versioned) {
+  const key = `releases/android/${manifest.versionCode}.apk`;
+  const object = request.method === "HEAD" ? await env.BUCKET.head(key) : await env.BUCKET.get(key);
+  if (!object || object.size !== manifest.apkBytes) throw fault(503, "Android release file is unavailable");
+  return new Response(request.method === "HEAD" ? null : object.body, { headers: {
+    "content-type": "application/vnd.android.package-archive",
+    "content-disposition": `attachment; filename="saku-${manifest.versionName}.apk"`,
+    "content-length": String(object.size),
+    "cache-control": versioned ? "public, max-age=31536000, immutable" : "public, max-age=300",
+    "etag": object.httpEtag,
+    "x-content-type-options": "nosniff",
+  } });
 }
 
 async function provisionSheet(accessToken) {
@@ -420,22 +461,16 @@ async function route(request, env) {
     if (!room || !/^[a-f0-9]{64}$/.test(room) || !ticket || !/^[A-Za-z0-9_-]{43}$/.test(ticket)) throw fault(401, "Invalid live ticket");
     return env.LIVE_UPDATES.get(env.LIVE_UPDATES.idFromName(room)).fetch(new Request(`https://live/connect?hash=${encodeURIComponent(await hashToken(ticket))}`, request));
   }
-  if (request.method === "OPTIONS" && /^\/v[12]\//.test(path)) return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-headers": "authorization,content-type,x-saku-version,x-saku-user-id", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" } });
+  if (request.method === "OPTIONS" && /^\/v[12]\//.test(path)) return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-headers": "authorization,content-type,x-saku-version,x-saku-user-id,x-saku-app-build", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" } });
   if (request.method === "GET" && ["/", "/privacy", "/terms", "/account-deletion"].includes(path) && path !== "/") return legalPage(path, env);
   if (request.method === "GET" && path === "/health") return reply({ ok: true });
-  if (["GET", "HEAD"].includes(request.method) && path === "/download/saku.apk") {
-    if (env.ANDROID_RELEASE_ENABLED !== "true") throw fault(404, "Android release is not available yet");
-    const key = "releases/saku.apk";
-    const object = request.method === "HEAD" ? await env.BUCKET.head(key) : await env.BUCKET.get(key);
-    if (!object) throw fault(404, "Android release is not available yet");
-    return new Response(request.method === "HEAD" ? null : object.body, { headers: {
-      "content-type": "application/vnd.android.package-archive",
-      "content-disposition": 'attachment; filename="saku.apk"',
-      "content-length": String(object.size),
-      "cache-control": "public, max-age=300",
-      "etag": object.httpEtag,
-      "x-content-type-options": "nosniff",
-    } });
+  if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, "cache-control": "public, max-age=300" });
+  if (["GET", "HEAD"].includes(request.method) && path === "/download/saku.apk") return androidReleaseResponse(request, env, await androidReleaseManifest(env), false);
+  const androidDownload = path.match(/^\/download\/android\/(\d+)\.apk$/);
+  if (["GET", "HEAD"].includes(request.method) && androidDownload) {
+    const manifest = await androidReleaseManifest(env);
+    if (Number(androidDownload[1]) !== manifest.versionCode) throw fault(404, "Android release is not available");
+    return androidReleaseResponse(request, env, manifest, true);
   }
 
   if (request.method === "GET" && path === "/auth/google/start") {
@@ -851,7 +886,7 @@ export default {
       const status = error.status || 500;
       if (status >= 500) console.error("Request failed", { path: new URL(request.url).pathname, message: error.message });
       const origin = request.headers.get("origin");
-      return reply({ error: status >= 500 ? "Server error" : error.message, revision: error.revision }, status, corsHeaders(origin, env));
+      return reply({ error: status >= 500 ? "Server error" : error.message, revision: error.revision, code: error.code, minimumBuild: error.minimumBuild }, status, corsHeaders(origin, env));
     }
   },
   async scheduled(_controller, env) {

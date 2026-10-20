@@ -31,6 +31,12 @@ const input = JSON.stringify({ kind: "text", month: "2026-10", text: "10/10/2026
 const request = (body = input, headers = {}) => worker.fetch(new Request("https://saku.example/v1/import/extract", { method: "POST", headers: { authorization: `Bearer ${id}.${secret}`, "content-type": "application/json", "x-saku-user-id": uid, ...headers }, body }), env);
 crypto.subtle.timingSafeEqual = nodeCrypto.timingSafeEqual;
 try {
+  env.MINIMUM_ANDROID_BUILD = "8";
+  const updateRequired = await request();
+  assert.equal(updateRequired.status, 426, "an obsolete native build must pause cloud routes");
+  assert.equal((await updateRequired.json()).code, "UPDATE_REQUIRED");
+  assert.equal((await request(input, { "x-saku-app-build": "8" })).status, 503, "the current native build may continue to the feature gate");
+  env.MINIMUM_ANDROID_BUILD = "7";
   assert.equal((await request()).status, 503, "the release gate must deny extraction");
   assert.equal(aiCalls, 0);
   env.AI_IMPORT_ENABLED = "true";

@@ -13,5 +13,5 @@
   "ai": { "binding": "AI" },
   "durable_objects": { "bindings": [{ "name": "LIVE_UPDATES", "class_name": "UserLiveUpdates" }] },
   "migrations": [{ "tag": "v1-live-updates", "new_sqlite_classes": ["UserLiveUpdates"] }],
-  "vars": { "GOOGLE_OAUTH_CLIENT_ID": "213129330817-578l0t3n12ctd9uja57ad2bcf22t5o7l.apps.googleusercontent.com", "SUPPORT_EMAIL": "richardhuang.email@gmail.com", "ALLOWED_ORIGINS": "https://localhost", "WRITE_ENABLED": "true", "ANDROID_RELEASE_ENABLED": "true", "AI_IMPORT_ENABLED": "true" }
+  "vars": { "GOOGLE_OAUTH_CLIENT_ID": "213129330817-578l0t3n12ctd9uja57ad2bcf22t5o7l.apps.googleusercontent.com", "SUPPORT_EMAIL": "richardhuang.email@gmail.com", "ALLOWED_ORIGINS": "https://localhost", "WRITE_ENABLED": "true", "ANDROID_RELEASE_ENABLED": "true", "MINIMUM_ANDROID_BUILD": "7", "AI_IMPORT_ENABLED": "true" }
 }
