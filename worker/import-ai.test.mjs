@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { DAILY_CAP, RESERVATION, aiImportAvailable, dateFromPrintedEvidence, importMessages, neuronsUsed, parseImportAnswer, validateImportInput } from "./import-ai.js";
+import { DAILY_CAP, RESERVATION, aiImportAvailable, dateFromPrintedEvidence, importMessages, importVerificationMessages, mergeImportPasses, neuronsUsed, parseImportAnswer, validateImportInput } from "./import-ai.js";
 
 assert.equal(aiImportAvailable({ AI_IMPORT_ENABLED: "true", AI: {} }), true);
 assert.equal(aiImportAvailable({ AI_IMPORT_ENABLED: "false", AI: {} }), false);
@@ -7,6 +7,23 @@ assert.equal(aiImportAvailable({ AI_IMPORT_ENABLED: "true" }), false);
 
 const input = validateImportInput({ kind: "text", month: "2026-10", text: "10/10 TOKOPEDIA 41.244 DB" });
 assert.equal(importMessages(input)[1].content.includes("TOKOPEDIA"), true);
+const verification = importVerificationMessages(input, [{ date: "2026-10-10", name: "TOKOPEDIA", amount: 41244, direction: "expense", activity: "purchase" }]);
+assert.equal(verification[1].content.includes("Second accuracy pass"), true);
+assert.equal(verification[1].content.includes("First-pass candidates"), true);
+assert.equal(verification[1].content.includes("TOKOPEDIA"), true);
+const firstPass = [
+  { date: "2026-10-10", dateEvidence: "10/10/2026", name: "Synthetic cafe", paymentMethod: "", amount: 2800, direction: "expense", activity: "purchase" },
+  { date: "2026-10-10", dateEvidence: "10/10/2026", name: "Synthetic omitted row", paymentMethod: "", amount: 5000, direction: "expense", activity: "fee" },
+];
+const secondPass = [
+  { date: "2026-10-10", dateEvidence: "10/10/2026", name: "Synthetic cafe", paymentMethod: "", amount: 28000, direction: "expense", activity: "purchase" },
+  { date: "2026-10-10", dateEvidence: "10/10/2026", name: "Synthetic newly found row", paymentMethod: "", amount: 7000, direction: "expense", activity: "purchase" },
+];
+assert.deepEqual(mergeImportPasses(firstPass, secondPass), [
+  secondPass[0],
+  { ...firstPass[1], direction: "unknown", activity: "unknown" },
+  secondPass[1],
+], "the second pass corrects aligned rows, adds discoveries, and cannot silently discard first-pass-only candidates");
 assert.throws(() => validateImportInput({ kind: "image", month: "2026-10", image: "data:image/svg+xml;base64,AA==" }));
 assert.equal(DAILY_CAP, 4000);
 assert.equal(RESERVATION, 2500);

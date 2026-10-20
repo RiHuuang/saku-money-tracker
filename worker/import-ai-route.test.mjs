@@ -45,9 +45,23 @@ try {
   const firstRow = (await response.json()).rows[0];
   assert.equal(firstRow.amount, 28000);
   assert.equal(firstRow.date, "", "the HTTP route must not trust a model date without printed evidence");
-  assert.equal(aiCalls, 1);
+  assert.equal(aiCalls, 2, "every source page needs extraction and verification passes");
   assert.equal(aiOptions.temperature, 0, "extraction should use deterministic sampling");
   assert.equal(aiOptions.seed, 0, "extraction should request a stable best-effort seed");
+  assert.equal(aiOptions.messages[1].content.includes("Second accuracy pass"), true);
+  assert.equal(aiOptions.messages[1].content.includes("Synthetic cafe"), true, "the verifier should receive the first-pass candidates");
+  env.AI.run = async (_model, options) => {
+    aiCalls++;
+    const verifying = options.messages[1].content.includes("Second accuracy pass");
+    return { response: JSON.stringify({ rows: verifying ? [
+      { date: "2026-10-10", dateEvidence: "10/10/2026", name: "Synthetic cafe", amount: 28000, direction: "expense", activity: "purchase" },
+      { date: "2026-10-10", dateEvidence: "10/10/2026", name: "Synthetic fee", amount: 5000, direction: "expense", activity: "fee" },
+    ] : [{ date: "2026-10-10", dateEvidence: "10/10/2026", name: "Synthetic cafe", amount: 28000, direction: "expense", activity: "purchase" }] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } };
+  };
+  const correctedResponse = await request();
+  const correctedRows = (await correctedResponse.json()).rows;
+  assert.equal(correctedRows.length, 2, "the verification pass should be able to restore a row omitted by the first pass");
+  assert.equal(correctedRows[1].name, "Synthetic fee");
   env.AI.run = async () => {
     aiCalls++;
     return { response: JSON.stringify({ rows: [{ date: "2026-10-12", dateEvidence: "10/10/2026", name: "Synthetic cafe", amount: 28000, direction: "expense", activity: "purchase" }] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } };
@@ -61,11 +75,11 @@ try {
   const imageResponse = await request(JSON.stringify({ kind: "image", month: "2026-10", image: "data:image/jpeg;base64,AA==" }));
   assert.equal(imageResponse.status, 200);
   assert.equal((await imageResponse.json()).rows[0].date, "2025-09-05", "the HTTP image route must use printed date evidence");
-  assert.equal(aiCalls, 3);
+  assert.equal(aiCalls, 8);
   const day = new Date().toISOString().slice(0, 10);
-  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_budget WHERE day=?").get(day).neurons, 36);
+  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_budget WHERE day=?").get(day).neurons, 96);
   sqlite.prepare("UPDATE import_ai_budget SET neurons=3990 WHERE day=?").run(day);
   assert.equal((await request()).status, 429, "the app allowance must stop another call");
-  assert.equal(aiCalls, 3);
+  assert.equal(aiCalls, 8);
   console.log("AI import route: auth, release gate, input validation and quota passed with a stub binding");
 } finally { delete crypto.subtle.timingSafeEqual; sqlite.close(); }

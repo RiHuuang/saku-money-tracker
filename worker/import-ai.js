@@ -28,6 +28,16 @@ export function importMessages(input) {
   return [{ role: "system", content: rules }, { role: "user", content }];
 }
 
+export function importVerificationMessages(input, firstRows) {
+  const [system] = importMessages(input);
+  const instruction = `Second accuracy pass. Re-read the complete source from top to bottom and return the full corrected transaction list, not only changes. The first pass below is untrusted working data: it may omit visible rows, invent rows, or contain wrong dates, amounts, directions, names, payment methods, or activities. Check every candidate against the source and find any visible transaction missing from it. Follow the system rules exactly and return JSON only.\nFirst-pass candidates:\n${JSON.stringify({ rows: firstRows })}`;
+  const content = input.kind === "text" ? `${instruction}\nStatement lines:\n${input.text}` : [
+    { type: "text", text: instruction },
+    { type: "image_url", image_url: { url: input.image, detail: "high" } },
+  ];
+  return [system, { role: "user", content }];
+}
+
 const activities = new Set(["purchase", "transfer", "topup", "card_payment", "refund", "income", "fee", "interest", "pay_later", "reward", "pending", "failed", "unknown"]);
 const monthNumbers = new Map(Object.entries({ jan: 1, januari: 1, january: 1, feb: 2, februari: 2, february: 2, mar: 3, maret: 3, march: 3, apr: 4, april: 4, mei: 5, may: 5, jun: 6, juni: 6, june: 6, jul: 7, juli: 7, july: 7, agu: 8, agt: 8, agustus: 8, aug: 8, august: 8, sep: 9, sept: 9, september: 9, okt: 10, oktober: 10, oct: 10, october: 10, nov: 11, november: 11, des: 12, desember: 12, dec: 12, december: 12 }));
 function calendarDate(year, month, day) {
@@ -102,6 +112,23 @@ export function parseImportAnswer(answer, kind = "text", reviewMonth = "", sourc
     }
     return { date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "", dateEvidence, name, paymentMethod, amount, direction, activity };
   });
+}
+
+const comparisonText = (value) => String(value || "").toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim();
+const comparisonKey = (row) => JSON.stringify([comparisonText(row.dateEvidence || row.date), comparisonText(row.name)]);
+export function mergeImportPasses(firstRows, verifiedRows) {
+  const remaining = verifiedRows.map((row, index) => ({ row, index, used: false }));
+  const merged = firstRows.map((first) => {
+    const key = comparisonKey(first);
+    const exact = remaining.find((candidate) => !candidate.used && JSON.stringify(candidate.row) === JSON.stringify(first));
+    const corrected = exact || remaining.find((candidate) => !candidate.used && key !== '["",""]' && comparisonKey(candidate.row) === key);
+    if (corrected) {
+      corrected.used = true;
+      return corrected.row;
+    }
+    return { ...first, direction: "unknown", activity: "unknown" };
+  });
+  return [...merged, ...remaining.filter((candidate) => !candidate.used).map((candidate) => candidate.row)];
 }
 
 export function neuronsUsed(answer) {

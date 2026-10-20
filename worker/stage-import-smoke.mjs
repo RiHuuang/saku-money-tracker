@@ -3,9 +3,12 @@ import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
-if (process.env.SAKU_APPROVED_SINGLE_AI_TEST !== "yes") throw new Error("Set SAKU_APPROVED_SINGLE_AI_TEST=yes only for an approved single staging call");
+if (process.env.SAKU_APPROVED_SINGLE_AI_TEST !== "yes") throw new Error("Set SAKU_APPROVED_SINGLE_AI_TEST=yes only for an approved single AI call");
 const mode = process.argv[2] || "text";
 if (!["text", "screenshot", "scan", "benchmark-1", "benchmark-2", "benchmark-3", "private-image"].includes(mode)) throw new Error("Choose text, screenshot, scan, benchmark-1 through benchmark-3, or private-image");
+const production = process.env.SAKU_IMPORT_TARGET === "production";
+if (production && process.env.SAKU_APPROVED_PRODUCTION_AI_TEST !== "yes") throw new Error("Set SAKU_APPROVED_PRODUCTION_AI_TEST=yes only for an approved production smoke call");
+if (production && mode === "private-image") throw new Error("Production smoke accepts synthetic sources only");
 const root = process.cwd();
 const wrangler = join(root, "node_modules", "wrangler", "bin", "wrangler.js");
 const uid = `synthetic-import-${randomUUID()}`;
@@ -14,10 +17,13 @@ const secret = randomBytes(32).toString("base64url");
 const refresh = randomBytes(32).toString("base64url");
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const now = Date.now();
+const database = production ? "saku" : "saku-stage";
+const config = production ? "wrangler.jsonc" : "wrangler.stage.jsonc";
+const origin = production ? "https://app.sakumoney.my.id" : "https://stage.sakumoney.my.id";
 const sqlPath = join(root, "output", `synthetic-import-${id}.sql`);
 const execute = (sql) => {
   writeFileSync(sqlPath, sql);
-  try { execFileSync(process.execPath, [wrangler, "d1", "execute", "saku-stage", "--remote", "--config", "wrangler.stage.jsonc", "--file", sqlPath], { cwd: root, stdio: "pipe", timeout: 45000 }); }
+  try { execFileSync(process.execPath, [wrangler, "d1", "execute", database, "--remote", "--config", config, "--file", sqlPath], { cwd: root, stdio: "pipe", timeout: 45000 }); }
   finally { unlinkSync(sqlPath); }
 };
 
@@ -43,7 +49,7 @@ async function inputForMode() {
 try {
   execute(`INSERT INTO users(uid,data,revision,snapshot_path,updated_at) VALUES('${uid}','{"name":"Synthetic import test"}',0,NULL,${now});
 INSERT INTO sessions(id,uid,access_hash,refresh_hash,access_expires_at,refresh_expires_at,updated_at) VALUES('${id}','${uid}','${hash(secret)}','${hash(refresh)}',${now + 300000},${now + 300000},${now});`);
-  const response = await fetch("https://stage.sakumoney.my.id/v1/import/extract", {
+  const response = await fetch(`${origin}/v1/import/extract`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${id}.${secret}`, "x-saku-user-id": uid },
     body: JSON.stringify(await inputForMode()),
