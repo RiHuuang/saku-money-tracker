@@ -562,7 +562,7 @@ async function route(request, env) {
     if (!(await reserveImport(env.DB, day))) throw fault(429, "Daily AI import allowance is used. Your draft is saved on this device; try again after 07:00 WIB.");
     let answer;
     try {
-      answer = await env.AI.run(MODEL, { messages: importMessages(input), max_completion_tokens: 4096, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, store: false, n: 1 });
+      answer = await env.AI.run(MODEL, { messages: importMessages(input), max_completion_tokens: 4096, temperature: 0, seed: 0, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, store: false, n: 1 });
       await settleImport(env.DB, day, answer);
       return reply({ rows: parseImportAnswer(answer, input.kind, input.month, input.kind === "text" ? input.text : "") }, 200, cors);
     } catch {

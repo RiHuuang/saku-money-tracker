@@ -18,10 +18,12 @@ const prepared = (sql, values = []) => ({
   run: async () => ({ meta: { changes: Number(sqlite.prepare(sql).run(...values).changes) } }),
 });
 let aiCalls = 0;
+let aiOptions;
 const env = {
   DB: { prepare: prepared }, AI_IMPORT_ENABLED: "false",
-  AI: { run: async () => {
+  AI: { run: async (_model, options) => {
     aiCalls++;
+    aiOptions = options;
     return { response: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Synthetic cafe", amount: 28000, direction: "expense", activity: "purchase" }] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } };
   } },
 };
@@ -44,6 +46,8 @@ try {
   assert.equal(firstRow.amount, 28000);
   assert.equal(firstRow.date, "", "the HTTP route must not trust a model date without printed evidence");
   assert.equal(aiCalls, 1);
+  assert.equal(aiOptions.temperature, 0, "extraction should use deterministic sampling");
+  assert.equal(aiOptions.seed, 0, "extraction should request a stable best-effort seed");
   env.AI.run = async () => {
     aiCalls++;
     return { response: JSON.stringify({ rows: [{ date: "2026-10-12", dateEvidence: "10/10/2026", name: "Synthetic cafe", amount: 28000, direction: "expense", activity: "purchase" }] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } };
