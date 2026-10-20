@@ -1,6 +1,6 @@
 # Saku
 
-An offline-first Android money tracker, built with React, TypeScript and Capacitor. Amounts are whole Indonesian rupiah. The installable Android application and the planned Cloudflare-hosted browser app share the same application.
+An offline-first Android money tracker, built with React, TypeScript and Capacitor. Amounts are whole Indonesian rupiah. The installable Android application and Cloudflare-hosted browser app share the same application.
 
 ## Run
 
@@ -14,7 +14,7 @@ npm run android:open
 
 Android requires JDK 21 and Android SDK 36. Build a debug APK in Android Studio, or run `gradlew.bat assembleDebug` from `android` with `JAVA_HOME` and `ANDROID_HOME` set to your installed toolchains. Google Play releases use an AAB and environment-provided signing credentials; see [`RELEASE.md`](RELEASE.md).
 
-The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a connected Android 12+ arm64 phone, install it with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`, or open the APK on the phone and permit installation from that source. Saku appears in the app drawer and can be placed on the home screen like any other app. It does not need the computer or dev server after installation. On a fresh install, open **Monthly check** and download the model once while online; afterward PDFs can be processed in airplane mode. Use `npx wrangler dev` with a locally initialized D1 database to test browser login; the standalone Vite server does not provide the API. The browser has no native PDF AI.
+The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a connected Android 12+ arm64 phone, install it with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`, or open the APK on the phone and permit installation from that source. Saku appears in the app drawer and can be placed on the home screen like any other app. It does not need the computer or dev server after installation. Catch up imports require sign-in and an internet connection for Cloudflare AI processing. Use `npx wrangler dev` with a locally initialized D1 database to test browser login; the standalone Vite server does not provide the API.
 
 ## Included
 
@@ -22,7 +22,7 @@ The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a conne
 - Three native Android home-screen widgets: four one-tap favorites with exact Undo, a compact Expense/Income/Transfer entry window, and a cash/spending/pocket snapshot. Favorites and snapshots support per-widget privacy mode.
 - Custom pocket names, icons and colors, with a recurring base budget and explicit monthly overrides. Expenses subtract from their pocket; income increases recorded cash.
 - Monthly income, expenses, account balances, category breakdown, weekly cash flow, remaining budgets, and overspending warnings.
-- CSV and Android-only PDF statement reconciliation for multiple banks/accounts, with explicit review, conservative duplicate handling, and opt-in import of missing transactions.
+- Local CSV reconciliation and staged cloud-assisted PDF/screenshot catch-up for multiple banks and wallets, with explicit review and conservative duplicate handling.
 - Local profile, Google registration/sign-in, revision-checked cloud backup, a private Google Sheets mirror, account management, JSON backup and validated restore. Native storage uses Capacitor Preferences; Saku session secrets use Android Keystore-backed AES-GCM storage.
 - Native Android back navigation and the Android share sheet for exports.
 - Credit cards with limits, balances, available credit, purchases, installment schedules and payments. Recurring expenses/income can be reviewed and marked paid or charged each month; the recurring list shows annual cost.
@@ -44,13 +44,11 @@ The total balance includes all recorded transactions through the selected month,
 
 Card purchases charge the full personal amount to the pocket on purchase day and the full billed amount to card debt. A later card payment reduces recorded cash and restores card credit, without counting as another expense. A shared expense charges only your share to the pocket but keeps the full payment in cash/card records for statement matching. Friend reimbursements increase cash without counting as income. Scheduled installments show the purchase amount divided across months; the schedule does not automatically assign payments to individual installments. Recurring items remain drafts until explicitly recorded.
 
-## Statement checks
+## Statement checks and catch-up import
 
-On Android, install the one-time Qwen3 0.6B mixed INT4 model (497,516,544 bytes) in **Monthly check** before selecting PDFs. The app requires Android 12+, arm64, roughly 6 GB RAM, and at least 800 MB free storage for setup. The model is downloaded from the pinned [LiteRT Community revision](https://huggingface.co/litert-community/Qwen3-0.6B/tree/a3c5d805ae362dff7f580bc25f2dfb9a5a7eaa76) and verified with SHA-256 `7900eb4e7362d88c58782c6f9999bb7a129e03544aa98b8f338ea0cc5d8c22c1`. The model stays in private app storage and can be removed from the same screen. Later statement processing works offline.
+**Catch up** accepts up to ten screenshots or PDF statements per local draft. PDF.js reads selectable text on the device; pages without enough text are rendered as images. Passwords are requested locally and are not saved. The user consents before selected page text or image data is sent to Cloudflare Workers AI (Gemma 4) for an extraction pass and a complete second accuracy pass, then chooses the correct Saku account before adding any extracted rows. Mixed-account files require an explicit account on every row; files never silently inherit the first account. Original files and review drafts stay in device IndexedDB. Extraction can be paused between pages and resumed. Users inspect dates, amounts, directions, activity types, and potential duplicates before a batch save; uncertain rows can stay in the draft. Bank-to-wallet top-ups can be paired as transfers. PayLater-funded rows wait for a matching card account and due month instead of being posted against a cash wallet. Accepted entries join the normal ledger sync and optional Google Sheets mirror. A partial screenshot never proves another ledger entry is missing. A failed source is marked for retry while other files continue; deleting the Saku account removes its local import drafts and remembered AI-processing consent.
 
-PDF.js reads selectable text. Pages without usable text are rendered one at a time and passed to bundled ML Kit Latin OCR. Passwords are prompted locally and are not saved. PDF files are limited to 20 MB and 50 pages. Clear bank and credit-card table rows are parsed deterministically; irregular leftovers run through the model in small sequential chunks with a compact context sampled across the complete document. Each suggestion shows its page/source line and editable fields; missing or conflicting evidence is flagged. After comparison, one focused review card at a time can be swiped right to accept or left to decline, with visible equivalent buttons. A final confirmation is required before ledger writes. Recognized opening/closing balances are checked against extracted rows when possible. Malformed model responses cannot write to the ledger. PDF images and drafts remain in memory only for the review session.
-
-CSV files still support per-file accounts, column mapping, Indonesian/English number formats, and explicit date order. Supported dates: ISO YYYY-MM-DD or explicit D/M/YYYY and M/D/YYYY. Debit/credit columns take priority over an amount column. For a single amount column, select a type column or use negative expenses and positive income. Zero, fractional rupiah, invalid dates and invalid numeric grouping are rejected. Repeated same-day, same-account, same-direction, same-amount rows are held for manual review, even if they are legitimate repeat payments. No fuzzy match is auto-approved. Files themselves stay in memory and are not saved.
+**Statement check** uses the same cloud-assisted sources for statement comparison. **CSV on device** is a separate visible tab for immediate, local-only CSV import and comparison. CSV supports per-file accounts, column mapping, Indonesian/English number formats, and explicit date order. Supported dates: ISO YYYY-MM-DD or explicit D/M/YYYY and M/D/YYYY. Debit/credit columns take priority over an amount column. For a single amount column, select a type column or use negative expenses and positive income. Zero, fractional rupiah, invalid dates and invalid numeric grouping are rejected. Repeated same-day, same-account, same-direction, same-amount rows are held for manual review. No fuzzy match is auto-approved. CSV files remain in memory for the review session and are not sent to Workers AI.
 
 CSV example:
 
@@ -60,7 +58,7 @@ date,description,debit,credit
 2026-09-02,Rent,1500000,
 ```
 
-Banks with proprietary CSV preambles must export or prepare a simple table first. XLSX and image-only files are not supported; scans must be inside PDFs. Browser preview offers CSV only. Card PDFs can be assigned to a card for exact matching, but missing card rows are held for manual entry because installment lines and payments often differ from purchase records. Matching partial statements does not establish that a whole month is reconciled. Printed balance labels and bank layouts vary, so balance checks can be unavailable or require manual inspection.
+Banks with proprietary CSV preambles must export or prepare a simple table first. XLSX is not supported. PDFs are limited to 20 MB and 50 pages; JPG, PNG, and WebP images are limited to 12 MB before local resizing. Source formats and bank layouts vary, so every extracted transaction requires review. The cloud-assisted feature is deployed to staging only while screenshot, scanned-PDF, and provider-format checks remain open; see [the import rollout gate](worker/FREE_TIER_GATE.md) and [public Indonesian source references](docs/import-reference-corpus.md).
 
 ## Google sign-in and Sheets sync
 
@@ -74,7 +72,7 @@ The Cloudflare Worker and deployment checklist are in [`worker/README.md`](worke
 
 ## Device verification
 
-The debug build has been installed and smoke-tested on a Xiaomi 15 running Android 16 at `1200x2670`. Earlier tests verified Google session persistence, the 497,516,544-byte PDF model, the combined transfer editor, profile-photo trigger, and swipe review deck. All three launcher widgets were bound and rendered together; Quick Entry formatted `1000000` as `1,000,000`, and all seven Android instrumentation tests passed. The supplied BCA credit-card statement produced 78 distinct candidates with page/source evidence and no validation flags. A later test-runner reinstall cleared device-only state; the Saku Cloud ledger was restored after sign-in, while the PDF model and widget placements must be set up again. The current 2.0 debug build was updated in place, and its native Monthly check PDF layout was visually checked without rerunning instrumentation on the personal phone. This is a development smoke test, not bank certification. Before a public release, broaden testing across other banks, scans, protected PDFs, interrupted downloads, low storage, cancellation, airplane mode, and sustained memory/latency on multiple 6 GB devices.
+Earlier Android-only statement prototypes were smoke-tested on a Xiaomi 15 running Android 16 at `1200x2670`, including a local Qwen model, BCA card PDF, and review deck. Those checks do not validate the new cloud-assisted Catch up flow. The staging route has passed approved synthetic text, screenshot, scanned-PDF, and browser upload-to-review requests; a separate isolated browser check covered local save and undo. Android file-picker behavior, real provider formats, and signed-build accuracy still need end-to-end checks before release. Widget and sync device evidence is tracked separately in the [Cloudflare rollout gate](worker/FREE_TIER_GATE.md).
 
 References checked during development:
 

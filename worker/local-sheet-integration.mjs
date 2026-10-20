@@ -98,7 +98,7 @@ async function cleanupD1(command) {
 }
 let worker;
 const varsFile = path.join(root, ".dev.vars");
-const origin = stage ? "https://saku-stage.saku-money-manager.workers.dev" : "http://127.0.0.1:8787";
+const origin = stage ? "https://stage.sakumoney.my.id" : "http://127.0.0.1:8787";
 const headers = { authorization: `Bearer ${id}.${secretPart}`, "content-type": "application/json", "x-saku-user-id": uid };
 const traceRequest = async (pathname, options = {}) => {
   if (setupOnly) {

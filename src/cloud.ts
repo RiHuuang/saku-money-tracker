@@ -157,6 +157,15 @@ function requestsFor(userId: string | undefined): SnapshotRequest {
     return response;
   };
 }
+export async function extractImportPage(userId: string, page: { month: string } & ({ kind: "text"; text: string } | { kind: "image"; image: string })): Promise<{ rows: { date: string; dateEvidence: string; name: string; paymentMethod: string; amount: number; direction: "expense" | "income" | "unknown"; activity: "purchase" | "transfer" | "topup" | "card_payment" | "refund" | "income" | "fee" | "interest" | "pay_later" | "reward" | "pending" | "failed" | "unknown" }[] }> {
+  const send = requestsFor(userId);
+  try {
+    return (await send("/v1/import/extract", { method: "POST", body: JSON.stringify(page) })).json();
+  } catch (error) {
+    if (error instanceof TypeError) throw new Error("Could not reach Saku Cloud. Check this device's connection and retry.");
+    throw error;
+  }
+}
 export async function signInGoogle(agreementVersion = AGREEMENT_VERSION): Promise<CloudState> {
   if (!native()) {
     window.location.assign("/auth/google/start");

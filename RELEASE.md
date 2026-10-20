@@ -44,6 +44,8 @@ Deploy and validate the Worker before distributing the new Android build. The AP
 
 ## Build configuration
 
+For a **staging debug APK only**, set both API variables to `https://stage.sakumoney.my.id`, run `npm run build -- --mode staging`, then run `node --require ./scripts/os-userinfo.cjs ./node_modules/@capacitor/cli/bin/capacitor sync android` and `:app:assembleDebug` with JDK 21. The default Vite build rejects a staging API, and Gradle rejects staging for release builds. After saving the debug APK, clear both shell variables and run `npm run android:sync` to restore production web assets before any release work. Do not install this debug APK over the release-signed user app.
+
 Create the ignored `.env.production`:
 
 ```dotenv

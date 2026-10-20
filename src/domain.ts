@@ -657,6 +657,7 @@ export function reconcile(
 ) {
   const key = (r: BankRow | Transaction) =>
     JSON.stringify([r.date, r.account, r.type, r.amount]);
+  const nameKey = (name: string) => name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim();
   const counts = new Map<string, number>();
   const indexed = new Map<string, Transaction[]>();
   for (const transaction of transactions) {
@@ -678,7 +679,7 @@ export function reconcile(
       return { ...r, status: "review" as const, matchId: "" };
     if (matches.length) return {
       ...r,
-      status: "matched" as const,
+      status: nameKey(r.name) && nameKey(r.name) === nameKey(matches[0].name) ? "matched" as const : "different" as const,
       matchId: matches[0].id,
     };
     const day = (date: string) => Date.parse(`${date}T12:00:00Z`) / 86400000;

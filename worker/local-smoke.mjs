@@ -9,7 +9,7 @@ const bundle = await build({ entryPoints: ["src/snapshotTransfer.ts"], bundle: t
 const { uploadSnapshot, downloadSnapshot } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].contents).toString("base64")}`);
 
 const stage = process.env.SAKU_STAGE === "1";
-const origin = process.env.SAKU_TEST_WORKER || (stage ? "https://saku-stage.saku-money-manager.workers.dev" : "http://127.0.0.1:8787");
+const origin = process.env.SAKU_TEST_WORKER || (stage ? "https://stage.sakumoney.my.id" : "http://127.0.0.1:8787");
 const originalFetch = globalThis.fetch;
 if (process.env.SAKU_SPACED === "1") globalThis.fetch = async (url, options = {}) => {
   await new Promise((resolve) => setTimeout(resolve, 3000));

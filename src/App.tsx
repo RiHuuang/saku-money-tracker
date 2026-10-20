@@ -75,6 +75,8 @@ import {
   TransactionList,
 } from "./components";
 const Statements = lazy(() => import("./Statements"));
+const CsvStatements = lazy(() => import("./CsvStatements"));
+const CatchUp = lazy(() => import("./CatchUp"));
 const Plans = lazy(() => import("./Plans"));
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
@@ -110,13 +112,14 @@ type Edit =
   | { type: "pocket_transfer" }
   | { type: "start" }
   | null;
+const cloudImportEnabled = import.meta.env.MODE === "staging" || import.meta.env.DEV;
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "transactions", label: "Activity", icon: ArrowDownLeft },
   { id: "pockets", label: "Pockets", icon: Wallet },
   { id: "plans", label: "Plans", icon: CreditCard },
   { id: "insights", label: "Insights", icon: BarChart3 },
-  { id: "check", label: "Monthly check", icon: FileCheck2 },
+  { id: "check", label: cloudImportEnabled ? "Catch up" : "Check", icon: FileCheck2 },
 ] as const;
 const mobileNavigation = [
   navigation[0], navigation[1], navigation[2], navigation[3],
@@ -130,6 +133,7 @@ export default function App() {
     [loadError, setLoadError] = useState(""),
     [view, setView] = useState<View>("overview"),
     [month, setMonth] = useState(today().slice(0, 7)),
+    [checkTab, setCheckTab] = useState<"catchup" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
     [edit, setEdit] = useState<Edit>(null),
     [toast, setToast] = useState(""),
     [busy, setBusy] = useState(false),
@@ -298,6 +302,11 @@ export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const listener = NativeApp.addListener("backButton", () => {
+      const dialog = document.querySelector<HTMLDialogElement>("dialog[open]");
+      if (dialog) {
+        dialog.querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')?.click();
+        return;
+      }
       if (edit) setEdit(null);
       else if (selectedPocketId) setSelectedPocketId(null);
       else {
@@ -451,7 +460,7 @@ export default function App() {
     plans: ["Cards and recurring payments", "Plans"],
     more: ["Explore your workspace", "More"],
     insights: ["Understand your spending", "Insights"],
-    check: ["Review your statements", "Monthly check"],
+    check: cloudImportEnabled ? ["Catch up on your money", "Catch up"] : ["Review your records", "Check"],
     settings: ["Manage your workspace", "Settings"],
   };
   const go = (v: View) => {
@@ -617,7 +626,7 @@ export default function App() {
           </section>
           {view === "more" && <section className="more-list" aria-label="More destinations">
             <button onClick={() => go("insights")}><BarChart3 /><span><strong>Insights</strong><small>See trends and spending breakdowns</small></span><ChevronRight /></button>
-            <button onClick={() => go("check")}><FileCheck2 /><span><strong>Monthly check</strong><small>Compare statements with your records</small></span><ChevronRight /></button>
+            <button onClick={() => go("check")}><FileCheck2 /><span><strong>{cloudImportEnabled ? "Catch up" : "Check"}</strong><small>{cloudImportEnabled ? "Import screenshots and statements" : nativeAIAvailable ? "Review CSV and PDF statements" : "Compare CSV with your records"}</small></span><ChevronRight /></button>
             <button onClick={() => go("settings")}><Settings /><span><strong>Settings</strong><small>Accounts, appearance, backup and privacy</small></span><ChevronRight /></button>
           </section>}
           {view === "overview" && (
@@ -999,13 +1008,9 @@ export default function App() {
           )}
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>
-              <Statements
-                data={data}
-                month={month}
-                commit={commit}
-                busy={busy}
-                notify={setToast}
-              />
+              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>Catch up</button><button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>Statement check</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>CSV on device</button></div>}
+              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
+              {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
           )}
           {view === "plans" && <Suspense fallback={<p className="loading-view">Loading plans...</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} /></Suspense>}
@@ -1156,6 +1161,7 @@ export default function App() {
       {edit?.type === "start" && (
         <StartProfile
           busy={busy}
+          suggestedName={cloud?.user?.name}
           onClose={() => setEdit(null)}
           onStart={async (next) => {
             if (await commit(next, "Your own little fresh start.")) {
@@ -1854,7 +1860,7 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
     <section className="login-panel">
       <span className="brand-mark"><Wallet /></span><h1>Saku</h1>
       <p>Know where your money lives, what it is for, and what is safe to spend.</p>
-      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. Bank statements and on-device AI prompts stay on this device. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
+      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. If you choose AI import, selected statement text and images are processed by Cloudflare AI. Original files and review drafts stay on this device. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
       <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
       <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? "Connecting..." : "Continue with Google"}</button>
       {!configured && <p className="form-error">Google sign-in is not configured in this build.</p>}{error && <p className="form-error" role="alert">{error}</p>}
@@ -1871,14 +1877,16 @@ function WorkspaceChoice({ local, remote, onChoose, onBackup }: { local: Data; r
 
 function StartProfile({
   busy,
+  suggestedName,
   onClose,
   onStart,
 }: {
   busy: boolean;
+  suggestedName?: string;
   onClose: () => void;
   onStart: (data: Data) => Promise<void>;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(suggestedName?.trim().slice(0, 40) || "");
   const [accounts, setAccounts] = useState([{ name: "BCA", balance: "" }, { name: "Jago", balance: "" }]);
   const [pockets, setPockets] = useState([{ name: "Food & coffee", budget: "", icon: "utensils" }, { name: "Bills", budget: "", icon: "home" }, { name: "Fun", budget: "", icon: "game" }]);
   const [hasCard, setHasCard] = useState(false), [cardName, setCardName] = useState(""), [cardLimit, setCardLimit] = useState(""), [cardDebt, setCardDebt] = useState("0"), [dueDay, setDueDay] = useState("15");
@@ -1910,7 +1918,7 @@ function StartProfile({
       <form onSubmit={submit}>
         <fieldset disabled={busy}>
           <div className="setup-progress" aria-label={`Setup step ${step + 1} of 3`}><span className={step === 0 ? "active" : ""}>1 Accounts</span><span className={step === 1 ? "active" : ""}>2 Pockets</span><span className={step === 2 ? "active" : ""}>3 Cards</span></div>
-          {step === 0 && <><label className="field">Your name<input autoFocus required value={name} maxLength={40} pattern=".*\S.*" onChange={(e) => setName(e.target.value)} placeholder="What should we call you?" /></label>
+          {step === 0 && <><label className="field">Your name<input autoFocus required value={name} maxLength={40} pattern=".*\S.*" onChange={(e) => setName(e.target.value)} placeholder={suggestedName?.trim() || "What should we call you?"} /></label>
           <h3>Where your money lives</h3>{accounts.map((item, index) => <div className="setup-row" key={index}><input aria-label={`Account ${index + 1} name`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /><div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Account"} opening balance`} placeholder="Opening balance" value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div></div>)}
           <button type="button" className="button secondary" onClick={() => setAccounts([...accounts, { name: "", balance: "" }])}><Plus size={16} />Add bank, cash, or e-wallet</button></>}
           {step === 1 && <>
@@ -2178,7 +2186,7 @@ function SettingsView({
       </section>
       <section className="connection-section">
         <span className="connection-icon"><CheckCheck size={25} /></span>
-        <div><h2>Offline first</h2><p>Your tracker keeps working without internet. Statement PDFs and local AI processing stay on this device; only the ledger you choose to sync is sent to Saku Cloud and your private Sheet.</p></div>
+        <div><h2>Offline first</h2><p>{cloudImportEnabled ? "Your ledger works without internet. AI import sends selected statement text or images to Cloudflare for processing. Original files and review drafts stay on this device; accepted transactions follow your existing cloud and Sheet sync." : nativeAIAvailable ? "Your ledger works without internet. CSV and PDF statement checking stay on this device while cloud catch-up is being tested." : "Your ledger works without internet. CSV checking stays on this device; PDF checking is available in the Android app while cloud catch-up is being tested."}</p></div>
       </section>
       <footer className="settings-footer">
         Saku 2.0 <span>·</span> Made for a more mindful month.

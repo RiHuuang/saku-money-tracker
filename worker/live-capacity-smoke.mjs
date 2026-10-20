@@ -11,7 +11,7 @@ const coldMaximum = process.env.SAKU_COLD_MAXIMUM === "1";
 const deletionProfile = process.env.SAKU_DELETE_PROFILE === "1" || process.env.SAKU_DELETE_PROFILE === "large";
 const repeats = Number(process.env.SAKU_CAPACITY_REPEATS || 2);
 if (!Number.isInteger(repeats) || repeats < 1 || repeats > 10 || (coldMaximum && !stage)) throw new Error("Invalid isolated capacity test options");
-const origin = stage ? "https://saku-stage.saku-money-manager.workers.dev" : "https://saku.saku-money-manager.workers.dev";
+const origin = stage ? "https://stage.sakumoney.my.id" : "https://saku.saku-money-manager.workers.dev";
 const uid = `capacity-${crypto.randomUUID()}`;
 const id = crypto.randomUUID();
 const secret = crypto.randomBytes(32).toString("base64url");
