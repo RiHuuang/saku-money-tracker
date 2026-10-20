@@ -39,6 +39,7 @@ import {
   ICONS,
   accountBalance,
   budgetFor,
+  cardBalance,
   emptyData,
   exportCSV,
   isIncome,
@@ -67,11 +68,12 @@ import {
   FitMoney,
   IconButton,
   MoneyInput,
-  ChoicePicker,
+  ChoiceField,
   Modal,
   PocketCard,
   PocketIcon,
   SpendingRing,
+  SegmentedChoice,
   TransactionList,
 } from "./components";
 const Statements = lazy(() => import("./Statements"));
@@ -302,7 +304,8 @@ export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const listener = NativeApp.addListener("backButton", () => {
-      const dialog = document.querySelector<HTMLDialogElement>("dialog[open]");
+      const dialogs = document.querySelectorAll<HTMLDialogElement>("dialog[open]");
+      const dialog = dialogs[dialogs.length - 1];
       if (dialog) {
         dialog.querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')?.click();
         return;
@@ -1254,28 +1257,8 @@ function Transactions({
       </div>
       <div className="transaction-filters">
         <SlidersHorizontal size={16} />
-        <select
-          aria-label="Filter by pocket"
-          value={pocket}
-          onChange={(e) => setPocket(e.target.value)}
-        >
-          <option value="all">All pockets</option>
-          {data.pockets.map((p) => (
-            <option value={p.id} key={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter by account"
-          value={account}
-          onChange={(e) => setAccount(e.target.value)}
-        >
-          <option value="all">All accounts</option>
-          {[...data.accounts, ...data.creditCards.map((c) => c.name)].map((a) => (
-            <option key={a}>{a}</option>
-          ))}
-        </select>
+        <ChoiceField label="Filter by pocket" value={pocket} onValueChange={setPocket} options={[{ value: "all", label: "All pockets" }, ...data.pockets.map((p) => ({ value: p.id, label: p.name }))]} />
+        <ChoiceField label="Filter by account" value={account} onValueChange={setAccount} options={[{ value: "all", label: "All accounts" }, ...data.accounts.map((name) => ({ value: name, label: name, description: money(accountBalance(data, name)) })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: "Credit card" }))]} />
         <span>{rows.length} transactions</span>
       </div>
       <div className="ledger">
@@ -1460,6 +1443,13 @@ function TransactionEditor({
     } satisfies Favorite : undefined;
     await onSave(saved, rule, quick);
   }
+  const accountChoices = data.accounts.map((name) => ({ value: name, label: name, description: `Recorded balance ${money(accountBalance(data, name))}` }));
+  const paymentChoices = [
+    ...data.accounts.map((name) => ({ value: `bank:${name}`, label: name, description: `Account · ${money(accountBalance(data, name))}` })),
+    ...data.creditCards.map((item) => ({ value: `card:${item.id}`, label: item.name, description: `Credit available ${money(Math.max(0, item.limit - cardBalance(data, item.id)))}` })),
+  ];
+  const pocketStats = summary(data, date.slice(0, 7)).pockets;
+  const pocketChoices = [{ value: "", label: "Unassigned", description: "Categorize this later" }, ...pocketStats.map((item) => ({ value: item.id, label: item.name, description: `${money(Math.max(0, item.limit - item.spent))} remaining` }))];
   const modeControl = <div className="segmented form-segment transaction-modes">
     <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "expense" ? "selected" : ""} onClick={() => setMode("expense")}><ArrowUpRight size={16} />Expense</button>
     <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "income" ? "selected" : ""} onClick={() => setMode("income")}><ArrowDownLeft size={16} />Income</button>
@@ -1469,7 +1459,7 @@ function TransactionEditor({
     <form onSubmit={(e) => void submit(e)}><fieldset disabled={busy}>{modeControl}
       {data.accounts.length < 2 && <p className="form-error" role="alert">Add another bank, cash account, or e-wallet before making a transfer.</p>}
       <label className="field">Amount<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={setAmount} required /></div></label>
-      <div className="form-columns"><label className="field">From<ChoicePicker value={transferFrom} onChange={(e) => setTransferFrom(e.target.value)}>{data.accounts.map((item) => <option key={item} value={item}>{item} · {money(accountBalance(data, item))}</option>)}</ChoicePicker></label><label className="field">To<ChoicePicker value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>{data.accounts.map((item) => <option key={item} value={item}>{item} · {money(accountBalance(data, item))}</option>)}</ChoicePicker></label></div>
+      <div className="form-columns"><label className="field">From<ChoiceField hideLabel label="Transfer from" value={transferFrom} onValueChange={setTransferFrom} options={accountChoices} /></label><label className="field">To<ChoiceField hideLabel label="Transfer to" value={transferTo} onValueChange={setTransferTo} options={accountChoices} /></label></div>
       <label className="field">Date<input type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} required /></label>
       <label className="field">Note <span className="optional">optional</span><textarea rows={2} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -1524,29 +1514,16 @@ function TransactionEditor({
             />
           </label>
           {type === "expense" && !special && <label className="field">Paid with
-            <ChoicePicker value={cardId ? `card:${cardId}` : `bank:${account}`} onChange={(e) => {
-              if (e.target.value.startsWith("card:")) setCardId(e.target.value.slice(5));
-              else { setCardId(""); setAccount(e.target.value.slice(5)); }
-            }}>
-              {data.accounts.map((a) => <option key={a} value={`bank:${a}`}>{a}</option>)}
-              {data.creditCards.map((c) => <option key={c.id} value={`card:${c.id}`}>{c.name}</option>)}
-            </ChoicePicker>
+            <ChoiceField hideLabel label="Paid with" value={cardId ? `card:${cardId}` : `bank:${account}`} options={paymentChoices} onValueChange={(value) => {
+              if (value.startsWith("card:")) setCardId(value.slice(5));
+              else { setCardId(""); setAccount(value.slice(5)); }
+            }} />
           </label>}
           {type === "expense" && (
             transaction?.kind !== "card_payment" &&
             <label className="field">
               Pocket
-              <ChoicePicker
-                value={pocket}
-                onChange={(e) => setPocket(e.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {data.pockets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </ChoicePicker>
+              <ChoiceField hideLabel label="Pocket" value={pocket} onValueChange={setPocket} options={pocketChoices} />
               <small>{pocket ? "Counts against this pocket." : "You can categorize this later."}</small>
             </label>
           )}
@@ -1563,21 +1540,12 @@ function TransactionEditor({
             </label>
             {(special || type === "income") && <label className="field">
               Account
-              <ChoicePicker
-                value={account}
-                onChange={(e) => setAccount(e.target.value)}
-              >
-                {data.accounts.map((a) => (
-                  <option key={a}>{a}</option>
-                ))}
-              </ChoicePicker>
+              <ChoiceField hideLabel label="Account" value={account} onValueChange={setAccount} options={accountChoices} />
             </label>}
           </div>
           {cardId && type === "expense" && !special && <div className="form-columns">
             <label className="field">Payment plan
-              <select value={installments === "1" ? "one" : "installments"} onChange={(e) => setInstallments(e.target.value === "one" ? "1" : "3")}>
-                <option value="one">One payment</option><option value="installments">Installments</option>
-              </select>
+              <SegmentedChoice label="Payment plan" value={installments === "1" ? "one" : "installments"} onValueChange={(value) => setInstallments(value === "one" ? "1" : "3")} options={[{ value: "one", label: "One payment" }, { value: "installments", label: "Installments" }]} />
             </label>
             {installments !== "1" && <label className="field">Number of payments<input type="number" min={2} max={60} value={installments} onChange={(e) => setInstallments(e.target.value)} /></label>}
             <label className="field">First due month<input type="month" value={firstDueMonth} onChange={(e) => setFirstDueMonth(e.target.value)} /></label>
@@ -1587,7 +1555,7 @@ function TransactionEditor({
           {shared && type === "expense" && !special && <div className="form-columns"><label className="field">People including you<input type="number" min={2} max={30} value={people} onChange={(e) => setPeople(e.target.value)} /></label><label className="field">Your share (Rp)<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={setOwnAmount} /></label><p className="editor-help">The full payment stays on your bank or card statement. Only your share uses your pocket budget.</p></div>}
           {!special && <label className="checkbox-label editor-option"><input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} /> Repeat monthly after I confirm it</label>}
           {!transaction && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={saveFavorite} onChange={(e) => setSaveFavorite(e.target.checked)} /> Save as a quick entry</label>}
-          {transaction?.split && <div className="repayment-review"><strong>Shared payment</strong><p>Others owe {money(transaction.amount - transaction.split.ownAmount)}. Repaid {money(data.transactions.filter((t) => t.forTransactionId === transaction.id).reduce((n, t) => n + t.amount, 0))}.</p><div className="plans-fields"><label className="field">Repayment (Rp)<MoneyInput min={1} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">Received in<select value={repayAccount} onChange={(e) => setRepayAccount(e.target.value)}>{data.accounts.map((a) => <option key={a}>{a}</option>)}</select></label><label className="field">Received on<input type="date" min={transaction.date} max={today()} value={repayDate} onChange={(e) => setRepayDate(e.target.value)} /></label></div><button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount))} onClick={() => void onRepay(transaction.id, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>Record repayment</button></div>}
+          {transaction?.split && <div className="repayment-review"><strong>Shared payment</strong><p>Others owe {money(transaction.amount - transaction.split.ownAmount)}. Repaid {money(data.transactions.filter((t) => t.forTransactionId === transaction.id).reduce((n, t) => n + t.amount, 0))}.</p><div className="plans-fields"><label className="field">Repayment (Rp)<MoneyInput min={1} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">Received in<ChoiceField hideLabel label="Repayment account" value={repayAccount} onValueChange={setRepayAccount} options={accountChoices} /></label><label className="field">Received on<input type="date" min={transaction.date} max={today()} value={repayDate} onChange={(e) => setRepayDate(e.target.value)} /></label></div><button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount))} onClick={() => void onRepay(transaction.id, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>Record repayment</button></div>}
           <label className="field">
             Note <span className="optional">optional</span>
             <textarea
@@ -1851,7 +1819,8 @@ function PocketEditor({
 
 function PocketTransferEditor({ data, month, busy, onClose, onSave }: { data: Data; month: string; busy: boolean; onClose: () => void; onSave: (move: Data["pocketTransfers"][number]) => Promise<void> }) {
   const stats = summary(data, month), [from, setFrom] = useState(data.pockets[0]?.id || ""), [to, setTo] = useState(data.pockets[1]?.id || ""), [amount, setAmount] = useState(""), [error, setError] = useState("");
-  return <Modal title="Move pocket budget" subtitle={`Adjust ${monthLabel(month)} only. No cash moves.`} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError("Choose two different pockets and an amount still available in the source pocket."); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">From<ChoicePicker value={from} onChange={(e) => setFrom(e.target.value)}>{stats.pockets.map((p) => <option key={p.id} value={p.id}>{p.name} · {money(Math.max(0, p.limit - p.spent))} left</option>)}</ChoicePicker></label><label className="field">To<ChoicePicker value={to} onChange={(e) => setTo(e.target.value)}>{stats.pockets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</ChoicePicker></label><label className="field">Amount<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">Move budget</button></div></fieldset></form></Modal>;
+  const choices = stats.pockets.map((p) => ({ value: p.id, label: p.name, description: `${money(Math.max(0, p.limit - p.spent))} remaining` }));
+  return <Modal title="Move pocket budget" subtitle={`Adjust ${monthLabel(month)} only. No cash moves.`} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError("Choose two different pockets and an amount still available in the source pocket."); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">From<ChoiceField hideLabel label="Pocket to move from" value={from} onValueChange={setFrom} options={choices} /></label><label className="field">To<ChoiceField hideLabel label="Pocket to move to" value={to} onValueChange={setTo} options={choices} /></label><label className="field">Amount<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">Move budget</button></div></fieldset></form></Modal>;
 }
 
 function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean; busy: boolean; error: string; onLogin: () => Promise<void> }) {

@@ -33,7 +33,7 @@ import { balanceIssue, evidenceIssues, extractionPrompt, hasTransactionEvidence,
 import { readPdf } from "./pdfReader";
 import { localStatementAI, nativeAIAvailable, type ModelProgress, type ModelStatus } from "./localStatementAI";
 import { download } from "./storage";
-import { ChoicePicker, IconButton, Modal, MoneyInput } from "./components";
+import { ChoiceField, IconButton, Modal, MoneyInput, SegmentedChoice } from "./components";
 
 export default function Statements({
   data,
@@ -369,7 +369,7 @@ export default function Statements({
           <div className="file-heading"><FileText size={20} /><div><strong>{pdf.file}</strong><small>{pdf.stage} · {pdf.progress}% · {pdf.candidates.length} suggestions</small></div>
             <IconButton label={`Remove ${pdf.file}`} onClick={() => setPdfs((prev) => prev.filter((p) => p.id !== pdf.id))}><Trash2 size={17} /></IconButton></div>
           <progress max={100} value={pdf.progress} aria-label={`${pdf.file} progress`} />
-          <label className="field">Account<select value={pdf.account} onChange={(e) => updatePdf(pdf.id, { account: e.target.value, candidates: pdf.candidates.map((c) => ({ ...c, account: e.target.value, accepted: false })) })}>{[...data.accounts, ...data.creditCards.map((c) => c.name)].map((a) => <option key={a}>{a}</option>)}</select></label>
+          <ChoiceField label="Account" value={pdf.account} onValueChange={(value) => updatePdf(pdf.id, { account: value, candidates: pdf.candidates.map((c) => ({ ...c, account: value, accepted: false })) })} options={[...data.accounts, ...data.creditCards.map((card) => card.name)].map((account) => ({ value: account, label: account }))} />
           {pdf.error && <p className="negative">{pdf.error}</p>}
           {pdf.balanceIssue && <p className="inline-warning" role="status">{pdf.balanceIssue}</p>}
           {pdf.candidates.map((c) => <div className="pdf-candidate" key={c.id}>
@@ -378,7 +378,7 @@ export default function Statements({
               <label className="field">Date<input type="date" value={c.date} onChange={(e) => editCandidate(pdf.id, c.id, { date: e.target.value })} /></label>
               <label className="field">Description<input value={c.name} maxLength={100} onChange={(e) => editCandidate(pdf.id, c.id, { name: e.target.value })} /></label>
               <label className="field">Amount (Rp)<MoneyInput min={1} value={c.amount || ""} onValueChange={(value) => editCandidate(pdf.id, c.id, { amount: Number(value) })} /></label>
-              <label className="field">Direction<select value={c.type} onChange={(e) => editCandidate(pdf.id, c.id, { type: e.target.value as "income" | "expense" })}><option value="expense">Money out</option><option value="income">Money in</option></select></label>
+              <SegmentedChoice label="Direction" value={c.type} onValueChange={(value) => editCandidate(pdf.id, c.id, { type: value as "income" | "expense" })} options={[{ value: "expense", label: "Money out" }, { value: "income", label: "Money in" }]} />
             </div>
             {c.issues.length > 0 && <><p className="negative">{c.issues.join(" · ")}</p><label className="checkbox-label"><input type="checkbox" checked={!!c.manualConfirmed} onChange={(e) => editCandidate(pdf.id, c.id, { manualConfirmed: e.target.checked })} />I checked flagged fields against the PDF</label></>}
             <label className="checkbox-label"><input type="checkbox" checked={c.accepted} disabled={pdf.stage !== "Ready for review" || !candidateValid(c) || (c.issues.length > 0 && !c.manualConfirmed)} onChange={(e) => editCandidate(pdf.id, c.id, { accepted: e.target.checked })} />Accept for comparison</label>
@@ -487,45 +487,9 @@ export default function Statements({
                   </IconButton>
                 </div>
                 <div className="mapping-grid">
-                  <label className="field">
-                    Account
-                    <select
-                      value={f.account}
-                      onChange={(e) =>
-                        update(f.id, { account: e.target.value })
-                      }
-                    >
-                      {[...data.accounts, ...data.creditCards.map((c) => c.name)].map((a) => (
-                        <option key={a}>{a}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    Amount format
-                    <select
-                      value={f.format}
-                      onChange={(e) =>
-                        update(f.id, { format: e.target.value as "id" | "en" })
-                      }
-                    >
-                      <option value="id">1.000,00 (Indonesia)</option>
-                      <option value="en">1,000.00 (English)</option>
-                    </select>
-                  </label>
-                  <label className="field">
-                    Date order
-                    <select
-                      value={f.dateOrder}
-                      onChange={(e) =>
-                        update(f.id, {
-                          dateOrder: e.target.value as "dmy" | "mdy",
-                        })
-                      }
-                    >
-                      <option value="dmy">Day / month / year</option>
-                      <option value="mdy">Month / day / year</option>
-                    </select>
-                  </label>
+                  <ChoiceField label="Account" value={f.account} onValueChange={(value) => update(f.id, { account: value })} options={[...data.accounts, ...data.creditCards.map((card) => card.name)].map((account) => ({ value: account, label: account }))} />
+                  <SegmentedChoice label="Amount format" value={f.format} onValueChange={(value) => update(f.id, { format: value as "id" | "en" })} options={[{ value: "id", label: "1.000,00" }, { value: "en", label: "1,000.00" }]} />
+                  <SegmentedChoice label="Date order" value={f.dateOrder} onValueChange={(value) => update(f.id, { dateOrder: value as "dmy" | "mdy" })} options={[{ value: "dmy", label: "Day / month / year" }, { value: "mdy", label: "Month / day / year" }]} />
                 </div>
                 <details
                   className="column-mapping"
@@ -547,27 +511,7 @@ export default function Statements({
                         "credit",
                       ] as (keyof Mapping)[]
                     ).map((field) => (
-                      <label className="field" key={field}>
-                        {field === "name"
-                          ? "Description"
-                          : field.charAt(0).toUpperCase() + field.slice(1)}
-                        <select
-                          value={f.mapping[field]}
-                          onChange={(e) =>
-                            update(f.id, {
-                              mapping: {
-                                ...f.mapping,
-                                [field]: e.target.value,
-                              },
-                            })
-                          }
-                        >
-                          <option value="">Not used</option>
-                          {f.headers.map((h) => (
-                            <option key={h}>{h}</option>
-                          ))}
-                        </select>
-                      </label>
+                      <ChoiceField key={field} label={field === "name" ? "Description" : field.charAt(0).toUpperCase() + field.slice(1)} value={f.mapping[field]} onValueChange={(value) => update(f.id, { mapping: { ...f.mapping, [field]: value } })} options={[{ value: "", label: "Not used" }, ...f.headers.map((header) => ({ value: header, label: header }))]} />
                     ))}
                   </div>
                   <p>
@@ -668,7 +612,7 @@ export default function Statements({
                 <p>{row?.date || transaction?.date} · {row?.account || transaction?.account}</p>
                 {source && <div className="review-source"><span>Statement page {source.page}</span><p>{source.sourceLine}</p></div>}
                 {original && <div className="review-source comparison"><span>Currently in Saku</span><p>{original.date} · {original.name} · {money(original.amount)}</p></div>}
-                {row?.status === "missing" && row.type === "expense" && !data.creditCards.some((card) => card.name === row.account) && <label className="field">Pocket<ChoicePicker value={selection[row.id] || ""} onChange={(event) => setSelection((value) => ({ ...value, [row.id]: event.target.value }))}><option value="">Unassigned</option>{data.pockets.filter((pocket) => pocket.createdMonth <= row.date.slice(0, 7)).map((pocket) => <option key={pocket.id} value={pocket.id}>{pocket.name}</option>)}</ChoicePicker></label>}
+                {row?.status === "missing" && row.type === "expense" && !data.creditCards.some((card) => card.name === row.account) && <ChoiceField label="Pocket" value={selection[row.id] || ""} onValueChange={(value) => setSelection((current) => ({ ...current, [row.id]: value }))} options={[{ value: "", label: "Unassigned" }, ...data.pockets.filter((pocket) => pocket.createdMonth <= row.date.slice(0, 7)).map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
               </div><div className="review-deck-actions"><button className="button secondary" onClick={() => decideCurrent(false)}><X size={17} />{declineLabel}</button><button className="button primary" onClick={() => decideCurrent(true)}><Check size={17} />{acceptLabel}</button></div></div>;
             })() : <div className="review-deck-done"><CheckCheck size={34} /><h3>All cards sorted</h3><p>Review the staged summary below before anything changes.</p><button className="button primary" onClick={() => setDeckOpen(false)}>Done</button></div>}
           </Modal>}
