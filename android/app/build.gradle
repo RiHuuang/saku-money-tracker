@@ -18,7 +18,7 @@ if (sakuApiUrl && webApiUrl && sakuApiUrl != webApiUrl) {
 if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } && sakuApiUrl != 'https://app.sakumoney.my.id') {
     throw new GradleException('Release builds require SAKU_API_URL=https://app.sakumoney.my.id')
 }
-if (isolatedStageDebug && (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } || sakuApiUrl != 'https://saku-stage.saku-money-manager.workers.dev')) {
+if (isolatedStageDebug && (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } || sakuApiUrl != 'https://stage.sakumoney.my.id')) {
     throw new GradleException('SAKU_ISOLATED_STAGE_DEBUG requires a debug build and the staging API URL')
 }
 

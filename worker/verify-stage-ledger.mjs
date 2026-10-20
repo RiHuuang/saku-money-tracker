@@ -16,7 +16,7 @@ const id = crypto.randomUUID(), secret = crypto.randomBytes(32).toString("base64
 const hash = crypto.createHash("sha256").update(secret).digest("hex"), now = Date.now();
 d1(`INSERT INTO sessions(id,uid,access_hash,refresh_hash,access_expires_at,refresh_expires_at,updated_at) VALUES('${id}','${uid}','${hash}','${hash}',${now + 600000},${now + 600000},${now})`);
 try {
-  const response = await fetch("https://saku-stage.saku-money-manager.workers.dev/v2/sync", { headers: { authorization: `Bearer ${id}.${secret}`, "x-saku-user-id": uid } });
+  const response = await fetch("https://stage.sakumoney.my.id/v2/sync", { headers: { authorization: `Bearer ${id}.${secret}`, "x-saku-user-id": uid } });
   assert.equal(response.status, 200);
   const bytes = Buffer.from(await response.arrayBuffer()), ledger = JSON.parse(bytes);
   assert.equal(ledger.version, 3);

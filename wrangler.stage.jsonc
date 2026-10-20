@@ -5,6 +5,7 @@
   "minify": true,
   "compatibility_date": "2026-10-03",
   "limits": { "cpu_ms": 1000 },
+  "routes": [{ "pattern": "stage.sakumoney.my.id", "custom_domain": true }],
   "triggers": { "crons": ["*/5 * * * *"] },
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/v1/*", "/v2/*", "/auth/*", "/download/*", "/health", "/privacy", "/terms", "/account-deletion"] },
   "d1_databases": [{ "binding": "DB", "database_name": "saku-stage", "database_id": "8c119b08-260c-4baa-be51-197478416c2b" }],

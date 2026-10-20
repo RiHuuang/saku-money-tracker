@@ -43,7 +43,7 @@ async function inputForMode() {
 try {
   execute(`INSERT INTO users(uid,data,revision,snapshot_path,updated_at) VALUES('${uid}','{"name":"Synthetic import test"}',0,NULL,${now});
 INSERT INTO sessions(id,uid,access_hash,refresh_hash,access_expires_at,refresh_expires_at,updated_at) VALUES('${id}','${uid}','${hash(secret)}','${hash(refresh)}',${now + 300000},${now + 300000},${now});`);
-  const response = await fetch("https://saku-stage.saku-money-manager.workers.dev/v1/import/extract", {
+  const response = await fetch("https://stage.sakumoney.my.id/v1/import/extract", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${id}.${secret}`, "x-saku-user-id": uid },
     body: JSON.stringify(await inputForMode()),

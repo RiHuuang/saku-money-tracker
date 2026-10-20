@@ -32,7 +32,7 @@ for (let step = 0; step < 100; step++) {
   let response;
   for (let attempt = 0; ; attempt++) {
     try {
-      response = await fetch("https://saku-stage.saku-money-manager.workers.dev/v1/me", { method: "DELETE", headers, signal: AbortSignal.timeout(60_000) });
+      response = await fetch("https://stage.sakumoney.my.id/v1/me", { method: "DELETE", headers, signal: AbortSignal.timeout(60_000) });
       break;
     } catch (error) {
       if (error?.name !== "TypeError" || attempt >= 3) throw error;
