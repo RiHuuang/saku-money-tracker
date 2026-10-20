@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type CSSProperties, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties, type InputHTMLAttributes } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -14,6 +15,7 @@ import {
   Home,
   Plane,
   Plus,
+  Search,
   MoreHorizontal,
   ShoppingBag,
   Utensils,
@@ -53,8 +55,113 @@ export function MoneyInput({ value, onValueChange, ...props }: Omit<InputHTMLAtt
     });
   }} />;
 }
-export function ChoicePicker({ children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <span className="choice-picker"><select {...props}>{children}</select><ChevronDown size={17} aria-hidden="true" /></span>;
+export type ChoiceOption = {
+  value: string;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+  searchText?: string;
+};
+
+export function ChoiceField({
+  value,
+  options,
+  onValueChange,
+  label,
+  placeholder = "Choose an option",
+  disabled = false,
+  searchable,
+  hideLabel = false,
+  className = "",
+}: {
+  value: string;
+  options: ChoiceOption[];
+  onValueChange: (value: string) => void;
+  label: string;
+  placeholder?: string;
+  disabled?: boolean;
+  searchable?: boolean;
+  hideLabel?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false), [query, setQuery] = useState("");
+  const dialog = useRef<HTMLDialogElement>(null), trigger = useRef<HTMLButtonElement>(null);
+  const titleId = useId(), selected = options.find((option) => option.value === value);
+  const shouldSearch = searchable ?? options.length > 8;
+  const visibleOptions = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase("id-ID");
+    if (!needle) return options;
+    return options.filter((option) => `${option.label} ${option.description || ""} ${option.searchText || ""}`.toLocaleLowerCase("id-ID").includes(needle));
+  }, [options, query]);
+  useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (open && !element.open) element.showModal();
+    else if (!open && element.open) element.close();
+  }, [open]);
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+  const close = () => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); };
+  const sheet = open ? createPortal(
+    <dialog
+      ref={dialog}
+      className="choice-sheet"
+      aria-labelledby={titleId}
+      onCancel={(event) => { event.preventDefault(); close(); }}
+      onClick={(event) => { if (event.target === dialog.current) close(); }}
+    >
+      <div className="choice-sheet-shell">
+        <div className="choice-sheet-handle" aria-hidden="true" />
+        <header className="choice-sheet-header">
+          <div><span>Choose one</span><h2 id={titleId}>{label}</h2></div>
+          <IconButton label="Close choices" onClick={close}><X size={19} /></IconButton>
+        </header>
+        {shouldSearch && <label className="choice-sheet-search"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${label.toLocaleLowerCase("en-US")}`} /></label>}
+        <div className="choice-sheet-list" role="listbox" aria-label={label} tabIndex={-1} onKeyDown={(event) => {
+          const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)')];
+          const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+          const next = event.key === "ArrowDown" ? Math.min(buttons.length - 1, index + 1) : event.key === "ArrowUp" ? Math.max(0, index - 1) : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : -1;
+          if (next >= 0) { event.preventDefault(); buttons[next]?.focus(); }
+        }}>
+          {visibleOptions.map((option) => <button
+            type="button"
+            role="option"
+            aria-selected={option.value === value}
+            className={option.value === value ? "selected" : ""}
+            disabled={option.disabled}
+            key={option.value}
+            onClick={() => { onValueChange(option.value); close(); }}
+          ><span><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</span>{option.value === value && <Check size={19} aria-hidden="true" />}</button>)}
+          {!visibleOptions.length && <p className="choice-sheet-empty">No matching choices.</p>}
+        </div>
+      </div>
+    </dialog>,
+    document.body,
+  ) : null;
+  return <span className={`choice-picker ${className}`.trim()}>
+    {!hideLabel && <span className="choice-label">{label}</span>}
+    <button ref={trigger} type="button" className="choice-trigger" aria-haspopup="listbox" aria-expanded={open} disabled={disabled} onClick={() => setOpen(true)}>
+      <span><strong>{selected?.label || placeholder}</strong>{selected?.description && <small>{selected.description}</small>}</span><ChevronDown size={17} aria-hidden="true" />
+    </button>
+    {sheet}
+  </span>;
+}
+
+export function SegmentedChoice({ value, options, onValueChange, label, disabled = false, compact = false }: {
+  value: string;
+  options: ChoiceOption[];
+  onValueChange: (value: string) => void;
+  label: string;
+  disabled?: boolean;
+  compact?: boolean;
+}) {
+  return <div className={`adaptive-segmented-field${compact ? " compact" : ""}`}>
+    <span className="choice-label">{label}</span>
+    <div className="adaptive-segmented" role="radiogroup" aria-label={label}>
+      {options.map((option) => <button type="button" role="radio" aria-checked={option.value === value} className={option.value === value ? "selected" : ""} disabled={disabled || option.disabled} key={option.value} onClick={() => onValueChange(option.value)}><span>{option.label}</span>{option.description && <small>{option.description}</small>}</button>)}
+    </div>
+  </div>;
 }
 export function FitMoney({ amount }: { amount: number }) {
   const ref = useRef<HTMLSpanElement>(null);

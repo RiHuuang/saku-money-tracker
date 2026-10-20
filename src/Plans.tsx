@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { CalendarDays, CreditCard as CreditCardIcon, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
-  cardBalance, cardDue, dueRules, installmentAmounts, money, shiftMonth, today, uid, validAmount, validDate,
+  accountBalance, cardBalance, cardDue, dueRules, installmentAmounts, money, shiftMonth, today, uid, validAmount, validDate,
   type CreditCard, type Data, type RecurringRule, type Transaction,
 } from "./domain";
-import { Modal, MoneyInput } from "./components";
+import { ChoiceField, Modal, MoneyInput, SegmentedChoice } from "./components";
 
 type Props = {
   data: Data;
@@ -169,9 +169,9 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
         <label className="field">Payment day<input type="number" min={1} max={28} required value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></label>
       </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>Save card</button><button type="button" className="button secondary" onClick={() => setCardDraft(null)}>Cancel</button></div></form>}
       {paymentCard && <Modal title="Record card payment" subtitle="Pay down this card from one of your accounts." onClose={() => setPayCard("")}><form className="plans-form" onSubmit={(e) => void makePayment(e)}><div className="plans-payment-balance"><span>Outstanding now</span><strong>{money(Math.max(0, paymentBalance))}</strong><small>This payment moves cash to the card. It is not new spending.</small></div><div className="plans-fields">
-        <label className="field">Card<select value={payCard} onChange={(e) => setPayCard(e.target.value)}>{data.creditCards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <ChoiceField label="Card" value={payCard} onValueChange={setPayCard} options={data.creditCards.map((card) => ({ value: card.id, label: card.name, description: `${money(Math.max(0, cardBalance(data, card.id)))} outstanding` }))} />
         <label className="field">Amount (Rp)<MoneyInput min={1} required value={payAmount} onValueChange={setPayAmount} /></label>
-        <label className="field">Paid from<select value={payAccount} onChange={(e) => setPayAccount(e.target.value)}>{data.accounts.map((a) => <option key={a}>{a}</option>)}</select></label>
+        <ChoiceField label="Paid from" value={payAccount} onValueChange={setPayAccount} options={data.accounts.map((account) => ({ value: account, label: account, description: `Recorded balance ${money(accountBalance(data, account))}` }))} />
         <label className="field">Date<input type="date" max={today()} required value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
       </div>{paymentCreditAfter > 0 && <p className="plans-payment-credit">This payment will leave {money(paymentCreditAfter)} as card credit. Available credit will be {money(paymentCard.limit - paymentBalance + paymentAmount)}.</p>}<div className="plans-form-actions"><button className="button primary" disabled={busy}>Record payment</button><button type="button" className="button secondary" onClick={() => setPayCard("")}>Cancel</button></div></form></Modal>}
     </> : <>
@@ -183,10 +183,10 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
       {ruleDraft && <Modal title={ruleDraft.id ? "Edit recurring item" : "Add recurring item"} subtitle="Review the amount, schedule, and payment source." onClose={() => setRuleDraft(null)}><form className="plans-form" onSubmit={(e) => void saveRule(e)}><div className="plans-fields">
         <label className="field">Name<input value={ruleName} required maxLength={100} onChange={(e) => setRuleName(e.target.value)} /></label>
         <label className="field">Amount (Rp)<MoneyInput min={1} value={ruleAmount} required onValueChange={setRuleAmount} /></label>
-        <label className="field">Direction<select value={ruleType} onChange={(e) => { setRuleType(e.target.value as "income" | "expense"); if (e.target.value === "income") setRuleMethod(`bank:${data.accounts[0]}`); }}><option value="expense">Money out</option><option value="income">Money in</option></select></label>
-        <label className="field">Paid with<select value={ruleMethod} onChange={(e) => setRuleMethod(e.target.value)}>{data.accounts.map((a) => <option key={a} value={`bank:${a}`}>{a}</option>)}{ruleType === "expense" && data.creditCards.map((c) => <option key={c.id} value={`card:${c.id}`}>{c.name}</option>)}</select></label>
+        <SegmentedChoice label="Direction" value={ruleType} onValueChange={(value) => { const next = value as "income" | "expense"; setRuleType(next); if (next === "income") setRuleMethod(`bank:${data.accounts[0]}`); }} options={[{ value: "expense", label: "Money out" }, { value: "income", label: "Money in" }]} />
+        <ChoiceField label={ruleType === "income" ? "Received in" : "Paid with"} value={ruleMethod} onValueChange={setRuleMethod} options={[...data.accounts.map((account) => ({ value: `bank:${account}`, label: account, description: `Account · ${money(accountBalance(data, account))}` })), ...(ruleType === "expense" ? data.creditCards.map((card) => ({ value: `card:${card.id}`, label: card.name, description: `Credit available ${money(Math.max(0, card.limit - cardBalance(data, card.id)))}` })) : [])]} />
         {ruleMethod.startsWith("card:") && ruleType === "expense" && <label className="field">Payments per charge<input type="number" min={1} max={60} step={1} value={ruleInstallments} onChange={(e) => setRuleInstallments(e.target.value)} /></label>}
-        {ruleType === "expense" && <label className="field">Pocket<select value={rulePocket} required onChange={(e) => setRulePocket(e.target.value)}><option value="">Choose pocket</option>{data.pockets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
+        {ruleType === "expense" && <ChoiceField label="Pocket" placeholder="Choose pocket" value={rulePocket} onValueChange={setRulePocket} options={data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))} />}
         <label className="field">Day each month<input type="number" min={1} max={31} value={ruleDay} required onChange={(e) => setRuleDay(e.target.value)} /></label>
         <label className="field">From month<input type="month" value={ruleMonth} required onChange={(e) => setRuleMonth(e.target.value)} /></label>
       </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>Save recurring item</button><button type="button" className="button secondary" onClick={() => setRuleDraft(null)}>Cancel</button></div></form></Modal>}
