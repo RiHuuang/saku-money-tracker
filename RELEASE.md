@@ -6,7 +6,9 @@ Saku 2.2.0 (versionCode 8) adds verified in-app Android updates, the redesigned 
 
 The release-signed APK is `output/saku-2.2.0-build8-release.apk`, 40,350,643 bytes, with SHA-256 `A87C6ACCE54EB7F61E1D76231967C4B61C09E089E57080270CC5DFD4BACE60C0`. APK v2 signature verification passed and its signer SHA-1 is `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`, matching the existing Saku release certificate. Release lint, release unit tests, `assembleRelease`, the web build, all application tests, and all Worker tests passed.
 
-The APK and manifest were published to the private production R2 bucket before production Worker version `b64fb51b-9699-4c69-a58a-6240b9265699` was deployed. The versioned download and `/download/saku.apk` both returned HTTP 200 with the exact byte count; a complete downloaded copy matched the APK SHA-256. The manifest reports 2.2.0/build 8 and minimum supported build 7, so the installed 2.1.2 release can continue syncing during the rollout. Build 8 still needs one manual install because build 7 predates the updater; physical upgrade, ledger-preservation, and Settings status checks remain pending.
+The APK and manifest were published to the private production R2 bucket before production Worker version `b64fb51b-9699-4c69-a58a-6240b9265699` was deployed. The versioned download and `/download/saku.apk` both returned HTTP 200 with the exact byte count; a complete downloaded copy matched the APK SHA-256. The manifest reports 2.2.0/build 8 and minimum supported build 7, so the installed 2.1.2 release could continue syncing during the rollout.
+
+The signed production APK was then installed in place over 2.1.2 on the physical Xiaomi phone. Android preserved the signed-in profile, eight accounts, balances, and the 82-transaction October ledger. A cold launch reached Home with `Synced`; Settings showed `Saku 2.2.0 · build 8`, the updater reported `Up to date`, and Google backup reported `Up to date`. The production Home screen also confirmed the recorded-cash amount and supporting values render in white on the green balance card. No test transaction or other ledger write was made.
 
 ### Previous 2.1.2 release
 
