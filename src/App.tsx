@@ -116,7 +116,7 @@ type Edit =
   | { type: "pocket_transfer" }
   | { type: "start" }
   | null;
-const cloudImportEnabled = import.meta.env.MODE === "staging" || import.meta.env.DEV;
+const cloudImportEnabled = true;
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "transactions", label: "Activity", icon: ArrowDownLeft },
