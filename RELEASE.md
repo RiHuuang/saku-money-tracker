@@ -1,6 +1,22 @@
 # Saku production release
 
-## Current direct APK release — October 21
+## Current direct APK release — October 22
+
+Saku 2.3.0 (versionCode 10) brings screenshot and PDF Catch Up into the production app and adds auditable account-balance adjustments. A balance correction records the exact delta, date, and required reason while staying out of income and spending totals. The Catch Up source card was also rebuilt into a stable responsive layout with a clear file identity, processing status, account choice, and mixed-account control.
+
+This release followed the staging-first path. The feature was deployed to the isolated `saku-stage` D1 database and `saku-stage-data` R2 bucket as Worker version `388263f9-06c3-4040-899d-da4788bbc1c4`. Google OAuth callbacks for `stage.sakumoney.my.id` were registered and the sign-in flow reached the Google account chooser. An isolated synthetic ledger then verified create, persistence, and deletion of a Rp25.000 balance adjustment at cloud revisions 1 through 3; the staging account and cloud objects were removed afterward. Local browser checks also covered adjustment save, Activity labeling, deletion, the Catch Up image/PDF picker, and the redesigned source card.
+
+Pull request [#9](https://github.com/RiHuuang/saku-money-tracker/pull/9) passed `app-and-worker` CI and was squash-merged into `main` as commit `63f892b3a3e09c52e55d77a8b3beb48d40fd7498`. The merged commit was then rebuilt and published to production as Cloudflare Worker version `1afe704f-2986-46d7-8dcd-2bda101ddc52`. Production health returned `{"ok":true}`, Google sign-in returned a valid 302 to Google's account chooser with the production callback, and the signed release manifest reports 2.3.0/build 10 with minimum supported build 7.
+
+The release-signed APK is `output/saku-2.3.0-build10-release.apk`, 40,352,815 bytes, with SHA-256 `8A970930E4552D8B1DE18EF595A22F8F364E669B5D97CFE67F22334BFC6AC761`. Its package is `id.saku.money`; APK signature verification passed with signer SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`. A complete download from the production versioned route matched the local byte count and SHA-256 exactly. The production web app visibly loaded Catch Up and the corrected source-card layout from the signed-in account without making a ledger write.
+
+All 53 application tests, the production and staging web builds, Android release lint, release unit tests, `assembleRelease`, staging debug lint, debug unit tests, and `assembleDebug` passed. Physical installation of build 10 and the resulting in-app update prompt remain unverified because the Xiaomi phone was disconnected during final release validation.
+
+### Previous 2.2.1 release
+
+Saku 2.2.1 (versionCode 9) fixed update checks after restarting Saku and kept update status available between daily checks. Its production manifest was superseded by build 10 on October 22.
+
+### Previous 2.2.0 release — October 21
 
 Saku 2.2.0 (versionCode 8) adds verified in-app Android updates, the redesigned adaptive choice picker, and corrected Home balance contrast. The app checks the signed production release manifest at most once every 24 hours, offers a three-day reminder for optional releases, shows a metered-network warning, and verifies the downloaded APK's size, SHA-256, package id, version code, and signing certificate before opening Android's installer. Critical releases keep the offline ledger available while requiring an update before cloud sync resumes.
 
