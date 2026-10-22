@@ -12,6 +12,7 @@ if (productionEnvFile.exists()) productionEnvFile.withInputStream { productionEn
 def webApiUrl = System.getenv('VITE_SAKU_API_URL') ?: productionEnv.getProperty('VITE_SAKU_API_URL', '')
 def sakuApiUrl = project.findProperty('SAKU_API_URL') ?: System.getenv('SAKU_API_URL') ?: webApiUrl
 def isolatedStageDebug = project.findProperty('SAKU_ISOLATED_STAGE_DEBUG') == 'true'
+def emulatorBuild = project.findProperty('SAKU_EMULATOR_BUILD') == 'true'
 if (sakuApiUrl && webApiUrl && sakuApiUrl != webApiUrl) {
     throw new GradleException('SAKU_API_URL and VITE_SAKU_API_URL must match so widget and foreground sync use the same service')
 }
@@ -31,7 +32,9 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '10')
         versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.3.0'
-        ndk { abiFilters 'arm64-v8a' }
+        // Production stays ARM64-only. Explicit emulator builds package the x86_64
+        // variants so the signed app can be exercised on the Windows Android emulator.
+        ndk { abiFilters(emulatorBuild ? 'x86_64' : 'arm64-v8a') }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [
             sakuAppLabel: '@string/app_name',
