@@ -46,8 +46,10 @@ try {
   assert.equal(aiCalls, 0, "invalid requests must not reach the AI binding");
   const browserWithoutCsrf = await worker.fetch(new Request("https://saku.example/v1/import/extract", { method: "POST", headers: { cookie: `saku_access=${id}.${secret}`, "x-saku-user-id": uid }, body: input }), env);
   assert.equal(browserWithoutCsrf.status, 403);
+  sqlite.exec("DROP TABLE import_ai_budget");
   const response = await request();
   assert.equal(response.status, 200, await response.clone().text());
+  assert.equal(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='import_ai_budget'").get().name, "import_ai_budget", "the route must repair an additive budget-table migration missed by an older environment");
   const firstRow = (await response.json()).rows[0];
   assert.equal(firstRow.amount, 28000);
   assert.equal(firstRow.date, "", "the HTTP route must not trust a model date without printed evidence");
