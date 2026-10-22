@@ -1,6 +1,14 @@
 # Saku production release
 
-## Current direct APK release — October 22
+## Current direct APK release — October 23
+
+Saku 2.3.1 (versionCode 11) packages the latest production interface work for Android. It clarifies opening-balance setup with account-specific cards and example-only amounts, hides the balance-adjustment dialog scrollbar while keeping it scrollable, uses the app's sans-serif numerals for balance values, and tones down the Catch Up source cards so file status and account selection are easier to scan.
+
+Pull requests [#11](https://github.com/RiHuuang/saku-money-tracker/pull/11), [#12](https://github.com/RiHuuang/saku-money-tracker/pull/12), and [#13](https://github.com/RiHuuang/saku-money-tracker/pull/13) passed CI and were merged through the staging-first workflow. The final web build was deployed to production as Cloudflare Worker version `c8e8e4c3-e9a6-4b84-9aa7-07c797f25ada`; production Home and `/health` returned HTTP 200, and the served CSS and JavaScript matched the merged build byte-for-byte.
+
+The release-signed APK is `output/saku-2.3.1-build11-release.apk`, 40,353,539 bytes, with SHA-256 `3772695BDD7EB14319B11D59B988E766D7F4206904D3A45A4C7F28AB46A175D5`. Its package is `id.saku.money`; APK v2 signature verification passed with signer SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`. Android release lint, release unit tests, and `assembleRelease` passed from a clean isolated Gradle cache.
+
+### Previous 2.3.0 release — October 22
 
 Saku 2.3.0 (versionCode 10) brings screenshot and PDF Catch Up into the production app and adds auditable account-balance adjustments. A balance correction records the exact delta, date, and required reason while staying out of income and spending totals. The Catch Up source card was also rebuilt into a stable responsive layout with a clear file identity, processing status, account choice, and mixed-account control.
 
