@@ -30,8 +30,8 @@ android {
         applicationId "id.saku.money"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '10')
-        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.3.0'
+        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '11')
+        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.3.1'
         // Production stays ARM64-only. Explicit emulator builds package the x86_64
         // variants so the signed app can be exercised on the Windows Android emulator.
         ndk { abiFilters(emulatorBuild ? 'x86_64' : 'arm64-v8a') }
