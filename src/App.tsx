@@ -1984,7 +1984,17 @@ function StartProfile({
         <fieldset disabled={busy}>
           <div className="setup-progress" aria-label={`Setup step ${step + 1} of 3`}><span className={step === 0 ? "active" : ""}>1 Accounts</span><span className={step === 1 ? "active" : ""}>2 Pockets</span><span className={step === 2 ? "active" : ""}>3 Cards</span></div>
           {step === 0 && <><label className="field">Your name<input autoFocus required value={name} maxLength={40} pattern=".*\S.*" onChange={(e) => setName(e.target.value)} placeholder={suggestedName?.trim() || "What should we call you?"} /></label>
-          <h3>Where your money lives</h3>{accounts.map((item, index) => <div className="setup-row" key={index}><input aria-label={`Account ${index + 1} name`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /><div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Account"} opening balance`} placeholder="Opening balance" value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div></div>)}
+          <div className="setup-account-heading">
+            <div><h3>Where your money lives</h3><p>Enter the balance shown in each bank or e-wallet today. Leave it at Rp0 if the account is empty.</p></div>
+          </div>
+          <div className="setup-account-list">{accounts.map((item, index) => {
+            const balanceHelpId = `opening-balance-help-${index}`;
+            return <section className="setup-account-card" key={index} aria-label={item.name ? `${item.name} account` : `Account ${index + 1}`}>
+              <span className="setup-account-icon" aria-hidden="true"><Wallet size={18} /></span>
+              <label className="field setup-account-name">Account name<input aria-label={`Account ${index + 1} name`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /></label>
+              <label className="field setup-opening-balance">Opening balance<div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Account"} opening balance`} aria-describedby={balanceHelpId} placeholder={index === 0 ? "2,450,000" : index === 1 ? "875,000" : "0"} value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div><small id={balanceHelpId}>{item.balance ? "This becomes your starting recorded balance." : "Example only. It is saved only after you enter an amount."}</small></label>
+            </section>;
+          })}</div>
           <button type="button" className="button secondary" onClick={() => setAccounts([...accounts, { name: "", balance: "" }])}><Plus size={16} />Add bank, cash, or e-wallet</button></>}
           {step === 1 && <>
           <h3>Your monthly pockets</h3>{pockets.map((item, index) => <div className="setup-row" key={index}><input aria-label={`Pocket ${index + 1} name`} value={item.name} maxLength={40} onChange={(e) => setPockets(pockets.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /><div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Pocket"} monthly budget`} placeholder="Monthly budget" value={item.budget} onValueChange={(budget) => setPockets(pockets.map((x, i) => i === index ? { ...x, budget } : x))} /></div></div>)}
