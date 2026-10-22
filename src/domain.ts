@@ -19,7 +19,7 @@ export type Transaction = {
   account: string;
   note: string;
   verified?: boolean;
-  kind?: "card_purchase" | "card_payment" | "reimbursement" | "opening_balance" | "account_transfer";
+  kind?: "card_purchase" | "card_payment" | "reimbursement" | "opening_balance" | "account_transfer" | "balance_adjustment";
   cardId?: string;
   installments?: number;
   firstDueMonth?: string;
@@ -130,14 +130,37 @@ export const validAmount = (n: number) =>
 export const budgetFor = (p: Pocket, m: string) =>
   m < p.createdMonth ? 0 : (p.budgets[m] ?? p.budget);
 export const isSpending = (t: Transaction) =>
-  t.type === "expense" && !["card_payment", "account_transfer"].includes(t.kind || "");
+  t.type === "expense" && !["card_payment", "account_transfer", "balance_adjustment"].includes(t.kind || "");
 export const personalAmount = (t: Transaction) =>
   t.split?.ownAmount ?? t.amount;
 export const isIncome = (t: Transaction) =>
-  t.type === "income" && !["reimbursement", "opening_balance", "account_transfer"].includes(t.kind || "");
+  t.type === "income" && !["reimbursement", "opening_balance", "account_transfer", "balance_adjustment"].includes(t.kind || "");
 export function accountBalance(data: Data, account: string) {
   return data.transactions.filter((t) => t.account === account && t.kind !== "card_purchase")
     .reduce((sum, t) => sum + (t.type === "income" ? t.amount : -t.amount), 0);
+}
+export function balanceAdjustment(data: Data, account: string, targetBalance: number, date: string, reason: string, existing?: Transaction): Transaction {
+  const cleanReason = reason.trim();
+  const baseBalance = accountBalance(existing
+    ? { ...data, transactions: data.transactions.filter((transaction) => transaction.id !== existing.id) }
+    : data, account);
+  const difference = targetBalance - baseBalance;
+  if (!data.accounts.includes(account) || (existing && (existing.kind !== "balance_adjustment" || existing.account !== account)) ||
+    !Number.isSafeInteger(targetBalance) || targetBalance < 0 || targetBalance > 1e12 || !validDate(date) || date > today() ||
+    !cleanReason || cleanReason.length > 500 || !validAmount(Math.abs(difference)))
+    throw new Error("Check the new balance, date, and reason.");
+  return {
+    id: existing?.id || uid(),
+    name: "Balance adjustment",
+    amount: Math.abs(difference),
+    type: difference > 0 ? "income" : "expense",
+    kind: "balance_adjustment",
+    date,
+    pocketId: "",
+    account,
+    note: cleanReason,
+    verified: false,
+  };
 }
 export function cardBalance(data: Data, cardId: string) {
   const card = data.creditCards.find((c) => c.id === cardId);
@@ -391,7 +414,7 @@ export function validateData(input: unknown): Data {
   let absoluteTotal = 0;
   for (const t of d.transactions) {
     const card = d.creditCards.find((c) => c.id === t?.cardId);
-    const special = ["card_purchase", "card_payment", "reimbursement", "opening_balance", "account_transfer"].includes(t?.kind || "");
+    const special = ["card_purchase", "card_payment", "reimbursement", "opening_balance", "account_transfer", "balance_adjustment"].includes(t?.kind || "");
     if (
       !t ||
       typeof t.id !== "string" ||
@@ -409,6 +432,7 @@ export function validateData(input: unknown): Data {
       (t.kind === "reimbursement" && (t.type !== "income" || !t.forTransactionId)) ||
       (t.kind === "opening_balance" && (t.type !== "income" || t.pocketId !== "")) ||
       (t.kind === "account_transfer" && (t.pocketId !== "" || !t.transferId)) ||
+      (t.kind === "balance_adjustment" && (t.pocketId !== "" || typeof t.note !== "string" || !t.note.trim() || t.cardId !== undefined || t.recurringRuleId !== undefined || t.occurrenceMonth !== undefined || t.split !== undefined)) ||
       (t.kind !== undefined && !special) ||
       (t.type === "income" && t.pocketId !== "") ||
       (t.kind === "card_purchase" ? !card : !d.accounts.includes(t.account)) ||

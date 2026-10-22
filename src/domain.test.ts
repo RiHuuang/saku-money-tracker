@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   bankRows,
+  accountBalance,
+  balanceAdjustment,
   cardBalance,
   cardDue,
   budgetFor,
@@ -20,6 +22,52 @@ import {
   validateData,
   type Statement,
 } from "./domain";
+
+test("balance adjustments reconcile an account without changing income or spending", () => {
+  const data = emptyData();
+  data.accounts = ["BCA"];
+  data.pockets = [];
+  data.transactions = [{
+    id: "opening",
+    name: "Opening balance",
+    amount: 100000,
+    type: "income",
+    kind: "opening_balance",
+    date: "2026-10-01",
+    pocketId: "",
+    account: "BCA",
+    note: "",
+  }];
+
+  const increase = balanceAdjustment(data, "BCA", 125000, "2026-10-20", "Matched bank app");
+  assert.equal(increase.type, "income");
+  assert.equal(increase.amount, 25000);
+  data.transactions.push(increase);
+  assert.equal(accountBalance(data, "BCA"), 125000);
+  assert.equal(summary(data, "2026-10").income, 0);
+  assert.equal(summary(data, "2026-10").expenses, 0);
+  assert.doesNotThrow(() => validateData(data));
+
+  const decrease = balanceAdjustment(data, "BCA", 90000, "2026-10-21", "Corrected reconciliation", increase);
+  assert.equal(decrease.id, increase.id);
+  assert.equal(decrease.type, "expense");
+  assert.equal(decrease.amount, 10000);
+  data.transactions = data.transactions.map((item) => item.id === decrease.id ? decrease : item);
+  assert.equal(accountBalance(data, "BCA"), 90000);
+  assert.equal(summary(data, "2026-10").income, 0);
+  assert.equal(summary(data, "2026-10").expenses, 0);
+  assert.doesNotThrow(() => validateData(data));
+});
+
+test("balance adjustments require a real change and an audit reason", () => {
+  const data = emptyData();
+  data.accounts = ["Cash"];
+  data.pockets = [];
+  data.transactions = [];
+  assert.throws(() => balanceAdjustment(data, "Cash", 0, "2026-10-21", "Counted cash"));
+  assert.throws(() => balanceAdjustment(data, "Cash", 1000, "2026-10-21", " "));
+  assert.throws(() => balanceAdjustment(data, "Unknown", 1000, "2026-10-21", "Counted cash"));
+});
 
 test("balances and pocket budgets follow transaction create, edit, delete and month boundaries", () => {
   const d = emptyData();
