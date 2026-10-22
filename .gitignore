@@ -12,6 +12,7 @@ android/**/build/
 *.tsbuildinfo
 .env*
 !.env.production
+!.env.staging
 .dev.vars
 artifacts/
 output/

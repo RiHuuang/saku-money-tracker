@@ -22,6 +22,7 @@ import {
   LockKeyhole,
   LogOut,
   Menu,
+  PencilLine,
   Plus,
   Search,
   Settings,
@@ -38,6 +39,7 @@ import {
   COLORS,
   ICONS,
   accountBalance,
+  balanceAdjustment,
   budgetFor,
   cardBalance,
   emptyData,
@@ -110,6 +112,7 @@ import {
 
 type Edit =
   | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string }
+  | { type: "balance_adjustment"; account: string; value?: Transaction }
   | { type: "pocket"; value?: Pocket }
   | { type: "pocket_delete"; value: Pocket }
   | { type: "account_transfer"; value?: Transaction }
@@ -160,6 +163,13 @@ export default function App() {
   const reconcileRef = useRef<(() => Promise<void>) | null>(null);
   const selectedPocket = data?.pockets.find((p) => p.id === selectedPocketId);
   function openPocket(id: string) { go("pockets"); setSelectedPocketId(id); setPocketAllHistory(false); }
+  function openTransaction(value: Transaction) {
+    setEdit(value.kind === "account_transfer"
+      ? { type: "account_transfer", value }
+      : value.kind === "balance_adjustment"
+        ? { type: "balance_adjustment", account: value.account, value }
+        : { type: "transaction", value });
+  }
   useEffect(() => {
     void (async () => {
       try {
@@ -804,7 +814,7 @@ export default function App() {
                 <TransactionList
                   transactions={sorted.slice(0, 5)}
                   pockets={data.pockets}
-                  onEdit={(value) => setEdit(value.kind === "account_transfer" ? { type: "account_transfer", value } : { type: "transaction", value })}
+                  onEdit={openTransaction}
                   compactView
                 />
               </section>
@@ -817,7 +827,7 @@ export default function App() {
             <Transactions
               data={data}
               month={month}
-              onEdit={(value) => setEdit(value.kind === "account_transfer" ? { type: "account_transfer", value } : { type: "transaction", value })}
+              onEdit={openTransaction}
               notify={setToast}
             />
           )}
@@ -1033,6 +1043,7 @@ export default function App() {
               syncNow={() => cloud?.dirty || (cloud?.sheetPending && cloud.revision === 0) ? queueSync(data, true) : attemptMirror(true)}
               themePreference={themePreference}
               onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast("Appearance could not be saved.")); }}
+              onAdjustBalance={(account) => setEdit({ type: "balance_adjustment", account })}
             />
           )}
         </main>
@@ -1057,6 +1068,23 @@ export default function App() {
         const kept = data.transactions.filter((t) => !oldTransferId || t.transferId !== oldTransferId);
         if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? "Transfer updated" : "Transfer recorded")) setEdit(null);
       }} onDeleteTransfer={async (transferId) => { if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, "Transfer deleted")) setEdit(null); }} />}
+      {edit?.type === "balance_adjustment" && <BalanceAdjustmentEditor
+        key={edit.value?.id || edit.account}
+        data={data}
+        account={edit.account}
+        transaction={edit.value}
+        busy={busy}
+        onClose={() => { if (!busy) setEdit(null); }}
+        onSave={async (transaction) => {
+          const transactions = edit.value
+            ? data.transactions.map((item) => item.id === transaction.id ? transaction : item)
+            : [...data.transactions, transaction];
+          if (await commit({ ...data, transactions }, edit.value ? "Balance adjustment updated" : "Account balance adjusted")) setEdit(null);
+        }}
+        onDelete={async (id) => {
+          if (await commit({ ...data, transactions: data.transactions.filter((item) => item.id !== id) }, "Balance adjustment removed")) setEdit(null);
+        }}
+      />}
       {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, "Pocket budget moved")) setEdit(null); }} />}
       {edit?.type === "transaction" && (
         <TransactionEditor
@@ -1289,6 +1317,72 @@ function Transactions({
       </div>
     </>
   );
+}
+
+function BalanceAdjustmentEditor({
+  data,
+  account,
+  transaction,
+  busy,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  data: Data;
+  account: string;
+  transaction?: Transaction;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (transaction: Transaction) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const currentBalance = accountBalance(data, account);
+  const baseBalance = transaction
+    ? accountBalance({ ...data, transactions: data.transactions.filter((item) => item.id !== transaction.id) }, account)
+    : currentBalance;
+  const [target, setTarget] = useState(String(Math.max(0, currentBalance)));
+  const [date, setDate] = useState(transaction?.date || today());
+  const [reason, setReason] = useState(transaction?.note || "");
+  const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const targetBalance = target === "" ? Number.NaN : Number(target);
+  const validTarget = Number.isSafeInteger(targetBalance) && targetBalance >= 0 && targetBalance <= 1e12;
+  const difference = validTarget ? targetBalance - baseBalance : 0;
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    try { await onSave(balanceAdjustment(data, account, targetBalance, date, reason, transaction)); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "Could not adjust this balance."); }
+  }
+  return <Modal
+    title={`Adjust ${account} balance`}
+    subtitle="Match the amount shown by your bank, wallet, or cash count. Saku keeps the difference in Activity."
+    onClose={onClose}
+  >
+    <form onSubmit={(event) => void submit(event)} className="balance-adjustment-form">
+      <fieldset disabled={busy}>
+        <div className="balance-adjustment-overview" aria-label={`Recorded balance ${money(currentBalance)}. New balance ${validTarget ? money(targetBalance) : "not entered"}.`}>
+          <div><span>Recorded now</span><strong>{money(currentBalance)}</strong></div>
+          <ArrowRight size={20} aria-hidden="true" />
+          <div><span>After adjustment</span><strong>{validTarget ? money(targetBalance) : "—"}</strong></div>
+        </div>
+        <label className="field">New balance<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="0" max="1000000000000" value={target} onValueChange={setTarget} placeholder="0" required aria-label={`New balance for ${account} in rupiah`} /></div></label>
+        <div className={`balance-adjustment-effect ${difference < 0 ? "negative" : difference > 0 ? "positive" : ""}`}>
+          <span>{difference > 0 ? "Saku will add" : difference < 0 ? "Saku will subtract" : "No adjustment needed"}</span>
+          {difference !== 0 && <strong>{difference > 0 ? "+" : "−"}{money(Math.abs(difference))}</strong>}
+        </div>
+        <label className="field">Reason<textarea rows={2} value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder="e.g. Matched the balance in my bank app" required /></label>
+        <label className="field">Adjustment date<input type="date" value={date} max={today()} onChange={(event) => setDate(event.target.value)} required /></label>
+        <p className="editor-help">This changes the recorded account balance without counting as spending or income.</p>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {deleting && transaction ? <div className="delete-confirm"><p>Remove this balance adjustment? The account returns to the balance calculated without it.</p><button type="button" className="button danger" onClick={() => void onDelete(transaction.id)}>Remove adjustment</button><button type="button" className="button secondary" onClick={() => setDeleting(false)}>Keep it</button></div> : <div className="form-footer">
+          {transaction && <IconButton label="Remove balance adjustment" onClick={() => setDeleting(true)}><Trash2 size={18} /></IconButton>}
+          <button type="button" className="button secondary" onClick={onClose}>Cancel</button>
+          <button className="button primary" disabled={!validTarget || !validAmount(Math.abs(difference)) || !reason.trim() || date > today()}>{busy ? "Saving..." : transaction ? "Save adjustment" : "Adjust balance"}<Check size={16} /></button>
+        </div>}
+      </fieldset>
+    </form>
+  </Modal>;
 }
 
 function TransactionEditor({
@@ -1920,6 +2014,7 @@ function SettingsView({
   syncNow,
   themePreference,
   onThemeChange,
+  onAdjustBalance,
 }: {
   data: Data;
   commit: (d: Data, m: string) => Promise<boolean>;
@@ -1933,6 +2028,7 @@ function SettingsView({
   syncNow: () => Promise<void>;
   themePreference: ThemePreference;
   onThemeChange: (preference: ThemePreference) => void;
+  onAdjustBalance: (account: string) => void;
 }) {
   const [name, setName] = useState(data.name),
     [account, setAccount] = useState(""),
@@ -2022,12 +2118,13 @@ function SettingsView({
         <p>Keep cash, banks, and e-wallets in one place.</p>
         <div className="account-list">
           {data.accounts.map((a) => (
-            <div key={a}>
-              <Wallet size={19} />
-              <strong>{a}</strong>
-              <span>
-                {money(accountBalance(data, a))}
-              </span>
+            <div className="account-row" key={a}>
+              <button type="button" className="account-adjust-button" disabled={busy} onClick={() => onAdjustBalance(a)} aria-label={`Adjust ${a} balance, currently ${money(accountBalance(data, a))}`}>
+                <span className="account-list-icon"><Wallet size={19} /></span>
+                <span className="account-list-name"><strong>{a}</strong><small>Tap to adjust balance</small></span>
+                <strong className="account-list-balance">{money(accountBalance(data, a))}</strong>
+                <PencilLine size={16} aria-hidden="true" />
+              </button>
               {!data.transactions.some((t) => t.account === a) &&
                 data.accounts.length > 1 && (
                   <IconButton

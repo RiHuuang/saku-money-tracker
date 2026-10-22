@@ -177,7 +177,7 @@ object WidgetLedger {
             val type = row.optString("type")
             val kind = row.optString("kind")
             if (kind != "card_purchase") totalCash += if (type == "income") amount else -amount
-            if (type != "expense" || kind == "card_payment" || kind == "account_transfer") continue
+            if (type != "expense" || kind == "card_payment" || kind == "account_transfer" || kind == "balance_adjustment") continue
             val personal = wholeAmount(row.optJSONObject("split")?.opt("ownAmount")) ?: amount
             val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull() ?: continue
             if (date == today) spentToday += personal
