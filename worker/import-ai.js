@@ -139,6 +139,10 @@ export function neuronsUsed(answer) {
 }
 
 export async function reserveImport(db, day) {
+  // Environments created before AI import may not have received the additive
+  // budget table. Keep the route recoverable instead of failing every source
+  // with a generic 502 until an operator notices the schema drift.
+  await db.prepare("CREATE TABLE IF NOT EXISTS import_ai_budget (day TEXT PRIMARY KEY, neurons INTEGER NOT NULL DEFAULT 0)").run();
   await db.prepare("INSERT OR IGNORE INTO import_ai_budget(day,neurons) VALUES(?,0)").bind(day).run();
   const reserved = await db.prepare("UPDATE import_ai_budget SET neurons=neurons+? WHERE day=? AND neurons+?<=? RETURNING neurons").bind(RESERVATION, day, RESERVATION, DAILY_CAP).first();
   return Boolean(reserved);
