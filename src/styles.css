@@ -1411,6 +1411,33 @@ main {
 .setup-row > input { min-width: 0; border: 1px solid #dfe6e6; border-radius: 6px; padding: 10px 12px; }
 .setup-row .amount-input { margin: 0; min-width: 0; }
 .setup-row .amount-input input { min-width: 0; font-size: 14px; }
+.setup-account-heading { margin: 22px 0 12px; }
+.setup-account-heading h3 { margin: 0; color: var(--ink); font-size: 17px; }
+.setup-account-heading p { max-width: 52ch; margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.setup-account-list { display: grid; gap: 10px; margin-bottom: 12px; }
+.setup-account-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, .82fr) minmax(0, 1.18fr);
+  align-items: start;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-muted);
+  box-shadow: 0 8px 22px rgb(25 73 59 / .06);
+  transition: border-color .18s, box-shadow .18s;
+}
+.setup-account-card:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px rgb(32 118 92 / .12); }
+.setup-account-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; color: var(--teal); background: var(--accent-soft); }
+.setup-account-card .field { min-width: 0; margin: 0; }
+.setup-account-card .field > input, .setup-account-card .amount-input { margin-top: 7px; }
+.setup-account-card .amount-input { min-width: 0; background: var(--surface); }
+.setup-account-card .amount-input input { min-width: 0; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.015em; }
+.setup-opening-balance small { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.4; }
+@media (max-width: 560px) {
+  .setup-account-card { grid-template-columns: 42px minmax(0, 1fr); }
+  .setup-opening-balance { grid-column: 1 / -1; }
+}
 .setup-section { padding: 14px; margin: 10px 0; border: 1px solid #dfe8e6; border-radius: 7px; background: #f8fbfa; }
 .decision-card { touch-action: pan-y; transition: border-color .18s, background .18s, transform .18s; }
 .decision-card.add, .decision-card.update, .decision-card.keep { border-color: #71a99f; background: #f1faf7; }
