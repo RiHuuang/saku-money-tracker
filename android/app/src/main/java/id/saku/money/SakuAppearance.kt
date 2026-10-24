@@ -5,16 +5,22 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.view.View
+import androidx.appcompat.app.AppCompatDelegate
 
 object SakuAppearance {
     private const val KEY = "saku-appearance-v1"
+    fun preference(context: Context): String = context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE).getString(KEY, "system") ?: "system"
     fun isDark(context: Context): Boolean {
-        val preference = context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE).getString(KEY, "system")
-        return when (preference) {
+        return when (preference(context)) {
             "dark" -> true
             "light" -> false
             else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         }
+    }
+    fun nightMode(context: Context): Int = when (preference(context)) {
+        "dark" -> AppCompatDelegate.MODE_NIGHT_YES
+        "light" -> AppCompatDelegate.MODE_NIGHT_NO
+        else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
     }
     fun applyChrome(activity: Activity) {
         val dark = isDark(activity)

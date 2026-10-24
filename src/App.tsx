@@ -1364,7 +1364,7 @@ function BalanceAdjustmentEditor({
         <div className="balance-adjustment-overview" aria-label={`Recorded balance ${money(currentBalance)}. New balance ${validTarget ? money(targetBalance) : "not entered"}.`}>
           <div><span>Recorded now</span><strong>{money(currentBalance)}</strong></div>
           <ArrowRight size={20} aria-hidden="true" />
-          <div><span>After adjustment</span><strong>{validTarget ? money(targetBalance) : "—"}</strong></div>
+          <div><span>After adjustment</span><strong>{validTarget ? money(targetBalance) : "Not set"}</strong></div>
         </div>
         <label className="field">New balance<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="0" max="1000000000000" value={target} onValueChange={setTarget} placeholder="0" required aria-label={`New balance for ${account} in rupiah`} /></div></label>
         <div className={`balance-adjustment-effect ${difference < 0 ? "negative" : difference > 0 ? "positive" : ""}`}>

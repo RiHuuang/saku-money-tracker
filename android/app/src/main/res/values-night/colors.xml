@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="saku_background">#101D18</color>
+    <color name="widget_surface">#192C24</color>
+    <color name="widget_text">#EDF3ED</color>
+    <color name="widget_muted">#AEC3B5</color>
+    <color name="widget_teal">#92D3B1</color>
+    <color name="widget_teal_soft">#284638</color>
+    <color name="widget_action_text">#10231A</color>
+    <color name="widget_warning">#EFBD7A</color>
+    <color name="widget_border">#365144</color>
+</resources>

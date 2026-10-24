@@ -20,21 +20,36 @@ object SakuWidgets {
     private val favoriteButtons = intArrayOf(R.id.favorite_1, R.id.favorite_2, R.id.favorite_3, R.id.favorite_4)
 
     private fun appearance(context: Context, views: RemoteViews, root: Int, title: Int, muted: IntArray, values: IntArray = intArrayOf(), actions: IntArray = intArrayOf(), softActions: IntArray = intArrayOf()) {
+        val followsSystem = SakuAppearance.preference(context) == "system"
         val dark = SakuAppearance.isDark(context)
         val text = if (dark) 0xffedf3ed.toInt() else 0xff203b33.toInt()
         val hint = if (dark) 0xffaec3b5.toInt() else 0xff60746a.toInt()
         val jade = if (dark) 0xff92d3b1.toInt() else 0xff176b55.toInt()
-        views.setInt(root, "setBackgroundResource", if (dark) R.drawable.widget_dark_background else R.drawable.widget_background)
-        views.setTextColor(title, text)
-        muted.forEach { views.setTextColor(it, hint) }
-        values.forEach { views.setTextColor(it, text) }
+        views.setInt(root, "setBackgroundResource", when {
+            followsSystem -> R.drawable.widget_background
+            dark -> R.drawable.widget_dark_background
+            else -> R.drawable.widget_light_background
+        })
+        if (!followsSystem) {
+            views.setTextColor(title, text)
+            muted.forEach { views.setTextColor(it, hint) }
+            values.forEach { views.setTextColor(it, text) }
+        }
         actions.forEach {
-            views.setInt(it, "setBackgroundResource", if (dark) R.drawable.widget_dark_action_background else R.drawable.widget_action_background)
-            views.setTextColor(it, if (dark) 0xff10231a.toInt() else 0xffffffff.toInt())
+            views.setInt(it, "setBackgroundResource", when {
+                followsSystem -> R.drawable.widget_action_background
+                dark -> R.drawable.widget_dark_action_background
+                else -> R.drawable.widget_light_action_background
+            })
+            if (!followsSystem) views.setTextColor(it, if (dark) 0xff10231a.toInt() else 0xffffffff.toInt())
         }
         softActions.forEach {
-            views.setInt(it, "setBackgroundResource", if (dark) R.drawable.widget_dark_soft_background else R.drawable.widget_soft_background)
-            views.setTextColor(it, jade)
+            views.setInt(it, "setBackgroundResource", when {
+                followsSystem -> R.drawable.widget_soft_background
+                dark -> R.drawable.widget_dark_soft_background
+                else -> R.drawable.widget_light_soft_background
+            })
+            if (!followsSystem) views.setTextColor(it, jade)
         }
     }
 
@@ -48,7 +63,9 @@ object SakuWidgets {
     fun renderFavorites(context: Context, manager: AppWidgetManager, widgetId: Int) {
         val views = RemoteViews(context.packageName, R.layout.widget_favorites)
         appearance(context, views, R.id.favorites_root, R.id.widget_title, intArrayOf(R.id.widget_empty, R.id.widget_status), actions = favoriteButtons)
-        views.setTextColor(R.id.widget_undo, if (SakuAppearance.isDark(context)) 0xff92d3b1.toInt() else 0xff176b55.toInt())
+        if (SakuAppearance.preference(context) != "system") {
+            views.setTextColor(R.id.widget_undo, if (SakuAppearance.isDark(context)) 0xff92d3b1.toInt() else 0xff176b55.toInt())
+        }
         val prefs = WidgetLedger.widgetPreferences(context)
         val available = WidgetLedger.load(context) != null
         val all = WidgetLedger.favorites(context)
@@ -108,8 +125,10 @@ object SakuWidgets {
         appearance(context, views, R.id.snapshot_root, R.id.snapshot_title,
             intArrayOf(R.id.snapshot_cash_label, R.id.snapshot_today_label, R.id.snapshot_week_label, R.id.snapshot_pockets_label, R.id.snapshot_sign_in),
             intArrayOf(R.id.snapshot_cash, R.id.snapshot_week))
-        views.setTextColor(R.id.snapshot_today, if (SakuAppearance.isDark(context)) 0xffefbd7a.toInt() else 0xffa86c32.toInt())
-        views.setTextColor(R.id.snapshot_pockets, if (SakuAppearance.isDark(context)) 0xff92d3b1.toInt() else 0xff176b55.toInt())
+        if (SakuAppearance.preference(context) != "system") {
+            views.setTextColor(R.id.snapshot_today, if (SakuAppearance.isDark(context)) 0xffefbd7a.toInt() else 0xffa86c32.toInt())
+            views.setTextColor(R.id.snapshot_pockets, if (SakuAppearance.isDark(context)) 0xff92d3b1.toInt() else 0xff176b55.toInt())
+        }
         val snapshot = WidgetLedger.snapshot(context)
         val private = WidgetLedger.widgetPreferences(context).getBoolean("privacy:$widgetId", false)
         views.setViewVisibility(R.id.snapshot_values, if (snapshot == null) View.GONE else View.VISIBLE)
@@ -136,8 +155,8 @@ object SakuWidgets {
     }
     private fun amount(value: Long, private: Boolean) = if (private) "••••" else "Rp ${NumberFormat.getIntegerInstance(Locale.forLanguageTag("id-ID")).format(value)}"
     private fun compact(value: Long): String = when {
-        value >= 1_000_000 -> "Rp ${String.format(Locale.US, "%.1f", value / 1_000_000.0).removeSuffix(".0")}m"
-        value >= 1_000 -> "Rp ${value / 1_000}k"
+        value >= 1_000_000 -> "Rp ${String.format(Locale.forLanguageTag("id-ID"), "%.1f", value / 1_000_000.0).removeSuffix(",0")} jt"
+        value >= 1_000 -> "Rp ${value / 1_000} rb"
         else -> "Rp $value"
     }
 }
@@ -179,8 +198,4 @@ class QuickEntryWidgetProvider : AppWidgetProvider() {
 class SnapshotWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) = ids.forEach { SakuWidgets.renderSnapshot(context, manager, it) }
     override fun onDeleted(context: Context, ids: IntArray) = SakuWidgets.clearWidget(context, ids)
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == Intent.ACTION_CONFIGURATION_CHANGED) SakuWidgets.refreshAll(context)
-    }
 }

@@ -34,7 +34,10 @@ export async function saveTheme(preference: ThemePreference): Promise<void> {
 
 export function watchSystemTheme(): () => void {
   const media = matchMedia("(prefers-color-scheme: dark)");
-  const onChange = () => paintTheme(currentPreference);
+  const onChange = () => {
+    paintTheme(currentPreference);
+    if (currentPreference === "system" && Capacitor.isNativePlatform()) void native.applyAppearance({ preference: currentPreference });
+  };
   media.addEventListener("change", onChange);
   return () => media.removeEventListener("change", onChange);
 }
