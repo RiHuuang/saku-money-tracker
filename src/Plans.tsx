@@ -162,12 +162,12 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
           {deleteId !== card.id && <button className="text-button muted-action" onClick={() => setDeleteId(card.id)}><Trash2 size={14} /> Remove card</button>}
         </section>;
       })}</div>
-      {cardDraft && <form className="plans-form" onSubmit={(e) => void saveCard(e)}><h3>{cardDraft.id ? "Edit card" : "Add a credit card"}</h3><div className="plans-fields">
+      {cardDraft && <Modal title={cardDraft.id ? "Edit card" : "Add a credit card"} subtitle="Keep the card name, limit, and payment schedule up to date." onClose={() => setCardDraft(null)}><form className="plans-form" onSubmit={(e) => void saveCard(e)}><div className="plans-fields">
         <label className="field">Card name<input value={cardName} maxLength={50} required placeholder="e.g. CC BCA" onChange={(e) => setCardName(e.target.value)} /></label>
         <label className="field">Credit limit (Rp)<MoneyInput min={1} required value={limit} onValueChange={setLimit} /></label>
         <label className="field">Already owed (Rp)<MoneyInput min={0} required value={openingDebt} onValueChange={setOpeningDebt} /></label>
         <label className="field">Payment day<input type="number" min={1} max={28} required value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></label>
-      </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>Save card</button><button type="button" className="button secondary" onClick={() => setCardDraft(null)}>Cancel</button></div></form>}
+      </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>Save card</button><button type="button" className="button secondary" onClick={() => setCardDraft(null)}>Cancel</button></div></form></Modal>}
       {paymentCard && <Modal title="Record card payment" subtitle="Pay down this card from one of your accounts." onClose={() => setPayCard("")}><form className="plans-form" onSubmit={(e) => void makePayment(e)}><div className="plans-payment-balance"><span>Outstanding now</span><strong>{money(Math.max(0, paymentBalance))}</strong><small>This payment moves cash to the card. It is not new spending.</small></div><div className="plans-fields">
         <ChoiceField label="Card" value={payCard} onValueChange={setPayCard} options={data.creditCards.map((card) => ({ value: card.id, label: card.name, description: `${money(Math.max(0, cardBalance(data, card.id)))} outstanding` }))} />
         <label className="field">Amount (Rp)<MoneyInput min={1} required value={payAmount} onValueChange={setPayAmount} /></label>

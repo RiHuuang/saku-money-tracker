@@ -9,6 +9,9 @@
     <color name="widget_muted">#60746A</color>
     <color name="widget_teal">#176B55</color>
     <color name="widget_teal_soft">#E4EFE8</color>
+    <color name="widget_action_text">#FFFFFF</color>
+    <color name="widget_warning">#A86C32</color>
+    <color name="widget_border">#D8E5E2</color>
     <color name="widget_lilac_soft">#EEEAF7</color>
     <color name="widget_peach_soft">#FAECDD</color>
 </resources>

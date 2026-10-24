@@ -26,7 +26,7 @@
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 
-    <style name="WidgetQuickEntryTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
+    <style name="WidgetQuickEntryTheme" parent="Theme.AppCompat.DayNight.Dialog.Alert">
         <item name="colorAccent">@color/widget_teal</item>
         <item name="android:fontFamily">sans</item>
         <item name="android:windowNoTitle">true</item>

@@ -10,10 +10,13 @@ import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 
 class WidgetConfigActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        AppCompatDelegate.setDefaultNightMode(SakuAppearance.nightMode(this))
         super.onCreate(savedInstanceState)
+        SakuAppearance.applyChrome(this)
         val widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         setResult(Activity.RESULT_CANCELED)
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) { finish(); return }
@@ -23,7 +26,7 @@ class WidgetConfigActivity : AppCompatActivity() {
         val muted = if (dark) 0xffaec3b5.toInt() else 0xff60746a.toInt()
         val pad = (20 * density).toInt()
         val prefs = WidgetLedger.widgetPreferences(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad); setBackgroundColor(if (dark) 0xff192c24.toInt() else 0xffffffff.toInt()) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad); setBackgroundColor(if (dark) 0xff192c24.toInt() else 0xfff7f6f0.toInt()) }
         root.addView(TextView(this).apply { text = "Saku widget"; textSize = 24f; setTextColor(ink) })
         val privacy = CheckBox(this).apply { text = "Hide money amounts"; setTextColor(ink); isChecked = prefs.getBoolean("privacy:$widgetId", false) }
         root.addView(privacy)
@@ -41,6 +44,7 @@ class WidgetConfigActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "Save widget"
             isAllCaps = false
+            minHeight = (48 * density).toInt()
             setTextColor(if (dark) 0xff10231a.toInt() else 0xffffffff.toInt())
             setBackgroundResource(if (dark) R.drawable.widget_dark_action_background else R.drawable.widget_action_background)
             setOnClickListener {

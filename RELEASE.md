@@ -1,6 +1,14 @@
 # Saku production release
 
-## Current direct APK release — October 23
+## Current direct APK release — October 24
+
+Saku 2.3.2 (versionCode 12) aligns the web app, Android widgets, native quick entry, legal pages, and Indonesian landing page around one readable Saku design system. Light, dark, and system preferences now carry through app surfaces and widget resources; card editing uses the shared dialog pattern; Catch Up follows the app's typography and hierarchy; and narrow mobile layouts no longer push core controls outside the viewport.
+
+The clean build was verified on staging as Worker version `f8fff78c-6bfe-486c-922b-41015674909a`, including a real 390 px viewport pass across Home, Activity, Plans, Catch Up, Settings, legal pages, and the landing page. All 53 application tests passed. Android release lint, release unit tests, and `assembleRelease` passed after the production web assets were synced. The production app and legal pages were deployed as Worker version `2bfc77e9-6069-4f43-9887-d3fc465ba58c`; the landing page was deployed as version `ece38867-8f7a-4646-8f47-531fe40bf26f`. Production Home, health, privacy, terms, landing, and release-manifest requests returned HTTP 200.
+
+The release-signed APK is `output/saku-2.3.2-build12-release.apk`, 40,128,200 bytes, with SHA-256 `665400EAD85538FFE39C6088344E288C5715D29F7866959351A0542D6F3126CC`. Its package is `id.saku.money`; APK v2 signature verification passed with signer SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`. The production versioned download matched the local byte count and SHA-256 exactly, and the live manifest reports 2.3.2/build 12 with minimum supported build 7. No release APK was installed during this pass because no Android device was connected.
+
+### Previous 2.3.1 release — October 23
 
 Saku 2.3.1 (versionCode 11) packages the latest production interface work for Android. It clarifies opening-balance setup with account-specific cards and example-only amounts, hides the balance-adjustment dialog scrollbar while keeping it scrollable, uses the app's sans-serif numerals for balance values, and tones down the Catch Up source cards so file status and account selection are easier to scan.
 
