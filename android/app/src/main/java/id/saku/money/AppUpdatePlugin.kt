@@ -14,11 +14,14 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+
+internal fun readExpectedUpdateBytes(data: JSONObject): Long = data.optLong("bytes", -1L)
 
 @CapacitorPlugin(name = "AppUpdate")
 class AppUpdatePlugin : Plugin() {
@@ -45,7 +48,9 @@ class AppUpdatePlugin : Plugin() {
     @PluginMethod
     fun downloadAndInstall(call: PluginCall) {
         val url = call.getString("url") ?: ""
-        val expectedBytes = call.getLong("bytes") ?: -1L
+        // Capacitor decodes values below Int.MAX_VALUE as Integer. PluginCall.getLong()
+        // only accepts a boxed Long, so normal APK sizes were rejected before download.
+        val expectedBytes = readExpectedUpdateBytes(call.data)
         val expectedHash = call.getString("sha256")?.lowercase() ?: ""
         val expectedVersion = call.getInt("versionCode") ?: -1
         val allowMetered = call.getBoolean("allowMetered") ?: false

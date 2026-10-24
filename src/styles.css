@@ -1734,24 +1734,40 @@ main {
   color: #9ba8a5;
 }
 .transaction-filters {
+  display: grid;
+  grid-template-columns: auto minmax(170px, 220px) minmax(170px, 220px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: end;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+.transaction-filter-heading {
   display: flex;
-  gap: 12px;
   align-items: center;
-  color: #94a19f;
-  font-size: 11px;
-  margin: 19px 0;
+  gap: 10px;
+  align-self: center;
+  padding-right: 5px;
 }
-.transaction-filters select {
-  border: 0;
-  background: transparent;
-  color: #6b7c77;
-  font-size: 11px;
-  max-width: 180px;
-  padding: 5px;
+.transaction-filter-heading > span:last-child { display: grid; gap: 2px; }
+.transaction-filter-heading strong { color: var(--ink); font-size: 12px; line-height: 1.2; }
+.transaction-filter-heading small { color: var(--muted); font-size: 10px; white-space: nowrap; }
+.transaction-filter-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--teal);
 }
-.transaction-filters > span {
-  margin-left: auto;
-}
+.transaction-filter-field { min-width: 0; margin: 0; }
+.transaction-filter-field .choice-label { margin-bottom: 5px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.transaction-filter-field .choice-trigger { min-height: 44px; background: var(--surface); }
+.transaction-count { align-self: center; justify-self: end; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .ledger {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -3157,18 +3173,9 @@ main {
     font-size: 10px;
     padding: 9px 13px;
   }
-  .transaction-filters {
-    gap: 8px;
-    font-size: 9px;
-    flex-wrap: wrap;
-  }
-  .transaction-filters select {
-    font-size: 10px;
-    max-width: 130px;
-  }
-  .transaction-filters > span {
-    font-size: 9px;
-  }
+  .transaction-filters { grid-template-columns: 1fr 1fr; }
+  .transaction-filter-heading { grid-column: 1 / -1; }
+  .transaction-count { grid-column: 1 / -1; justify-self: start; }
   .ledger {
     padding: 0 15px;
   }
@@ -3939,8 +3946,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .transaction-tools .search-field { flex-basis: 100%; }
   .transaction-tools .segmented { flex: 1; }
   .transaction-tools .export-menu { margin-left: auto; }
-  .transaction-filters { flex-wrap: wrap; }
-  .transaction-filters > span { width: 100%; margin-left: 0; }
+  .transaction-filters { grid-template-columns: 1fr 1fr; }
+  .transaction-filter-heading, .transaction-count { grid-column: 1 / -1; }
+  .transaction-count { justify-self: start; }
   .ledger { padding: 0 15px; }
   .ledger-header { display: none; }
   .transaction-date-heading { padding-top: 19px; }
@@ -4096,9 +4104,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .transaction-tools .segmented { min-width: 0; width: 100%; }
   .transaction-tools .segmented button { flex: 1; min-width: 0; padding-inline: 8px; }
   .transaction-tools .export-menu { margin-left: 0; }
-  .transaction-filters { display: grid; grid-template-columns: 1fr; align-items: stretch; width: 100%; }
-  .transaction-filters label, .transaction-filters select { width: 100%; max-width: none; }
-  .transaction-filters > span { width: auto; margin-left: 0; }
+  .transaction-filters { grid-template-columns: 1fr; align-items: stretch; width: 100%; padding: 13px; }
+  .transaction-filter-heading, .transaction-count { grid-column: auto; }
+  .transaction-filter-field { width: 100%; max-width: none; }
+  .transaction-count { justify-self: start; }
   .section-heading.plans-heading { align-items: stretch; flex-direction: column; }
   .plans-heading .button { align-self: flex-start; }
   .plans-tabs { width: 100%; }

@@ -1286,10 +1286,13 @@ function Transactions({
         </div></details>
       </div>
       <div className="transaction-filters">
-        <SlidersHorizontal size={16} />
-        <ChoiceField label="Filter by pocket" value={pocket} onValueChange={setPocket} options={[{ value: "all", label: "All pockets" }, ...data.pockets.map((p) => ({ value: p.id, label: p.name }))]} />
-        <ChoiceField label="Filter by account" value={account} onValueChange={setAccount} options={[{ value: "all", label: "All accounts" }, ...data.accounts.map((name) => ({ value: name, label: name, description: money(accountBalance(data, name)) })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: "Credit card" }))]} />
-        <span>{rows.length} transactions</span>
+        <div className="transaction-filter-heading">
+          <span className="transaction-filter-icon" aria-hidden="true"><SlidersHorizontal size={17} /></span>
+          <span><strong>Filters</strong><small>Narrow this month</small></span>
+        </div>
+        <ChoiceField className="transaction-filter-field" label="Pocket" value={pocket} onValueChange={setPocket} options={[{ value: "all", label: "All pockets" }, ...data.pockets.map((p) => ({ value: p.id, label: p.name }))]} />
+        <ChoiceField className="transaction-filter-field" label="Account" value={account} onValueChange={setAccount} options={[{ value: "all", label: "All accounts" }, ...data.accounts.map((name) => ({ value: name, label: name, description: money(accountBalance(data, name)) })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: "Credit card" }))]} />
+        <span className="transaction-count">{rows.length} transactions</span>
       </div>
       <div className="ledger">
         <div className="ledger-header">

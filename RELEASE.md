@@ -2,6 +2,16 @@
 
 ## Current direct APK release — October 24
 
+Saku 2.3.3 (versionCode 13) fixes Android's `Invalid Saku update metadata` failure. Capacitor represents ordinary APK byte counts as an Android `Integer`, while the updater previously requested only a boxed `Long`; the native validation therefore rejected the 40.1 MB release before opening a network connection. The updater now reads either numeric representation, and a native regression test covers the exact 40,128,200-byte shape that failed on the phone.
+
+Builds 12 and earlier contain the broken native updater and cannot repair that native code through their own prompt. They need one manual install of 2.3.3 from Saku's browser download; build 13 preserves the existing app data and fixes later in-app upgrades.
+
+The Activity filter section is now a single contained toolbar with a clear filter heading, aligned Pocket and Account choice controls, and an anchored result count. Its responsive layout was visually checked in wide dark mode and a true 390 px light-mode frame, while the same semantic surface tokens cover system-resolved appearance. The clean app was deployed to staging as Worker version `5f09bf2d-3f10-48e3-8d72-e455d2925468` and production as Worker version `da376dc2-8ec1-495a-bdf0-4a45ff683c84`.
+
+All 53 application tests and Worker suites passed. Android release lint, release unit tests including the updater regression, and `assembleRelease` passed. The release-signed APK is `output/saku-2.3.3-build13-release.apk`, 40,128,400 bytes, with SHA-256 `973B397760E754C4DFBCE9D1BE30C1CCB572E44DE6FDA64B452D276B424FBDE3`. Its package is `id.saku.money`; APK v2 signature verification passed with signer SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`. The production health endpoint returned successfully, the live manifest reports 2.3.3/build 13, and the versioned production download matched the local byte count and SHA-256 exactly. No release APK was installed during this pass because no Android device was connected.
+
+### Previous 2.3.2 release — October 24
+
 Saku 2.3.2 (versionCode 12) aligns the web app, Android widgets, native quick entry, legal pages, and Indonesian landing page around one readable Saku design system. Light, dark, and system preferences now carry through app surfaces and widget resources; card editing uses the shared dialog pattern; Catch Up follows the app's typography and hierarchy; and narrow mobile layouts no longer push core controls outside the viewport.
 
 The clean build was verified on staging as Worker version `f8fff78c-6bfe-486c-922b-41015674909a`, including a real 390 px viewport pass across Home, Activity, Plans, Catch Up, Settings, legal pages, and the landing page. All 53 application tests passed. Android release lint, release unit tests, and `assembleRelease` passed after the production web assets were synced. The production app and legal pages were deployed as Worker version `2bfc77e9-6069-4f43-9887-d3fc465ba58c`; the landing page was deployed as version `ece38867-8f7a-4646-8f47-531fe40bf26f`. Production Home, health, privacy, terms, landing, and release-manifest requests returned HTTP 200.
