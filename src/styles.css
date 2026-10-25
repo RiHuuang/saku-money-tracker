@@ -3833,16 +3833,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   width: min(540px, calc(100vw - 28px));
   max-height: min(720px, calc(100dvh - 28px));
   margin: auto;
-  padding: 6px;
-  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-  border-radius: 25px;
-  background: color-mix(in srgb, var(--surface-muted) 82%, transparent);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
   color: var(--ink);
   box-shadow: 0 26px 80px #10291e30;
   overflow: hidden;
 }
 .choice-sheet::backdrop { background: #1020198c; backdrop-filter: blur(3px); }
-.choice-sheet-shell { display: flex; flex-direction: column; max-height: calc(min(720px, 100dvh - 40px)); overflow: hidden; border-radius: 19px; background: var(--surface); box-shadow: inset 0 1px #ffffff90; }
+.choice-sheet-shell { display: flex; flex-direction: column; max-height: calc(min(720px, 100dvh - 40px)); overflow: hidden; border-radius: inherit; background: var(--surface); }
+:root[data-theme="dark"] .choice-sheet { box-shadow: 0 26px 80px #0008; }
 .choice-sheet-handle { display: none; width: 42px; height: 4px; margin: 9px auto 0; border-radius: 999px; background: var(--line); }
 .choice-sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 20px 12px; }
 .choice-sheet-header > div { min-width: 0; }
@@ -3868,8 +3869,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .adaptive-segmented button.selected { background: var(--surface); color: var(--teal); box-shadow: 0 3px 14px #173c2510; font-weight: 700; }
 .adaptive-segmented-field.compact .adaptive-segmented button { min-height: 38px; }
 @media (max-width: 760px) {
-  .choice-sheet { width: 100%; max-width: none; max-height: min(86dvh, 760px); margin: auto 0 0; padding: 5px 5px calc(5px + env(safe-area-inset-bottom, 0px)); border-width: 1px 0 0; border-radius: 26px 26px 0 0; }
-  .choice-sheet-shell { max-height: calc(min(86dvh, 760px) - env(safe-area-inset-bottom, 0px)); border-radius: 21px 21px 0 0; }
+  .choice-sheet { width: 100%; max-width: none; max-height: min(86dvh, 760px); margin: auto 0 0; padding: 0 0 env(safe-area-inset-bottom, 0px); border-width: 1px 0 0; border-radius: 24px 24px 0 0; }
+  .choice-sheet-shell { max-height: calc(min(86dvh, 760px) - env(safe-area-inset-bottom, 0px)); border-radius: inherit; }
   .choice-sheet-handle { display: block; }
   .choice-sheet-header { padding: 13px 16px 10px; }
   .choice-sheet-header h2 { font-size: 21px; }

@@ -1,6 +1,12 @@
 # Saku production release
 
-## Current direct APK release — October 24
+## Saku 2.3.4 release candidate — October 25
+
+Saku 2.3.4 (versionCode 14) removes the translucent rim around Activity's Pocket and Account choice sheets. The sheet now uses the app's opaque surface and border tokens in light and dark themes, including the mobile bottom-sheet layout. A synthetic Activity preview was checked with both themes, without opening a real ledger.
+
+The production web build and all application and Worker tests passed. Android release lint, release unit tests, and `assembleRelease` passed with an isolated Gradle cache. The signed APK is `output/saku-2.3.4-build14-release.apk`, 40,128,364 bytes, with SHA-256 `98F67811256FAD31053495E6FB8CBE3B6EDA6B7C9AE62CBE374C07AE92A4B028`. APK v2 signature verification passed; its certificate SHA-256 is `f6eed0700d23187e5822e40fbe684b557fc02d5eddfd1958a582c7f7decedfef`, matching the installed 2.3.3 release. Publication and on-device upgrade verification follow the merged web deployment.
+
+### Previous 2.3.3 release — October 24
 
 Saku 2.3.3 (versionCode 13) fixes Android's `Invalid Saku update metadata` failure. Capacitor represents ordinary APK byte counts as an Android `Integer`, while the updater previously requested only a boxed `Long`; the native validation therefore rejected the 40.1 MB release before opening a network connection. The updater now reads either numeric representation, and a native regression test covers the exact 40,128,200-byte shape that failed on the phone.
 
