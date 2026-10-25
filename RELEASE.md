@@ -1,10 +1,12 @@
 # Saku production release
 
-## Saku 2.3.4 release candidate — October 25
+## Current direct APK release — October 25
 
 Saku 2.3.4 (versionCode 14) removes the translucent rim around Activity's Pocket and Account choice sheets. The sheet now uses the app's opaque surface and border tokens in light and dark themes, including the mobile bottom-sheet layout. A synthetic Activity preview was checked with both themes, without opening a real ledger.
 
-The production web build and all application and Worker tests passed. Android release lint, release unit tests, and `assembleRelease` passed with an isolated Gradle cache. The signed APK is `output/saku-2.3.4-build14-release.apk`, 40,128,364 bytes, with SHA-256 `98F67811256FAD31053495E6FB8CBE3B6EDA6B7C9AE62CBE374C07AE92A4B028`. APK v2 signature verification passed; its certificate SHA-256 is `f6eed0700d23187e5822e40fbe684b557fc02d5eddfd1958a582c7f7decedfef`, matching the installed 2.3.3 release. Publication and on-device upgrade verification follow the merged web deployment.
+The production web build and all application and Worker tests passed. Android release lint, release unit tests, and `assembleRelease` passed with an isolated Gradle cache. Pull request [#20](https://github.com/RiHuuang/saku-money-tracker/pull/20) passed CI and was squash-merged into `main`; the merged web app was deployed as Worker version `89e0c347-ffc3-49a0-80fa-f6c5cda3d11c`. The public Home and health endpoints returned HTTP 200, and the served CSS matched the merged build byte-for-byte.
+
+The signed APK is `output/saku-2.3.4-build14-release.apk`, 40,128,364 bytes, with SHA-256 `98F67811256FAD31053495E6FB8CBE3B6EDA6B7C9AE62CBE374C07AE92A4B028`. APK v2 signature verification passed; its certificate SHA-256 is `f6eed0700d23187e5822e40fbe684b557fc02d5eddfd1958a582c7f7decedfef`, matching the installed 2.3.3 release. The APK contains the exact CSS from the verified web build. The live manifest now reports 2.3.4/build 14 with minimum supported build 7; a complete download from `/download/android/14.apk` matched its byte count and SHA-256. The physical in-app update from build 13 remains to be verified.
 
 ### Previous 2.3.3 release — October 24
 
@@ -14,7 +16,9 @@ Builds 12 and earlier contain the broken native updater and cannot repair that n
 
 The Activity filter section is now a single contained toolbar with a clear filter heading, aligned Pocket and Account choice controls, and an anchored result count. Its responsive layout was visually checked in wide dark mode and a true 390 px light-mode frame, while the same semantic surface tokens cover system-resolved appearance. The clean app was deployed to staging as Worker version `5f09bf2d-3f10-48e3-8d72-e455d2925468` and production as Worker version `da376dc2-8ec1-495a-bdf0-4a45ff683c84`.
 
-All 53 application tests and Worker suites passed. Android release lint, release unit tests including the updater regression, and `assembleRelease` passed. The release-signed APK is `output/saku-2.3.3-build13-release.apk`, 40,128,400 bytes, with SHA-256 `973B397760E754C4DFBCE9D1BE30C1CCB572E44DE6FDA64B452D276B424FBDE3`. Its package is `id.saku.money`; APK v2 signature verification passed with signer SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`. The production health endpoint returned successfully, the live manifest reports 2.3.3/build 13, and the versioned production download matched the local byte count and SHA-256 exactly. No release APK was installed during this pass because no Android device was connected.
+All 53 application tests and Worker suites passed. Android release lint, release unit tests including the updater regression, and `assembleRelease` passed. The release-signed APK is `output/saku-2.3.3-build13-release.apk`, 40,128,400 bytes, with SHA-256 `973B397760E754C4DFBCE9D1BE30C1CCB572E44DE6FDA64B452D276B424FBDE3`. Its package is `id.saku.money`; APK v2 signature verification passed with signer SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`. The production health endpoint returned successfully, the manifest then reported 2.3.3/build 13, and the versioned production download matched the local byte count and SHA-256 exactly. No release APK was installed during that build pass because no Android device was connected.
+
+On October 25, the exact signed build 13 was installed in place over the phone's 2.2.0 build. Its on-device SHA-256 matched the release; Saku launched, and the user confirmed existing accounts and transactions remained available.
 
 ### Previous 2.3.2 release — October 24
 
