@@ -142,7 +142,7 @@ export default function App() {
     [month, setMonth] = useState(today().slice(0, 7)),
     [checkTab, setCheckTab] = useState<"catchup" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
     [edit, setEdit] = useState<Edit>(null),
-    [toast, setToast] = useState(""),
+    [toast, setToast] = useState<string | { message: string; action: { label: string; run: () => void } }>(""),
     [busy, setBusy] = useState(false),
     [cloud, setCloud] = useState<CloudState | null>(null),
     [loginBusy, setLoginBusy] = useState(false),
@@ -384,7 +384,8 @@ export default function App() {
       activeSync.current = null;
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
       const status = typeof error === "object" && error && "status" in error ? (error as { status?: number }).status : undefined;
-      setToast(status === 409 ? "Google has newer data. Review before syncing again." : "Saved offline. Automatic sync will retry when Saku is active.");
+      const message = status === 409 ? "Google has newer data. Review before syncing again." : "Saved offline. Automatic sync will retry when Saku is active.";
+      setToast((current) => typeof current === "string" ? message : { ...current, message: `${current.message} · ${message}` });
     } finally {
       syncRunning.current = false;
       void reconcileRef.current?.();
@@ -1117,8 +1118,13 @@ export default function App() {
                 },
                 edit.value ? "Transaction updated" : "Transaction added",
               )
-            )
+            ) {
+              if (!edit.value) setToast({ message: "Transaction added", action: { label: "Undo", run: () => {
+                const current = latest.current.data;
+                if (current?.transactions.some((item) => item.id === t.id)) void commit({ ...current, transactions: current.transactions.filter((item) => item.id !== t.id) }, "Transaction removed");
+              } } });
               setEdit(null);
+            }
           }}
           onDelete={async (id) => {
             if (
@@ -1206,9 +1212,10 @@ export default function App() {
         />
       )}
       {toast && (
-        <div className="toast" role="status">
+        <div className={`toast${view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket) ? " above-mobile-add" : ""}`} role="status">
           <Check size={17} />
-          {toast}
+          {typeof toast === "string" ? toast : toast.message}
+          {typeof toast !== "string" && <button type="button" className="toast-action" onClick={toast.action.run}>{toast.action.label}</button>}
           <button aria-label="Dismiss message" onClick={() => setToast("")}>
             <X size={16} />
           </button>
