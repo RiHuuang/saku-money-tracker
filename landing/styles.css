@@ -50,3 +50,22 @@
 .mobile-nav-panel a{display:flex;align-items:center;min-height:53px;border-bottom:1px solid var(--line);color:var(--ink);font-size:.85rem;font-weight:600}
 .mobile-nav-panel a:last-child{border-bottom:0}.mobile-nav-panel a:hover,.mobile-nav-panel a[aria-current="location"]{color:var(--green)}
 @media(max-width:900px){.mobile-nav{display:block}}
+
+/* Keep the full navigation visible at tablet widths where it fits. */
+@media(min-width:741px) and (max-width:900px){
+  .nav{gap:20px}
+  .nav-links{display:flex;gap:18px}
+  .nav-links a{font-size:.73rem;white-space:nowrap}
+  .nav-actions{gap:10px;margin-left:0}
+  .mobile-nav{display:none}
+  .theme-label{display:none}
+  .nav-cta{padding-left:12px;white-space:nowrap}
+}
+
+/* Brand surfaces use the same semantic colors as the application. */
+:root{--art:#176b55;--art-ink:#fff;--brand-panel:#176b55;--brand-panel-ink:#fff;--brand-panel-muted:#e4efe8}
+:root[data-theme="dark"]{--art:#22382e;--art-ink:#edf3ed;--brand-panel:#22382e;--brand-panel-ink:#edf3ed;--brand-panel-muted:#aec3b5}
+.browser-section,.closing{background:var(--brand-panel);color:var(--brand-panel-ink)}
+.browser-section .eyebrow,.browser-heading h2 em,.browser-heading p:not(.eyebrow),.browser-heading .text-link,.closing .eyebrow,.closing h2 em,.closing .text-link,.closing-inner>p:last-of-type{color:var(--brand-panel-muted)}
+.browser-window{border-color:var(--line)}
+.button-inverse{background:var(--surface);color:var(--ink);box-shadow:0 6px 0 var(--line)}
