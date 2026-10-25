@@ -23,6 +23,7 @@ try {
     await import("../worker/android-release.test.mjs");
     await import("../worker/sheet-refresh.test.mjs");
     await import("../worker/bounded-login.test.mjs");
+    await import("../worker/auth-rate-limit.test.mjs");
     await import("../worker/live.test.mjs");
     await import("../worker/live-route.test.mjs");
   }
