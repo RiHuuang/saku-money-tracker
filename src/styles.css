@@ -3706,7 +3706,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button { border-radius: 12px; min-height: 44px; font-size: 13px; }
 .primary { background: var(--teal); color: var(--action-ink); box-shadow: 0 6px 20px #123f2920; }
 .primary:hover { background: var(--teal); filter: brightness(.93); }
-.secondary, .month-picker, input, select, textarea, .choice-picker { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.secondary, .month-picker, input, select, textarea { background: var(--surface); border-color: var(--line); color: var(--ink); }
 .secondary:hover, .icon-button:hover { background: var(--surface-muted); color: var(--ink); }
 .text-button, .positive { color: var(--teal) !important; }
 .negative { color: var(--danger) !important; }

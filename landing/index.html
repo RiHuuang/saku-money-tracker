@@ -1,91 +1,188 @@
 <!doctype html>
-<html lang="id">
+<html lang="id" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f5ed">
-  <meta name="description" content="Saku membantu kamu mencatat pengeluaran, mengatur kantong bulanan, dan menjaga salinan data keuanganmu tetap rapi.">
+  <meta name="theme-color" content="#f7f6f0">
+  <meta name="description" content="Lihat ke mana uangmu pergi. Catat transaksi, atur kantong, dan pahami pola pengeluaran bersama Saku untuk Android dan web.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Saku | uang sehari-hari, lebih terasa tertata">
-  <meta property="og:description" content="Catat yang keluar, lihat yang tersisa, dan lanjutkan hari dengan lebih tenang.">
+  <meta property="og:locale" content="id_ID">
+  <meta property="og:title" content="Saku — lihat ke mana uangmu pergi.">
+  <meta property="og:description" content="Catat yang terjadi hari ini. Atur uangmu dalam kantong. Pahami polanya dari waktu ke waktu.">
   <meta property="og:url" content="https://sakumoney.my.id/">
+  <meta property="og:image" content="https://sakumoney.my.id/assets/saku-social.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://sakumoney.my.id/">
   <link rel="icon" href="/assets/favicon.png" type="image/png">
-  <link rel="stylesheet" href="/styles.css?v=20261007c">
-  <title>Saku | uang sehari-hari, lebih terasa tertata</title>
+  <link rel="preload" href="/assets/fonts/jakarta-700.woff2" as="font" type="font/woff2" crossorigin>
+  <script>
+    try {
+      if (localStorage.getItem('saku-landing-theme-v1') === 'dark') {
+        document.documentElement.dataset.theme = 'dark';
+        document.querySelector('meta[name="theme-color"]').content = '#101d18';
+      }
+    } catch (_) {}
+  </script>
+  <link rel="stylesheet" href="/styles.css?v=20261025c">
+  <title>Saku — lihat ke mana uangmu pergi.</title>
 </head>
 <body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 17v3h14v-3"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M19.07 4.93l-1.42 1.42m-11.3 11.3-1.42 1.42"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5 8.5 8.5 0 1 0 20.5 14.6Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  </defs></svg>
   <a class="skip-link" href="#main">Lewati ke konten</a>
   <header class="site-header">
     <nav class="nav shell" aria-label="Navigasi utama">
       <a class="wordmark" href="/" aria-label="Saku, halaman utama">saku<span>.</span></a>
       <div class="nav-links">
         <a href="#cara-kerja">Cara kerja</a>
-        <a href="#cerita-saku">Kenali Saku</a>
+        <a href="#fitur-lain">Fitur lain</a>
         <a href="#tanya-jawab">Tanya jawab</a>
       </div>
-      <a class="nav-cta" href="#status-rilis">Mulai pakai Saku <span aria-hidden="true">↘</span></a>
+      <div class="nav-actions">
+        <details class="mobile-nav">
+          <summary>Menu <span class="menu-lines" aria-hidden="true"><i></i><i></i></span></summary>
+          <div class="mobile-nav-panel">
+            <a href="#cara-kerja">Cara kerja</a>
+            <a href="#fitur-lain">Fitur lain</a>
+            <a href="#tanya-jawab">Tanya jawab</a>
+          </div>
+        </details>
+        <button class="theme-toggle" type="button" aria-label="Aktifkan tema gelap" aria-pressed="false" hidden>
+          <svg class="icon theme-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+          <svg class="icon theme-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+          <span class="theme-label">Tema gelap</span>
+        </button>
+        <a class="nav-cta" href="#mulai">Mulai <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
     </nav>
   </header>
 
   <main id="main">
     <section class="hero shell" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="eyebrow-line"></span> Teman uang sehari-hari</p>
-        <h1 id="hero-title">Uang lewat tiap hari. <br> <em>Biar kamu tetap tahu</em><br>ke mana arahnya.</h1>
-        <p class="hero-lead">Dari belanja kecil sampai rencana bulanan, Saku membantumu mencatat, memahami, dan memberi tempat untuk setiap rupiah.</p>
-        <div class="hero-actions">
-          <a class="button button-primary" href="https://app.sakumoney.my.id/download/saku.apk" download="saku.apk">Unduh untuk Android <span class="button-icon" aria-hidden="true">↓</span></a>
-          <a class="button button-text" href="https://app.sakumoney.my.id/">Buka aplikasi web <span aria-hidden="true">↗</span></a>
+        <p class="eyebrow hero-enter"><span class="eyebrow-line"></span> Uang sehari-hari, lebih jelas</p>
+        <h1 id="hero-title" class="hero-enter">Tahu ke mana <em>uangmu</em> pergi.</h1>
+        <p class="hero-lead hero-enter">Dari satu transaksi sampai pola sebulan: catat, bagi ke kantong, lalu lihat gambaran yang sebenarnya.</p>
+        <div class="hero-actions hero-enter">
+          <a class="button button-primary" href="https://app.sakumoney.my.id/download/saku.apk" download="saku.apk">Unduh untuk Android <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a>
+          <a class="text-link" href="https://app.sakumoney.my.id/">Buka aplikasi web <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
         </div>
-        <p id="status-rilis" class="hero-note">Tersedia untuk Android dan browser. Masuk dengan Google untuk menyimpan dan memulihkan catatanmu. Tidak perlu menghubungkan rekening bank.</p>
+        <p class="hero-note hero-enter">Mulai tanpa menghubungkan rekening bank.</p>
       </div>
-      <div class="hero-visual" aria-label="Pratinjau tampilan beranda Saku">
-        <div class="phone-shell phone-hero">
-          <div class="phone-screen"><img src="/assets/saku-home-sample.png" width="390" height="844" alt="Tampilan beranda Saku dengan saldo dan pengeluaran rupiah menggunakan data contoh" fetchpriority="high"></div>
+      <div class="hero-art" aria-label="Pratinjau beranda Saku dengan data contoh">
+        <div class="art-grid" aria-hidden="true"></div>
+        <div class="art-index" aria-hidden="true">DATA CONTOH <span>01 / 03</span></div>
+        <figure class="hero-device">
+          <div class="device-frame">
+            <img class="theme-image light-image" src="/assets/home-light.png" width="390" height="844" alt="Beranda Saku dengan saldo tercatat, uang masuk, dan pengeluaran menggunakan data contoh" fetchpriority="high">
+            <img class="theme-image dark-image" src="/assets/home-dark.png" width="390" height="844" alt="" aria-hidden="true" fetchpriority="high">
+          </div>
+          <figcaption>Tampilan aplikasi · data contoh</figcaption>
+        </figure>
+        <div class="hero-ticket ticket-one" aria-hidden="true"><span>01 / CATAT</span><strong>Kopi sore</strong><b>Rp32.000</b></div>
+        <div class="hero-ticket ticket-two" aria-hidden="true"><span>02 / PAHAMI</span><strong>Catatan jadi gambaran.</strong><svg class="icon"><use href="#i-arrow"/></svg></div>
+        <div class="art-baseline" aria-hidden="true"><span>CATAT</span><span>ATUR</span><span>PAHAMI</span></div>
+      </div>
+      <a class="hero-next" href="#cara-kerja">Lihat cara kerjanya <span aria-hidden="true">↓</span></a>
+    </section>
+
+    <section class="statement" aria-label="Inti Saku">
+      <div class="shell statement-inner">
+        <span class="statement-number">01 — 03</span>
+        <p>Uangmu bergerak setiap hari.<br><strong>Sekarang ceritanya bisa kamu lihat.</strong></p>
+        <span class="statement-mark" aria-hidden="true">s.</span>
+      </div>
+    </section>
+
+    <section class="journey shell" id="cara-kerja" aria-labelledby="journey-title">
+      <div class="section-intro">
+        <p class="eyebrow">Cara kerja Saku</p>
+        <h2 id="journey-title">Tiga langkah menuju <em>lebih jelas.</em></h2>
+        <p>Mulai dari yang terjadi hari ini. Saku membantu menyusunnya menjadi gambaran yang bisa kamu gunakan.</p>
+      </div>
+      <div class="journey-layout">
+        <div class="journey-steps">
+          <article class="journey-step is-active" data-step="0" id="catat">
+            <div class="step-top"><span>01</span><span>CATAT</span></div>
+            <h3>Satu catatan kecil.<br>Gambaran mulai terbentuk.</h3>
+            <p>Catat uang masuk atau keluar, pilih akun dan kantongnya. Cari kembali transaksi saat kamu membutuhkannya.</p>
+            <p class="step-detail">Riwayat · Pencarian · Filter</p>
+            <figure class="mobile-preview"><div class="device-frame"><img class="theme-image light-image" src="/assets/activity-light.png" width="390" height="844" loading="lazy" alt="Activity Saku: transaksi contoh, pencarian, dan filter"><img class="theme-image dark-image" src="/assets/activity-dark.png" width="390" height="844" loading="lazy" alt="" aria-hidden="true"></div><figcaption>Activity · data contoh</figcaption></figure>
+          </article>
+          <article class="journey-step" data-step="1" id="atur">
+            <div class="step-top"><span>02</span><span>ATUR</span></div>
+            <h3>Berikan tempat untuk setiap rencana.</h3>
+            <p>Bagi anggaran bulanan ke dalam kantong. Bandingkan yang direncanakan, yang terpakai, dan yang masih tersedia.</p>
+            <p class="step-detail">Kantong adalah anggaran, bukan rekening bank baru.</p>
+            <figure class="mobile-preview"><div class="device-frame"><img class="theme-image light-image" src="/assets/pockets-light.png" width="390" height="844" loading="lazy" alt="Pockets Saku: anggaran dan sisa kantong dengan data contoh"><img class="theme-image dark-image" src="/assets/pockets-dark.png" width="390" height="844" loading="lazy" alt="" aria-hidden="true"></div><figcaption>Pockets · data contoh</figcaption></figure>
+          </article>
+          <article class="journey-step" data-step="2" id="pahami">
+            <div class="step-top"><span>03</span><span>PAHAMI</span></div>
+            <h3>Lihat polanya. Tentukan langkahmu.</h3>
+            <p>Tinjau pengeluaran per kategori dan arus uang bulanan dari transaksi yang sudah kamu catat.</p>
+            <p class="step-detail">Ringkasan · Kategori · Arus kas</p>
+            <figure class="mobile-preview"><div class="device-frame"><img class="theme-image light-image" src="/assets/insights-light.png" width="390" height="844" loading="lazy" alt="Insights Saku: ringkasan arus uang dan pengeluaran contoh"><img class="theme-image dark-image" src="/assets/insights-dark.png" width="390" height="844" loading="lazy" alt="" aria-hidden="true"></div><figcaption>Insights · data contoh</figcaption></figure>
+          </article>
         </div>
-        <div class="visual-caption"><span class="caption-mark" aria-hidden="true">✳</span><p>Satu tempat untuk melihat uang yang tercatat dan apa yang sudah dipakai bulan ini.</p></div>
-        <span class="sample-label">Tampilan aplikasi dengan data contoh</span>
+        <div class="journey-stage" aria-label="Pratinjau fitur Saku">
+          <div class="stage-meta"><span>DI DALAM SAKU</span><span class="stage-counter">01 / 03</span></div>
+          <div class="stage-visual" data-phase="0">
+            <div class="stage-halo" aria-hidden="true"></div>
+            <span class="stage-word" aria-hidden="true">CATAT</span>
+            <div class="stage-device device-frame">
+              <div class="screen-pair is-active" data-screen="0"><img class="theme-image light-image" src="/assets/activity-light.png" width="390" height="844" loading="lazy" alt="Activity Saku dengan data contoh"><img class="theme-image dark-image" src="/assets/activity-dark.png" width="390" height="844" loading="lazy" alt="" aria-hidden="true"></div>
+              <div class="screen-pair" data-screen="1" aria-hidden="true"><img class="theme-image light-image" src="/assets/pockets-light.png" width="390" height="844" loading="lazy" alt="Pockets Saku dengan data contoh"><img class="theme-image dark-image" src="/assets/pockets-dark.png" width="390" height="844" loading="lazy" alt="" aria-hidden="true"></div>
+              <div class="screen-pair" data-screen="2" aria-hidden="true"><img class="theme-image light-image" src="/assets/insights-light.png" width="390" height="844" loading="lazy" alt="Insights Saku dengan data contoh"><img class="theme-image dark-image" src="/assets/insights-dark.png" width="390" height="844" loading="lazy" alt="" aria-hidden="true"></div>
+            </div>
+            <span class="stage-annotation" aria-hidden="true">DATA CONTOH / BUKAN TRANSAKSI SUNGGUHAN</span>
+          </div>
+          <div class="stage-controls" aria-label="Pilih langkah"><button type="button" data-select-step="0" aria-pressed="true"><b>01</b> Catat</button><button type="button" data-select-step="1" aria-pressed="false"><b>02</b> Atur</button><button type="button" data-select-step="2" aria-pressed="false"><b>03</b> Pahami</button></div>
+          <div class="stage-progress" aria-hidden="true"><span></span></div>
+        </div>
       </div>
     </section>
 
-    <section class="statement" aria-label="Cara Saku membantu">
-      <div class="shell statement-inner"><p>Lebih mudah mengambil keputusan kecil saat angka-angkanya <em>terlihat jelas.</em></p></div>
-    </section>
-
-    <section id="cara-kerja" class="story shell" aria-labelledby="story-title">
-      <div class="section-head"><p class="eyebrow"><span class="eyebrow-line"></span> Untuk hari yang nyata</p><h2 id="story-title">Yang penting bukan mencatat semuanya dengan sempurna. <em>Yang penting, mulai terlihat.</em></h2></div>
-      <div class="story-grid">
-        <article class="story-card story-card-main">
-          <div class="story-count"><span>Catat</span></div>
-          <div class="story-content"><h3>Satu pengeluaran.<br>Satu langkah lebih jelas.</h3><p>Tambahkan transaksi saat terjadi. Lihat uang masuk, uang keluar, dan perubahan saldo tanpa perlu merangkai catatan sendiri.</p></div>
-          <div class="receipt" aria-label="Ilustrasi pencatatan pengeluaran contoh"><span>CATATAN HARI INI</span><strong>Kopi sore <b>− Rp 28.000</b></strong><small>Kantong Jajan · 6 Oktober</small><i aria-hidden="true"></i><span class="receipt-foot">Tercatat. Lanjutkan harimu.</span></div>
-        </article>
-        <article class="story-card story-card-side">
-          <div class="story-count"><span>Atur</span></div>
-          <div class="story-content"><h3>Beri tempat untuk rencana.</h3><p>Buat kantong bulanan untuk kebutuhan yang ingin kamu jaga. Kamu bisa melihat anggaran dan pemakaiannya berdampingan.</p></div>
-          <div class="mini-pocket" aria-label="Ilustrasi kantong bulanan contoh"><div><span>KANTONG BULANAN</span><strong>Makan & minum</strong></div><p>Rp 640.000 <span>tersisa</span></p><div class="progress"><span></span></div><small>Data ilustrasi</small></div>
-        </article>
+    <section class="browser-section" aria-labelledby="browser-title">
+      <div class="shell">
+        <div class="browser-heading"><div><p class="eyebrow">Lanjutkan di browser</p><h2 id="browser-title">Layar lebih luas.<br><em>Cerita yang sama.</em></h2></div><div><p>Cari dan tinjau catatan di laptop, termasuk filter per akun dan kantong. Lanjutkan catatan yang sama di ponsel setelah sinkronisasi.</p><a class="text-link" href="https://app.sakumoney.my.id/">Buka aplikasi web <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div></div>
+        <figure class="browser-window"><div class="browser-bar" aria-hidden="true"><span></span><span></span><span></span><b>app.sakumoney.my.id</b></div><img class="theme-image light-image" src="/assets/activity-desktop-light.png" width="1440" height="900" loading="lazy" alt="Saku di browser: Activity dengan transaksi contoh, pencarian, dan filter"><img class="theme-image dark-image" src="/assets/activity-desktop-dark.png" width="1440" height="900" loading="lazy" alt="" aria-hidden="true"><figcaption>Tampilan aplikasi web · data contoh</figcaption></figure>
       </div>
     </section>
 
-    <section id="cerita-saku" class="feature-section" aria-labelledby="feature-title">
-      <div class="shell feature-layout">
-        <div class="feature-copy"><p class="eyebrow eyebrow-light"><span class="eyebrow-line"></span> Dibuat untuk rutinitasmu</p><h2 id="feature-title">Dari layar utama sampai layar kecil di ponsel.</h2><p>Saku punya widget untuk melihat ringkasan dan mencatat lebih cepat. Saat kamu kembali ke aplikasi, catatan dan kantongmu tetap mudah dibaca.</p><ul class="feature-list"><li>Widget untuk akses cepat</li><li>Kantong untuk rencana bulanan</li><li>Riwayat yang bisa dicari</li></ul></div>
-        <figure class="feature-shot"><div class="phone-shell phone-secondary"><div class="phone-screen"><img src="/assets/saku-pockets-sample.png?v=20261008" width="390" height="844" alt="Tampilan Kantong Saku dengan enam kantong dan data rupiah contoh" loading="lazy"></div></div><figcaption>Tampilan aplikasi dengan data contoh</figcaption></figure>
+    <section class="more shell" id="fitur-lain" aria-labelledby="more-title">
+      <div class="more-heading"><p class="eyebrow">Saat hidup tak selalu rapi</p><h2 id="more-title">Ada ruang untuk <em>lebih dari hari ini.</em></h2></div>
+      <div class="feature-list">
+        <article class="feature-row"><span class="feature-number">04 / CATCH UP</span><div><h3>Tertinggal mencatat? Mulai dari mutasi.</h3><p>Unggah screenshot atau PDF, periksa hasil dan kemungkinan duplikat, lalu pilih transaksi yang ingin disimpan.</p><small>Perlu login, internet, dan persetujuan sebelum pemrosesan AI. Kamu tetap memeriksa hasilnya.</small></div><span class="feature-glyph" aria-hidden="true">↗</span></article>
+        <article class="feature-row"><span class="feature-number">05 / PLANS</span><div><h3>Rencana tetap terlihat.</h3><p>Tinjau tagihan rutin, cicilan, dan saldo kartu kredit. Catat pembayaran setelah benar-benar dilakukan.</p></div><span class="feature-glyph" aria-hidden="true">↗</span></article>
+        <article class="feature-row"><span class="feature-number">06 / WIDGET</span><div><h3>Catat lebih dekat dari layar utama.</h3><p>Di Android, buka pencatatan cepat atau transaksi favorit langsung dari widget.</p></div><span class="feature-glyph" aria-hidden="true">↗</span></article>
       </div>
     </section>
 
-    <section class="data-section shell" aria-labelledby="data-title">
-      <div class="data-heading"><p class="eyebrow"><span class="eyebrow-line"></span> Data milikmu</p><h2 id="data-title">Catatan yang terasa dekat.<br><em>Salinan yang tetap bisa kamu bawa.</em></h2></div>
-      <div class="data-copy"><p>Saku bisa dipakai di perangkat. Masuk dengan Google untuk menyimpan cadangan dan memulihkan catatan di perangkat lain.</p><p>Jika kamu memberi izin Drive, Saku juga bisa mencerminkan catatan ke Google Sheet. Fitur ini pilihanmu; cadangan dan cermin Sheet adalah dua proses yang berbeda.</p><a class="inline-link" href="https://app.sakumoney.my.id/">Buka aplikasi web <span aria-hidden="true">↗</span></a></div>
+    <section class="control-section" aria-labelledby="control-title">
+      <div class="shell control-layout"><div><p class="eyebrow">Catatanmu, pilihanmu</p><h2 id="control-title">Tetap dalam <em>kendalimu.</em></h2></div><div class="control-items"><p><strong>Catat saat offline.</strong> Setelah masuk dan menyiapkan akun, catatan di perangkat tetap bisa dibuka tanpa internet. Masuk dan sinkronisasi memerlukan koneksi.</p><p><strong>Cadangan dengan Google.</strong> Simpan cadangan dan pulihkan di perangkat lain dengan akun yang sama.</p><p><strong>Sheet jika kamu mau.</strong> Cerminkan catatan ke Google Sheets dengan izin terpisah, atau ekspor CSV. Perubahan di Sheet tidak mengubah catatan di Saku.</p></div></div>
     </section>
 
-    <section class="closing" aria-labelledby="closing-title"><div class="shell closing-inner"><p class="eyebrow eyebrow-light"><span class="eyebrow-line"></span> Mulai hari ini</p><h2 id="closing-title">Beri uangmu sedikit ruang untuk <em>lebih dipahami.</em></h2><div class="closing-actions"><a class="button button-cream" href="https://app.sakumoney.my.id/download/saku.apk" download="saku.apk">Unduh untuk Android <span class="button-icon" aria-hidden="true">↓</span></a><a class="button button-outline" href="https://app.sakumoney.my.id/">Buka aplikasi web <span aria-hidden="true">↗</span></a></div></div></section>
+    <section class="faq shell" id="tanya-jawab" aria-labelledby="faq-title">
+      <div><p class="eyebrow">Sebelum mulai</p><h2 id="faq-title">Yang perlu <em>kamu tahu.</em></h2></div>
+      <div class="faq-list">
+        <details><summary>Haruskah menghubungkan rekening bank?</summary><p>Tidak. Kamu mencatat transaksi dan saldo sendiri, atau meninjau hasil impor mutasi. Saku tidak menghubungkan atau memindahkan uang dari bank.</p></details>
+        <details><summary>Bisa dipakai di iPhone?</summary><p>Saku dapat dibuka lewat browser. Aplikasi unduhan dan widget layar utama saat ini tersedia untuk Android.</p></details>
+        <details><summary>Bagaimana memasang versi Android?</summary><p>Unduh APK dari situs ini, buka filenya, lalu ikuti petunjuk Android. Kamu mungkin perlu mengizinkan pemasangan dari browser yang dipakai.</p></details>
+        <details><summary>Bagaimana jika berganti ponsel?</summary><p>Pastikan cadangan terbaru sudah tersimpan. Masuk dengan akun Google yang sama di perangkat baru, lalu pulihkan catatanmu.</p></details>
+      </div>
+    </section>
 
-    <section id="tanya-jawab" class="faq shell" aria-labelledby="faq-title"><div><p class="eyebrow"><span class="eyebrow-line"></span> Tanya jawab</p><h2 id="faq-title">Sebelum mulai.</h2><p class="faq-intro">Beberapa hal yang biasanya ingin diketahui lebih dulu.</p></div><div class="faq-list"><details><summary>Apakah Saku perlu akses ke rekening bank?<span aria-hidden="true">+</span></summary><p>Tidak. Kamu memasukkan transaksi dan saldo awal sendiri. Saku bukan layanan yang menghubungkan atau memindahkan uang dari bank.</p></details><details><summary>Bisakah dipakai tanpa internet?<span aria-hidden="true">+</span></summary><p>Catatan di perangkat tetap tersedia saat offline. Untuk masuk, membuat cadangan, memulihkan data, atau memperbarui Google Sheet, perangkat perlu tersambung ke internet.</p></details><details><summary>Apakah Google Sheet wajib?<span aria-hidden="true">+</span></summary><p>Tidak. Pencerminan ke Google Sheet bersifat opsional dan memerlukan izin Drive terpisah.</p></details><details><summary>Bagaimana jika berganti ponsel?<span aria-hidden="true">+</span></summary><p>Masuk dengan akun Google yang sama dan pulihkan cadangan. Periksa salinan terbaru sebelum menghapus aplikasi atau mengganti perangkat.</p></details></div></section>
+    <section class="closing" id="mulai" aria-labelledby="closing-title"><div class="shell closing-inner"><p class="eyebrow">Mulai dari yang kamu catat hari ini</p><h2 id="closing-title">Beri uangmu <em>gambaran yang lebih jelas.</em></h2><div class="closing-actions"><a class="button button-inverse" href="https://app.sakumoney.my.id/download/saku.apk" download="saku.apk">Unduh untuk Android <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a><a class="text-link" href="https://app.sakumoney.my.id/">Buka aplikasi web <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><p>Masuk dengan Google untuk mulai memakai Saku.</p><span class="closing-orbit" aria-hidden="true">s.</span></div></section>
   </main>
-
-  <footer class="footer"><div class="shell footer-inner"><div><a class="wordmark" href="/" aria-label="Saku, kembali ke atas">saku<span>.</span></a><p>Uang sehari-hari, lebih terasa tertata.</p></div><div class="footer-links"><a href="https://app.sakumoney.my.id/privacy">Privasi</a><a href="https://app.sakumoney.my.id/terms">Ketentuan</a><a href="https://app.sakumoney.my.id/account-deletion">Hapus akun</a><a href="mailto:richardhuang.email@gmail.com">Kontak</a></div><p class="copyright">© <span id="year">2026</span> Saku</p></div></footer>
-  <script src="/script.js" defer></script>
+  <footer class="footer shell"><div><a class="wordmark" href="/" aria-label="Saku, halaman utama">saku<span>.</span></a><p>Ruang untuk uang sehari-hari.</p></div><div class="footer-links"><a href="https://app.sakumoney.my.id/privacy">Privasi</a><a href="https://app.sakumoney.my.id/terms">Ketentuan</a><a href="https://app.sakumoney.my.id/account-deletion">Hapus akun</a><a href="mailto:richardhuang.email@gmail.com">Kontak</a></div><span class="copyright">© <span id="year">2026</span> Saku</span></footer>
+  <script src="/script.js?v=20261025c" defer></script>
 </body>
 </html>
