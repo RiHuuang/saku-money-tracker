@@ -4,6 +4,7 @@ import { jwtVerify } from "jose/jwt/verify";
 import { decrypt, encrypt, encryptionKey, hashToken, pkceChallenge, timingSafeEqual, tokenPart } from "./crypto.js";
 import { avatarAfterSignIn, isGoogleAvatarUrl, sessionToken, splitSessionToken } from "../server/src/identity.js";
 import { aiImportAvailable, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, validateImportInput } from "./import-ai.js";
+import { withSecurityHeaders } from "./security-headers.js";
 export { UserLiveUpdates } from "./live.js";
 
 let jwks;
@@ -455,7 +456,7 @@ async function route(request, env) {
     }
     return reply({ error: "Update Saku to continue cloud sync.", code: "UPDATE_REQUIRED", updateUrl: successor }, 426);
   }
-  if (["GET", "HEAD"].includes(request.method) && path === "/") return env.ASSETS.fetch(request);
+  if (["GET", "HEAD"].includes(request.method) && path === "/") return withSecurityHeaders(await env.ASSETS.fetch(request));
   const allowedOrigins = new Set((env.ALLOWED_ORIGINS || "https://localhost").split(",").map((item) => item.trim()));
   const cors = corsHeaders(origin, env);
   if (origin && origin !== url.origin && !allowedOrigins.has(origin)) throw fault(403, "Origin is not allowed");
@@ -581,7 +582,7 @@ async function route(request, env) {
     return browser ? setBrowserSession(reply({ ok: true }), next) : reply(next, 200, cors);
   }
 
-  if (!path.startsWith("/v1/") && !path.startsWith("/v2/")) return env.ASSETS.fetch(request);
+  if (!path.startsWith("/v1/") && !path.startsWith("/v2/")) return withSecurityHeaders(await env.ASSETS.fetch(request));
   const auth = await authenticate(request, env);
   const expectedUid = request.headers.get("x-saku-user-id");
   if (expectedUid && expectedUid !== auth.uid) throw fault(409, "Google account changed during synchronization");

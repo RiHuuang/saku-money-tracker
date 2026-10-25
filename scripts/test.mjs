@@ -25,6 +25,7 @@ try {
     await import("../worker/bounded-login.test.mjs");
     await import("../worker/live.test.mjs");
     await import("../worker/live-route.test.mjs");
+    await import("../worker/security-headers.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });
