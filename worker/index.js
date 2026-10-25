@@ -54,7 +54,10 @@ async function googleJson(url, accessToken, options = {}) {
   // are already in the request, and parsing that echo wastes Worker CPU.
   if (response.ok && options.method === "PUT") return null;
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw fault([401, 429].includes(response.status) ? response.status : 502, `Google API failed (${response.status}): ${result.error?.message || "request rejected"}`);
+  if (!response.ok) {
+    console.error("Google API failed", response.status, result.error?.message || "request rejected");
+    throw fault([401, 429].includes(response.status) ? response.status : 502, "Google rejected the request; reconnect Google Drive");
+  }
   return result;
 }
 
