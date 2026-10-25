@@ -24,3 +24,5 @@ google-services.json
 service-account*.json
 client-secret*.json
 android/app/src/test/resources/sheet-parity.json
+promo/soundtrack.wav
+promo/stills/
