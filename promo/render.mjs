@@ -1,7 +1,8 @@
 // Renders promo/index.html frame by frame and encodes it with ffmpeg.
 //
-//   node promo/render.mjs                 → promo/saku-promo.mp4
-//   node promo/render.mjs --stills 0,9,14 → PNG stills in promo/stills/
+//   node promo/render.mjs                     → promo/saku-promo.mp4 (16:9)
+//   node promo/render.mjs --format vertical   → promo/saku-promo-vertical.mp4 (9:16)
+//   node promo/render.mjs --stills 0,9,14     → PNG stills in promo/stills/
 //
 // Requires Playwright (Chromium) and ffmpeg on PATH.
 import { createRequire } from 'node:module';
@@ -19,19 +20,23 @@ const opt = (name, fallback) => { const i = args.indexOf(name); return i >= 0 ? 
 const fps = Number(opt('--fps', 30));
 const stills = opt('--stills');
 const audio = join(here, 'soundtrack.wav');
-const out = opt('--out', join(here, 'saku-promo.mp4'));
+const vertical = opt('--format') === 'vertical';
+const out = opt('--out', join(here, vertical ? 'saku-promo-vertical.mp4' : 'saku-promo.mp4'));
 
 const browser = await chromium.launch();
+const url = pathToFileURL(join(here, 'index.html'));
+if (vertical) url.search = '?format=vertical';
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
-await page.goto(pathToFileURL(join(here, 'index.html')).href);
+await page.goto(url.href);
 await page.evaluate(() => window.ready);
-const duration = await page.evaluate(() => window.DURATION);
+const { duration, size } = await page.evaluate(() => ({ duration: window.DURATION, size: window.SIZE }));
+await page.setViewportSize(size);
 
 if (stills) {
   mkdirSync(join(here, 'stills'), { recursive: true });
   for (const t of stills.split(',').map(Number)) {
     await page.evaluate(t => window.seek(t), t);
-    await page.screenshot({ path: join(here, 'stills', `t${String(t).padStart(5, '0')}.png`) });
+    await page.screenshot({ path: join(here, 'stills', `${vertical ? 'v' : 'h'}${t.toFixed(2).padStart(5, '0')}.png`) });
   }
   await browser.close();
   process.exit(0);

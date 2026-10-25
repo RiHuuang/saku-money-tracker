@@ -128,6 +128,51 @@ h1,h2{font-weight:700;letter-spacing:-.06em;line-height:.99}
 #c-btn{display:flex;align-items:center;gap:16px;height:84px;padding:0 40px;border-radius:999px;background:#f1fff4;color:var(--closing);font-size:28px;font-weight:700;letter-spacing:-.02em}
 #c-btn svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 #c-note{left:120px;top:960px;font-size:20px;color:#a9d6ba}
+
+.t1{left:1600px;top:90px}.t2{left:1530px;top:430px}.t3{left:1180px;top:760px}.t4{left:1230px;top:175px}.t5{left:1560px;top:770px}.t6{left:760px;top:840px}
+.h1t{left:1570px;top:250px;width:320px;z-index:20}.h2t{left:935px;top:520px;width:260px;z-index:20}.h3t{left:1600px;top:700px;width:260px;z-index:20}
+.st0,.st1,.st2{top:270px}
+.step-h{margin-top:34px}.step-p{margin-top:34px}.chips{margin-top:30px}
+.p0{left:880px;top:200px}.p1{left:860px;top:400px}.p2{left:900px;top:600px}.p3{left:1590px;top:660px;width:300px;z-index:20}
+
+/* ── vertical 9:16 (1080×1920), enabled with ?format=vertical */
+html.v,html.v body,.v #stage{width:1080px;height:1920px}
+.v #grid{-webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 50%,#000 30%,transparent 80%);background-position:12px 48px}
+.v #s1-eye{left:76px;top:740px}
+.v .s1h{left:68px;top:790px;font-size:150px}
+.v .t1{left:660px;top:140px}.v .t4{left:90px;top:250px}.v .t2{left:560px;top:470px}
+.v .t3{left:80px;top:1470px}.v .t5{left:650px;top:1560px}.v .t6{left:360px;top:1700px}
+.v #tagline{top:1100px;font-size:38px}
+.v #panel{left:72px;top:740px;width:936px;height:1110px}
+.v #panel .halo{left:218px;top:300px}
+.v .sword{top:430px;font-size:230px}
+.v #phone{left:310px;top:807px;width:460px;height:976px;border-radius:52px}
+.v #figcap{left:72px;width:936px;top:1866px;font-size:18px}
+.v .leftcopy{left:72px;width:936px}
+.v #h-eye{top:220px}
+.v .hero-h{top:265px;font-size:124px}
+.v #h-lead{top:540px;width:936px;font-size:29px}
+.v .st0,.v .st1,.v .st2{top:200px}
+.v .step-h{font-size:88px;margin-top:26px}
+.v .step-p{width:936px;font-size:26px;margin-top:22px}
+.v .chips{margin-top:22px}
+.v .h1t{left:690px;top:860px}.v .h2t{left:30px;top:1150px}.v .h3t{left:740px;top:1500px}
+.v #entry{left:40px;top:880px}
+.v #toast{left:330px;top:1690px}
+.v .p0{left:30px;top:850px}.v .p1{left:50px;top:1060px}.v .p2{left:20px;top:1270px}.v .p3{left:720px;top:1560px}
+.v #flow{left:30px;top:850px}
+.v #donut{left:680px;top:1460px}
+.v #f-eye{left:76px;top:230px}
+.v .f-h{left:68px;top:280px;font-size:110px}
+.v #rows{left:72px;right:72px;top:720px}
+.v .row{grid-template-columns:1fr 60px;grid-template-rows:auto auto;align-content:center;row-gap:14px;height:270px}
+.v .row .num{grid-column:1;grid-row:1}.v .row>div{grid-column:1;grid-row:2}.v .row .gl{grid-column:2;grid-row:1/3}
+.v .row h3{font-size:42px}.v .row p{font-size:24px;line-height:1.4}
+.v #orbit{right:-260px;top:-60px;font-size:1100px}
+.v #c-eye{left:76px;top:560px}
+.v .c-h{left:68px;top:615px;font-size:128px}
+.v #c-foot{left:72px;right:72px;top:1150px;flex-direction:column;align-items:flex-start;gap:64px}
+.v #c-note{left:76px;top:1560px;font-size:24px}
 </style>
 </head>
 <body>
@@ -136,14 +181,14 @@ h1,h2{font-weight:700;letter-spacing:-.06em;line-height:.99}
 
   <!-- 1 · opening statement -->
   <p id="s1-eye" class="abs eyebrow"><i></i>Uang sehari-hari, lebih jelas</p>
-  <h1 class="abs s1h s1a"><span class="ln"><span>Uangmu bergerak</span></span><span class="ln"><span>setiap hari.</span></span></h1>
-  <h1 class="abs s1h s1b"><span class="ln"><span>Sekarang ceritanya</span></span><span class="ln"><span>bisa kamu <em>lihat.</em></span></span></h1>
-  <div class="abs tk t1" style="left:1600px;top:90px"><small>PENGELUARAN</small><strong>Kopi sore</strong><b>−Rp32.000</b></div>
-  <div class="abs tk dark t2" style="left:1530px;top:430px"><small>UANG MASUK</small><strong>Gaji Oktober</strong><b>+Rp10.000.000</b></div>
-  <div class="abs tk t3" style="left:1180px;top:760px"><small>TRANSPORTASI</small><strong>Ojek ke kantor</strong><b>−Rp24.000</b></div>
-  <div class="abs tk t4" style="left:1230px;top:175px"><small>TAGIHAN</small><strong>Listrik</strong><b>−Rp450.000</b></div>
-  <div class="abs tk t5" style="left:1560px;top:770px"><small>BELANJA</small><strong>Kebutuhan harian</strong><b>−Rp89.000</b></div>
-  <div class="abs tk t6" style="left:760px;top:840px"><small>HIBURAN</small><strong>Nonton bareng</strong><b>−Rp75.000</b></div>
+  <h1 class="abs s1h s1a" data-v="Uangmu|bergerak|setiap hari."><span class="ln"><span>Uangmu bergerak</span></span><span class="ln"><span>setiap hari.</span></span></h1>
+  <h1 class="abs s1h s1b" data-v="Sekarang|ceritanya|bisa kamu|<em>lihat.</em>"><span class="ln"><span>Sekarang ceritanya</span></span><span class="ln"><span>bisa kamu <em>lihat.</em></span></span></h1>
+  <div class="abs tk t1"><small>PENGELUARAN</small><strong>Kopi sore</strong><b>−Rp32.000</b></div>
+  <div class="abs tk dark t2"><small>UANG MASUK</small><strong>Gaji Oktober</strong><b>+Rp10.000.000</b></div>
+  <div class="abs tk t3"><small>TRANSPORTASI</small><strong>Ojek ke kantor</strong><b>−Rp24.000</b></div>
+  <div class="abs tk t4"><small>TAGIHAN</small><strong>Listrik</strong><b>−Rp450.000</b></div>
+  <div class="abs tk t5"><small>BELANJA</small><strong>Kebutuhan harian</strong><b>−Rp89.000</b></div>
+  <div class="abs tk t6"><small>HIBURAN</small><strong>Nonton bareng</strong><b>−Rp75.000</b></div>
 
   <!-- art panel shared by hero + journey -->
   <div id="panel" class="abs">
@@ -167,16 +212,16 @@ h1,h2{font-weight:700;letter-spacing:-.06em;line-height:.99}
   <p id="h-eye" class="abs eyebrow leftcopy"><i></i>Money tracker untuk Android &amp; web</p>
   <h1 class="abs leftcopy hero-h"><span class="ln"><span>Tahu ke mana</span></span><span class="ln"><span><em>uangmu</em> pergi.</span></span></h1>
   <p id="h-lead" class="abs leftcopy">Dari satu transaksi sampai pola sebulan: catat, bagi ke kantong, lalu lihat gambaran yang sebenarnya.</p>
-  <div class="abs tk h1t" style="left:1570px;top:250px;width:320px;z-index:20"><small>RECORDED CASH</small><strong>Across 4 accounts</strong><b id="cash" class="in">Rp 0</b></div>
-  <div class="abs tk h2t" style="left:935px;top:520px;width:260px;z-index:20"><small>01 / CATAT</small><strong>Kopi sore</strong><b>Rp32.000</b></div>
-  <div class="abs tk h3t" style="left:1600px;top:700px;width:260px;z-index:20"><small>02 / PAHAMI</small><strong style="font-size:24px;line-height:1.25">Catatan jadi gambaran.</strong></div>
+  <div class="abs tk h1t"><small>RECORDED CASH</small><strong>Across 4 accounts</strong><b id="cash" class="in">Rp 0</b></div>
+  <div class="abs tk h2t"><small>01 / CATAT</small><strong>Kopi sore</strong><b>Rp32.000</b></div>
+  <div class="abs tk h3t"><small>02 / PAHAMI</small><strong style="font-size:24px;line-height:1.25">Catatan jadi gambaran.</strong></div>
 
   <!-- 4 · catat -->
-  <div class="abs leftcopy st0" style="top:270px">
+  <div class="abs leftcopy st0">
     <div class="step-top sx"><span>01</span><i></i><span>CATAT</span></div>
-    <h2 class="step-h" style="margin-top:34px"><span class="ln"><span>Satu catatan kecil.</span></span><span class="ln"><span>Gambaran mulai</span></span><span class="ln"><span><em>terbentuk.</em></span></span></h2>
-    <p class="step-p sp" style="margin-top:34px">Catat uang masuk atau keluar, pilih akun dan kantongnya. Cari kembali saat kamu membutuhkannya.</p>
-    <div class="chips sc" style="margin-top:30px"><span>Riwayat</span><span>Pencarian</span><span>Filter</span></div>
+    <h2 class="step-h"><span class="ln"><span>Satu catatan kecil.</span></span><span class="ln"><span>Gambaran mulai</span></span><span class="ln"><span><em>terbentuk.</em></span></span></h2>
+    <p class="step-p sp">Catat uang masuk atau keluar, pilih akun dan kantongnya. Cari kembali saat kamu membutuhkannya.</p>
+    <div class="chips sc"><span>Riwayat</span><span>Pencarian</span><span>Filter</span></div>
   </div>
   <div id="entry" class="abs card">
     <div class="seg"><span class="on">Expense</span><span>Income</span><span>Transfer</span></div>
@@ -189,23 +234,23 @@ h1,h2{font-weight:700;letter-spacing:-.06em;line-height:.99}
   <div id="toast" class="abs"><b>✓</b>Transaksi tersimpan</div>
 
   <!-- 5 · atur -->
-  <div class="abs leftcopy st1" style="top:270px">
+  <div class="abs leftcopy st1">
     <div class="step-top sx"><span>02</span><i></i><span>ATUR</span></div>
-    <h2 class="step-h" style="margin-top:34px"><span class="ln"><span>Berikan tempat</span></span><span class="ln"><span>untuk setiap</span></span><span class="ln"><span><em>rencana.</em></span></span></h2>
-    <p class="step-p sp" style="margin-top:34px">Bagi anggaran bulanan ke dalam kantong. Lihat yang direncanakan, terpakai, dan masih tersedia.</p>
-    <div class="chips sc" style="margin-top:30px"><span>Kantong adalah anggaran, bukan rekening baru</span></div>
+    <h2 class="step-h"><span class="ln"><span>Berikan tempat</span></span><span class="ln"><span>untuk setiap</span></span><span class="ln"><span><em>rencana.</em></span></span></h2>
+    <p class="step-p sp">Bagi anggaran bulanan ke dalam kantong. Lihat yang direncanakan, terpakai, dan masih tersedia.</p>
+    <div class="chips sc"><span>Kantong adalah anggaran, bukan rekening baru</span></div>
   </div>
-  <div class="abs card pk p0" style="left:880px;top:200px"><div class="top"><span class="ic" style="background:#e4efe8"><svg viewBox="0 0 24 24" stroke="#176b55"><path d="M7 3v8m-3-8v5a3 3 0 0 0 6 0V3M7 11v10M17 3c-2 2-2 6 0 8v10"/></svg></span>Makan &amp; minum</div><div class="amt">Rp 384.000<small>left</small></div><div class="bar"><i style="background:#176b55"></i></div><div class="meta"><span>Rp 1.116.000 spent</span><span>74%</span></div></div>
-  <div class="abs card pk p1" style="left:860px;top:400px"><div class="top"><span class="ic" style="background:#ecebfa"><svg viewBox="0 0 24 24" stroke="#7a6fd6"><path d="M5 8h14l-1 12H6L5 8Zm4 0a3 3 0 0 1 6 0"/></svg></span>Belanja</div><div class="amt">Rp 137.000<small>left</small></div><div class="bar"><i style="background:#7a6fd6"></i></div><div class="meta"><span>Rp 863.000 spent</span><span>86%</span></div></div>
-  <div class="abs card pk p2" style="left:900px;top:600px"><div class="top"><span class="ic" style="background:#fbeee3"><svg viewBox="0 0 24 24" stroke="#d98a3a"><path d="M5 16h14v-4l-2-5H7l-2 5v4Zm2 0v2m10-2v2M5 12h14"/></svg></span>Transportasi</div><div class="amt">Rp 320.000<small>left</small></div><div class="bar"><i style="background:#d98a3a"></i></div><div class="meta"><span>Rp 280.000 spent</span><span>47%</span></div></div>
-  <div class="abs tk p3" style="left:1590px;top:660px;width:300px;z-index:20"><small>WITHIN BUDGET &amp; CASH</small><strong>Masih tersedia</strong><b id="avail" class="in">Rp 0</b></div>
+  <div class="abs card pk p0"><div class="top"><span class="ic" style="background:#e4efe8"><svg viewBox="0 0 24 24" stroke="#176b55"><path d="M7 3v8m-3-8v5a3 3 0 0 0 6 0V3M7 11v10M17 3c-2 2-2 6 0 8v10"/></svg></span>Makan &amp; minum</div><div class="amt">Rp 384.000<small>left</small></div><div class="bar"><i style="background:#176b55"></i></div><div class="meta"><span>Rp 1.116.000 spent</span><span>74%</span></div></div>
+  <div class="abs card pk p1"><div class="top"><span class="ic" style="background:#ecebfa"><svg viewBox="0 0 24 24" stroke="#7a6fd6"><path d="M5 8h14l-1 12H6L5 8Zm4 0a3 3 0 0 1 6 0"/></svg></span>Belanja</div><div class="amt">Rp 137.000<small>left</small></div><div class="bar"><i style="background:#7a6fd6"></i></div><div class="meta"><span>Rp 863.000 spent</span><span>86%</span></div></div>
+  <div class="abs card pk p2"><div class="top"><span class="ic" style="background:#fbeee3"><svg viewBox="0 0 24 24" stroke="#d98a3a"><path d="M5 16h14v-4l-2-5H7l-2 5v4Zm2 0v2m10-2v2M5 12h14"/></svg></span>Transportasi</div><div class="amt">Rp 320.000<small>left</small></div><div class="bar"><i style="background:#d98a3a"></i></div><div class="meta"><span>Rp 280.000 spent</span><span>47%</span></div></div>
+  <div class="abs tk p3"><small>WITHIN BUDGET &amp; CASH</small><strong>Masih tersedia</strong><b id="avail" class="in">Rp 0</b></div>
 
   <!-- 6 · pahami -->
-  <div class="abs leftcopy st2" style="top:270px">
+  <div class="abs leftcopy st2">
     <div class="step-top sx"><span>03</span><i></i><span>PAHAMI</span></div>
-    <h2 class="step-h" style="margin-top:34px"><span class="ln"><span>Lihat polanya.</span></span><span class="ln"><span>Tentukan</span></span><span class="ln"><span><em>langkahmu.</em></span></span></h2>
-    <p class="step-p sp" style="margin-top:34px">Tinjau pengeluaran per kategori dan arus uang bulanan dari transaksi yang sudah kamu catat.</p>
-    <div class="chips sc" style="margin-top:30px"><span>Ringkasan</span><span>Kategori</span><span>Arus kas</span></div>
+    <h2 class="step-h"><span class="ln"><span>Lihat polanya.</span></span><span class="ln"><span>Tentukan</span></span><span class="ln"><span><em>langkahmu.</em></span></span></h2>
+    <p class="step-p sp">Tinjau pengeluaran per kategori dan arus uang bulanan dari transaksi yang sudah kamu catat.</p>
+    <div class="chips sc"><span>Ringkasan</span><span>Kategori</span><span>Arus kas</span></div>
   </div>
   <div id="flow" class="abs card">
     <h4>Your cash flow</h4>
@@ -226,7 +271,7 @@ h1,h2{font-weight:700;letter-spacing:-.06em;line-height:.99}
 
   <!-- 7 · more -->
   <p id="f-eye" class="abs eyebrow"><i></i>Saat hidup tak selalu rapi</p>
-  <h2 class="abs f-h"><span class="ln"><span>Ada ruang untuk <em>lebih dari hari ini.</em></span></span></h2>
+  <h2 class="abs f-h" data-v="Ada ruang untuk|<em>lebih dari</em>|<em>hari ini.</em>"><span class="ln"><span>Ada ruang untuk <em>lebih dari hari ini.</em></span></span></h2>
   <div id="rows" class="abs">
     <div class="row"><i class="rule"></i><span class="num rc">04 / CATCH UP</span><div class="rc"><h3>Tertinggal mencatat? Mulai dari mutasi.</h3><p>Unggah screenshot atau PDF, periksa hasilnya, lalu simpan yang kamu pilih.</p></div><span class="gl rc">↗</span></div>
     <div class="row"><i class="rule"></i><span class="num rc">05 / PLANS</span><div class="rc"><h3>Rencana tetap terlihat.</h3><p>Tagihan rutin, cicilan, dan saldo kartu kredit di satu tempat.</p></div><span class="gl rc">↗</span></div>
@@ -255,6 +300,16 @@ h1,h2{font-weight:700;letter-spacing:-.06em;line-height:.99}
 // Deterministic timeline: every frame is a pure function of time, so the
 // renderer can seek to any t and screenshot it.
 const DURATION = 35;
+const V = new URLSearchParams(location.search).get('format') === 'vertical';
+if (V) {
+  document.documentElement.classList.add('v');
+  for (const el of document.querySelectorAll('[data-v]')) {
+    el.innerHTML = el.dataset.v.split('|').map(l => `<span class="ln"><span>${l}</span></span>`).join('');
+  }
+}
+const L = V
+  ? { W: 1080, H: 1920, dock: [72, 84, 64 / 260], phoneOff: 1300, entryFly: [300, 480] }
+  : { W: 1920, H: 1080, dock: [116, 46, 54 / 260], phoneOff: 1000, entryFly: [420, 420] };
 const E = {
   lin: p => p,
   out: p => 1 - Math.pow(1 - p, 4),
@@ -303,12 +358,12 @@ function seek(t) {
 }
 
 function build() {
-  const W = 1920, H = 1080;
+  const { W, H } = L;
 
   const wm = document.getElementById('wm');
   const wr = wm.getBoundingClientRect();
   const wx = (W - wr.width) / 2, wy = (H - wr.height) / 2 - 40;
-  const dock = 54 / 260;
+  const [dockX, dockY, dock] = L.dock;
   const dr = document.querySelector('#wm span').getBoundingClientRect();
   const dotX = wx + dr.left + dr.width * .45, dotY = wy + dr.top + dr.height * .78;
 
@@ -316,7 +371,7 @@ function build() {
   tw('#grid', 0, 1.4, { o: [0, 1] }, { ease: E.io });
   tw('#s1-eye', .2, .8, { o: [0, 1], x: [-30, 0] });
   tw('.s1a .ln>span', .35, 1, { yp: [130, 0] }, { stagger: .13, ease: E.expo });
-  tw('.s1b .ln>span', 0, 0, { yp: [130, 110] });
+  tw('.s1b .ln>span', 0, 0, { yp: [130, 130] });
   const tks = [...document.querySelectorAll('.tk[class*=" t"]')].filter(e => /\bt\d\b/.test(e.className));
   tks.forEach((el, i) => {
     const r = el.getBoundingClientRect();
@@ -339,7 +394,7 @@ function build() {
   tw('#wm span', 5.45, .7, { s: [0, 1], y: [-120, 0] }, { ease: E.back });
   tw('#tagline', 5.9, .8, { o: [0, 1], y: [20, 0] });
   tw('#tagline', 7.2, .4, { o: [1, 0] }, { ease: E.lin });
-  tw(wm, 7.45, 1.05, { x: [wx, 116], y: [wy, 46], s: [1, dock] }, { ease: E.io });
+  tw(wm, 7.45, 1.05, { x: [wx, dockX], y: [wy, dockY], s: [1, dock] }, { ease: E.io });
   tw('#grid', 7.4, .8, { o: [1, 0] }, { ease: E.lin });
 
   // ── 3 · hero (7.9 – 12.6s)
@@ -347,8 +402,8 @@ function build() {
   tw('#panel', 7.9, 1, { ct: [100, 0] }, { ease: E.expo });
   tw('#pindex', 8.5, .6, { o: [0, 1] });
   tw('#baseline', 9.3, .6, { o: [0, 1], y: [20, 0] });
-  tw('#phone', 0, 0, { y: [1000, 1000] });
-  tw('#phone', 8.25, 1.2, { y: [1000, 0] }, { ease: E.expo });
+  tw('#phone', 0, 0, { y: [L.phoneOff, L.phoneOff] });
+  tw('#phone', 8.25, 1.2, { y: [L.phoneOff, 0] }, { ease: E.expo });
   tw('#figcap', 9.4, .6, { o: [0, 1] });
   tw('.scr1,.scr2,.scr3', 0, 0, { ct: [100, 100] });
   tw('#h-eye', 8.3, .7, { o: [0, 1], x: [-30, 0] });
@@ -393,7 +448,7 @@ function build() {
   tw('#amtv', 13.9, .9, { steps: [0, 5.99] }, { ease: E.lin });
   tw('#save', 15.0, .14, { s: [1, .93] }, { ease: E.out });
   tw('#save', 15.14, .3, { s: [.93, 1] }, { ease: E.back });
-  tw('#entry', 15.35, .7, { x: [0, 420], y: [0, 420], s: [1, .3], r: [-2, 0] }, { ease: E.io });
+  tw('#entry', 15.35, .7, { x: [0, L.entryFly[0]], y: [0, L.entryFly[1]], s: [1, .3], r: [-2, 0] }, { ease: E.io });
   tw('#entry', 15.75, .3, { o: [1, 0] }, { ease: E.lin });
   tw('#toast', 0, 0, { o: [0, 0] });
   tw('#toast', 15.95, .6, { o: [0, 1], y: [30, 0] }, { ease: E.back });
@@ -418,7 +473,7 @@ function build() {
   tw('#flow,#donut', 24.75, .4, { o: [1, 0], s: [1, .94] }, { stagger: .05, ease: E.in });
 
   // exit the device stage
-  tw('#phone', 24.95, .8, { y: [0, 1000] }, { ease: E.in });
+  tw('#phone', 24.95, .8, { y: [0, L.phoneOff] }, { ease: E.in });
   tw('#figcap,#pindex,#baseline', 24.9, .3, { o: [1, 0] }, { ease: E.lin });
   tw('#panel', 25.25, .7, { cb: [0, 100] }, { ease: E.io });
 
@@ -451,8 +506,10 @@ window.ready = (async () => {
 })();
 window.seek = seek;
 window.DURATION = DURATION;
+window.SIZE = { width: L.W, height: L.H };
 
-// Preview in a browser: open this file and it plays in real time (?t=12 to freeze a frame).
+// Preview in a browser: open this file and it plays in real time (?t=12 to freeze a frame,
+// ?format=vertical for the 9:16 cut).
 if (!navigator.webdriver) window.ready.then(() => {
   const q = new URLSearchParams(location.search);
   if (q.has('t')) return seek(+q.get('t'));

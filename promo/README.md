@@ -1,6 +1,11 @@
 # Saku promo video
 
-`saku-promo.mp4`: a 35-second, 1920×1080, 30 fps motion graphic with a synthesized soundtrack. The copy is in Indonesian and follows the landing page. It uses the landing fonts (Plus Jakarta Sans and Fraunces), the landing palette, and the landing's sample-data app screens, so it shows no real user data.
+Two cuts of the same 35-second, 30 fps motion graphic with a synthesized soundtrack:
+
+- `saku-promo.mp4`: 16:9, 1920×1080, for YouTube, the web and presentations.
+- `saku-promo-vertical.mp4`: 9:16, 1080×1920, for Reels, TikTok, Shorts and Stories.
+
+Both cuts use the same timeline, so scene timing and the soundtrack match. The copy is in Indonesian and follows the landing page. It uses the landing fonts (Plus Jakarta Sans and Fraunces), the landing palette, and the landing's sample-data app screens, so it shows no real user data.
 
 | Time | Scene |
 | --- | --- |
@@ -18,8 +23,9 @@
 ```sh
 python3 promo/soundtrack.py   # writes promo/soundtrack.wav (numpy only)
 node promo/render.mjs         # writes promo/saku-promo.mp4 (Playwright + ffmpeg)
+node promo/render.mjs --format vertical   # writes promo/saku-promo-vertical.mp4
 ```
 
-`node promo/render.mjs --stills 4.2,14,23.8` writes single frames to `promo/stills/` for quick checks. `--silent` skips the audio. Open `promo/index.html` in a browser to watch it loop in real time, or add `?t=12` to hold one frame.
+`node promo/render.mjs --stills 4.2,14,23.8` writes single frames to `promo/stills/` for quick checks. `--silent` skips the audio. Open `promo/index.html` in a browser to watch it loop in real time, or add `?t=12` to hold one frame. Add `?format=vertical` to preview the 9:16 cut.
 
-Each frame depends only on the timestamp (`seek(t)` in `index.html`). Change scene timing in the `build()` timeline. If you shift a scene, also move the matching sound cues in `soundtrack.py`.
+Each frame depends only on the timestamp (`seek(t)` in `index.html`). Change scene timing in the `build()` timeline. The vertical cut changes only the layout, through the `.v` CSS rules and the `L` constants. Headlines that need different line breaks in 9:16 set them in `data-v`. If you shift a scene, also move the matching sound cues in `soundtrack.py`.
