@@ -135,44 +135,60 @@ h1,h2{font-weight:700;letter-spacing:-.06em;line-height:.99}
 .step-h{margin-top:34px}.step-p{margin-top:34px}.chips{margin-top:30px}
 .p0{left:880px;top:200px}.p1{left:860px;top:400px}.p2{left:900px;top:600px}.p3{left:1590px;top:660px;width:300px;z-index:20}
 
-/* ── vertical 9:16 (1080×1920), enabled with ?format=vertical */
+/* ── vertical 9:16 (1080×1920), enabled with ?format=vertical.
+   Text, logo, prices and the CTA stay inside the Reels + TikTok safe zone:
+   x 120–960, y 270–1248, and left of x 780 below y 840 (the right-hand action
+   rail). Backgrounds, the art panel and the lower part of the phone bleed
+   past it on purpose. ?guides=1 shades the unsafe area. */
 html.v,html.v body,.v #stage{width:1080px;height:1920px}
-.v #grid{-webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 50%,#000 30%,transparent 80%);background-position:12px 48px}
-.v #s1-eye{left:76px;top:740px}
-.v .s1h{left:68px;top:790px;font-size:150px}
-.v .t1{left:660px;top:140px}.v .t4{left:90px;top:250px}.v .t2{left:560px;top:470px}
-.v .t3{left:80px;top:1470px}.v .t5{left:650px;top:1560px}.v .t6{left:360px;top:1700px}
-.v #tagline{top:1100px;font-size:38px}
-.v #panel{left:72px;top:740px;width:936px;height:1110px}
-.v #panel .halo{left:218px;top:300px}
-.v .sword{top:430px;font-size:230px}
-.v #phone{left:310px;top:807px;width:460px;height:976px;border-radius:52px}
-.v #figcap{left:72px;width:936px;top:1866px;font-size:18px}
-.v .leftcopy{left:72px;width:936px}
-.v #h-eye{top:220px}
-.v .hero-h{top:265px;font-size:124px}
-.v #h-lead{top:540px;width:936px;font-size:29px}
-.v .st0,.v .st1,.v .st2{top:200px}
-.v .step-h{font-size:88px;margin-top:26px}
-.v .step-p{width:936px;font-size:26px;margin-top:22px}
-.v .chips{margin-top:22px}
-.v .h1t{left:690px;top:860px}.v .h2t{left:30px;top:1150px}.v .h3t{left:740px;top:1500px}
-.v #entry{left:40px;top:880px}
-.v #toast{left:330px;top:1690px}
-.v .p0{left:30px;top:850px}.v .p1{left:50px;top:1060px}.v .p2{left:20px;top:1270px}.v .p3{left:720px;top:1560px}
-.v #flow{left:30px;top:850px}
-.v #donut{left:680px;top:1460px}
-.v #f-eye{left:76px;top:230px}
-.v .f-h{left:68px;top:280px;font-size:110px}
-.v #rows{left:72px;right:72px;top:720px}
-.v .row{grid-template-columns:1fr 60px;grid-template-rows:auto auto;align-content:center;row-gap:14px;height:270px}
-.v .row .num{grid-column:1;grid-row:1}.v .row>div{grid-column:1;grid-row:2}.v .row .gl{grid-column:2;grid-row:1/3}
-.v .row h3{font-size:42px}.v .row p{font-size:24px;line-height:1.4}
-.v #orbit{right:-260px;top:-60px;font-size:1100px}
-.v #c-eye{left:76px;top:560px}
-.v .c-h{left:68px;top:615px;font-size:128px}
-.v #c-foot{left:72px;right:72px;top:1150px;flex-direction:column;align-items:flex-start;gap:64px}
-.v #c-note{left:76px;top:1560px;font-size:24px}
+.v #grid{-webkit-mask-image:radial-gradient(ellipse 80% 55% at 50% 42%,#000 30%,transparent 80%);background-position:24px 30px}
+.v .tk{width:240px;padding:20px 22px}
+.v .tk strong{margin-top:14px;font-size:20px}
+.v .tk b{font-size:30px}
+.v #s1-eye{left:124px;top:540px}
+.v .s1h{left:116px;top:590px;font-size:112px}
+.v .t4{left:120px;top:285px}.v .t2{left:375px;top:345px;width:270px}.v .t1{left:690px;top:285px}
+.v .t3{left:120px;top:1120px}.v .t5{left:400px;top:1120px}.v .t6{display:none}
+.v #tagline{top:880px;font-size:38px}
+.v #panel{left:0;top:690px;width:1080px;height:1230px}
+.v #panel .halo{left:290px;top:120px}
+.v .sword{top:190px;font-size:230px}
+.v #pindex{left:120px;right:120px;top:22px;font-size:16px;flex-direction:row-reverse}
+.v #baseline,.v #figcap,.v #h-lead,.v .sp,.v .sc{display:none}
+.v #phone{left:320px;top:750px;width:440px;height:933px;border-radius:50px}
+.v .leftcopy{left:120px;width:840px}
+.v #h-eye{top:380px;font-size:19px}
+.v .hero-h{top:420px;font-size:104px}
+.v .st0,.v .st1,.v .st2{top:370px}
+.v .step-top{font-size:19px}
+.v .step-h{font-size:76px;margin-top:20px}
+.v .h1t{left:660px;top:700px;width:300px}.v .h2t{left:120px;top:960px}.v .h3t{left:530px;top:1100px}
+.v #entry{left:120px;top:760px;width:400px;padding:26px}
+.v #amt{font-size:52px;min-height:62px}
+.v #toast{left:375px;top:1170px}
+.v .pk{padding:18px 22px}
+.v .pk .amt{margin-top:10px;font-size:27px}
+.v .pk .bar{margin-top:10px}
+.v .p0{left:120px;top:770px}.v .p1{left:140px;top:945px}.v .p2{left:650px;top:680px}.v .p3{left:500px;top:1110px;width:270px}
+.v #flow{left:120px;top:760px;width:460px;padding:26px 28px}
+.v #bars{height:170px}
+.v #donut{left:400px;top:1060px;width:360px;padding:24px}
+.v #f-eye{left:124px;top:380px}
+.v .f-h{left:116px;top:420px;font-size:84px}
+.v #rows{left:120px;right:120px;top:720px}
+.v .row{grid-template-columns:1fr;align-content:center;row-gap:10px;height:130px}
+.v .row .gl,.v .row p{display:none}
+.v .row h3{font-size:31px;max-width:660px}
+.v .row .num{font-size:17px}
+.v #orbit{right:-300px;top:40px;font-size:1100px}
+.v #c-eye{left:124px;top:400px;font-size:19px}
+.v .c-h{left:116px;top:445px;font-size:110px}
+.v #c-foot{left:120px;right:120px;top:860px;flex-direction:column;align-items:flex-start;gap:56px}
+.v #c-wm{font-size:72px}
+.v #c-url{font-size:24px}
+.v #c-note{left:124px;top:1165px;font-size:22px}
+#guides{display:none;position:absolute;inset:0;z-index:100;pointer-events:none}
+.guides #guides{display:block}
 </style>
 </head>
 <body>
@@ -283,6 +299,9 @@ html.v,html.v body,.v #stage{width:1080px;height:1920px}
   <div id="wm" class="abs">saku<span>.</span></div>
   <p id="tagline" class="abs">Ruang untuk uang sehari-hari.</p>
 
+  <!-- safe-zone overlay for checking the vertical cut (?guides=1) -->
+  <svg id="guides" viewBox="0 0 1080 1920"><g fill="rgba(220,40,40,.28)"><rect width="1080" height="270"/><rect y="1248" width="1080" height="672"/><rect y="270" width="120" height="978"/><rect x="960" y="270" width="120" height="978"/><rect x="780" y="840" width="180" height="408"/></g><path d="M120 270H960V840H780V1248H120Z" fill="none" stroke="#d22" stroke-width="3" stroke-dasharray="14 10"/></svg>
+
   <!-- 8 · closing -->
   <div id="closing" class="abs">
     <div id="orbit" class="abs">s.</div>
@@ -308,8 +327,9 @@ if (V) {
   }
 }
 const L = V
-  ? { W: 1080, H: 1920, dock: [72, 84, 64 / 260], phoneOff: 1300, entryFly: [300, 480] }
-  : { W: 1920, H: 1080, dock: [116, 46, 54 / 260], phoneOff: 1000, entryFly: [420, 420] };
+  ? { W: 1080, H: 1920, wmY: 759, dock: [120, 282, 48 / 260], phoneOff: 1300, entryFly: [230, 330] }
+  : { W: 1920, H: 1080, wmY: 500, dock: [116, 46, 54 / 260], phoneOff: 1000, entryFly: [420, 420] };
+if (new URLSearchParams(location.search).has('guides')) document.documentElement.classList.add('guides');
 const E = {
   lin: p => p,
   out: p => 1 - Math.pow(1 - p, 4),
@@ -362,7 +382,7 @@ function build() {
 
   const wm = document.getElementById('wm');
   const wr = wm.getBoundingClientRect();
-  const wx = (W - wr.width) / 2, wy = (H - wr.height) / 2 - 40;
+  const wx = (W - wr.width) / 2, wy = L.wmY - wr.height / 2;
   const [dockX, dockY, dock] = L.dock;
   const dr = document.querySelector('#wm span').getBoundingClientRect();
   const dotX = wx + dr.left + dr.width * .45, dotY = wy + dr.top + dr.height * .78;

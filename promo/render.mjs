@@ -25,7 +25,11 @@ const out = opt('--out', join(here, vertical ? 'saku-promo-vertical.mp4' : 'saku
 
 const browser = await chromium.launch();
 const url = pathToFileURL(join(here, 'index.html'));
-if (vertical) url.search = '?format=vertical';
+const params = new URLSearchParams();
+if (vertical) params.set('format', 'vertical');
+// --guides shades the platform safe zone; meant for checking stills, not the final video
+if (args.includes('--guides')) params.set('guides', '1');
+url.search = params.toString();
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
 await page.goto(url.href);
 await page.evaluate(() => window.ready);
