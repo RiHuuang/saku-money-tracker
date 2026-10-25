@@ -105,11 +105,12 @@ export const money = (n: number) =>
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(n);
+export const groupDigits = (n: number) => n.toLocaleString("id-ID");
 export const compact = (n: number) =>
   Math.abs(n) >= 1000000
-    ? `${(n / 1000000).toLocaleString("en", { maximumFractionDigits: 1 })}m`
+    ? `${(n / 1000000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`
     : Math.abs(n) >= 1000
-      ? `${(n / 1000).toLocaleString("en", { maximumFractionDigits: 0 })}k`
+      ? `${(n / 1000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} rb`
       : String(n);
 export const monthLabel = (month: string, short = false) =>
   new Date(`${month}-01T12:00:00`).toLocaleDateString("en-GB", {

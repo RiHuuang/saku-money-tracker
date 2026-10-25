@@ -23,7 +23,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { compact, isIncome, isSpending, money, personalAmount, type Pocket, type Transaction } from "./domain";
+import { compact, groupDigits, isIncome, isSpending, money, personalAmount, type Pocket, type Transaction } from "./domain";
 
 const icons: Record<string, LucideIcon> = {
   utensils: Utensils,
@@ -40,7 +40,7 @@ const icons: Record<string, LucideIcon> = {
 export function MoneyInput({ value, onValueChange, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & { value: string | number; onValueChange: (value: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
   const digits = String(value ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-  const shown = digits ? Number(digits).toLocaleString("en-US") : "";
+  const shown = digits ? groupDigits(Number(digits)) : "";
   return <input {...props} ref={ref} type="text" inputMode="numeric" value={shown} onChange={(event) => {
     const caret = event.currentTarget.selectionStart || 0;
     const digitCaret = event.currentTarget.value.slice(0, caret).replace(/\D/g, "").length;

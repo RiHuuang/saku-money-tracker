@@ -44,6 +44,7 @@ import {
   cardBalance,
   emptyData,
   exportCSV,
+  groupDigits,
   isIncome,
   isSpending,
   personalAmount,
@@ -1815,7 +1816,7 @@ function PocketEditor({
                 step="1"
                 value={budget}
                 onValueChange={setBudget}
-                placeholder="100,000"
+                placeholder={groupDigits(100000)}
                 required
                 aria-label="Pocket budget in rupiah"
               />
@@ -1995,7 +1996,7 @@ function StartProfile({
             return <section className="setup-account-card" key={index} aria-label={item.name ? `${item.name} account` : `Account ${index + 1}`}>
               <span className="setup-account-icon" aria-hidden="true"><Wallet size={18} /></span>
               <label className="field setup-account-name">Account name<input aria-label={`Account ${index + 1} name`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /></label>
-              <label className="field setup-opening-balance">Opening balance<div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Account"} opening balance`} aria-describedby={balanceHelpId} placeholder={index === 0 ? "2,450,000" : index === 1 ? "875,000" : "0"} value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div><small id={balanceHelpId}>{item.balance ? "This becomes your starting recorded balance." : "Example only. It is saved only after you enter an amount."}</small></label>
+              <label className="field setup-opening-balance">Opening balance<div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Account"} opening balance`} aria-describedby={balanceHelpId} placeholder={index === 0 ? groupDigits(2450000) : index === 1 ? groupDigits(875000) : "0"} value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div><small id={balanceHelpId}>{item.balance ? "This becomes your starting recorded balance." : "Example only. It is saved only after you enter an amount."}</small></label>
             </section>;
           })}</div>
           <button type="button" className="button secondary" onClick={() => setAccounts([...accounts, { name: "", balance: "" }])}><Plus size={16} />Add bank, cash, or e-wallet</button></>}
