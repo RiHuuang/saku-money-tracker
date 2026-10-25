@@ -39,6 +39,7 @@ import {
   COLORS,
   ICONS,
   accountBalance,
+  averageDailySpending,
   balanceAdjustment,
   budgetFor,
   cardBalance,
@@ -943,25 +944,8 @@ export default function App() {
                 <div>
                   <CalendarDays />
                   <span>Average daily spending</span>
-                  <strong>
-                    {money(
-                      Math.round(
-                        stats.expenses /
-                          (month === today().slice(0, 7)
-                            ? Number(today().slice(-2))
-                            : new Date(
-                                Number(month.slice(0, 4)),
-                                Number(month.slice(5, 7)),
-                                0,
-                              ).getDate()),
-                      ),
-                    )}
-                  </strong>
-                  <small>
-                    {month === today().slice(0, 7)
-                      ? "Across the days so far"
-                      : "Across the whole month"}
-                  </small>
+                  <strong>{money(averageDailySpending(data, month))}</strong>
+                  <small>Per day since your first entry this month</small>
                 </div>
               </div>
               <section className="charts-grid">
