@@ -44,6 +44,15 @@ object LedgerDatabase {
         }
     }
 
+    /** Records the snapshot the cloud acknowledged at [revision]; the app merges later conflicts against it. */
+    fun saveSyncBase(context: Context, userId: String, revision: Int, ledger: JSONObject) {
+        val db = open(context) ?: return
+        db.use {
+            db.execSQL("CREATE TABLE IF NOT EXISTS ledger_sync_base (user_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, data_json TEXT NOT NULL)")
+            db.execSQL("INSERT INTO ledger_sync_base (user_id, revision, data_json) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET revision = excluded.revision, data_json = excluded.data_json", arrayOf<Any>(userId, revision, ledger.toString()))
+        }
+    }
+
     fun save(context: Context, userId: String, ledger: JSONObject, expectedRevision: Long) {
         val db = open(context) ?: error("Open Saku to finish storage migration")
         db.use {

@@ -115,6 +115,7 @@ import {
   deleteCloudAccount,
   legalUrl,
   markCloudDirty,
+  mergeWithSyncBase,
   mirrorCloud,
   pullCloud,
   pushCloud,
@@ -184,9 +185,9 @@ export default function App() {
   const activeSync = useRef<Data | null>(null);
   const syncRunning = useRef(false);
   const mirrorRunning = useRef(false);
-  const latest = useRef({ data, cloud, edit });
-  latest.current = { data, cloud, edit };
-  const reconcileRef = useRef<(() => Promise<void>) | null>(null);
+  const latest = useRef({ data, cloud, edit, resolution });
+  latest.current = { data, cloud, edit, resolution };
+  const reconcileRef = useRef<((afterFailedSync?: boolean) => Promise<void>) | null>(null);
   const selectedPocket = data?.pockets.find((p) => p.id === selectedPocketId);
   function openPocket(id: string) { go("pockets"); setSelectedPocketId(id); setPocketAllHistory(false); }
   function openTransaction(value: Transaction) {
@@ -218,6 +219,7 @@ export default function App() {
       // A saved local ledger remains available offline.
     }
     const localNeedsReview = scoped && (remoteState?.dirty ?? state.dirty);
+    if (localNeedsReview && local && remote && remoteState && await mergeCloudChanges(local, remote, remoteState, false)) return;
     const newerCleanCloud = scoped && remoteState && !remoteState.dirty && remoteState.revision > state.revision && useful(remote);
     if ((useful(local) || localNeedsReview) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
       setResolution({ local: local!, remote: remote || emptyData(), remoteState });
@@ -250,24 +252,27 @@ export default function App() {
     let running = false, retry = 0, needed = true, signal = 0;
     const userId = cloud.user.id;
     const visible = () => document.visibilityState === "visible" && navigator.onLine !== false;
-    const reconcile = async () => {
+    // After a failed sync, only an outside signal (a notice, reconnecting) retries it.
+    const reconcile = async (afterFailedSync = false) => {
       signal++;
       needed = true;
       if (running || !visible() || stopped) return;
       const current = latest.current;
-      if (current.edit || saving.current || syncRunning.current || !current.data || current.cloud?.user?.id !== userId) return;
+      if (current.edit || current.resolution || saving.current || syncRunning.current || !current.data || current.cloud?.user?.id !== userId) return;
       const startedWith = signal;
       running = true;
       try {
         const { revision, state } = await refreshCloudMetadata();
         if (stopped || latest.current.cloud?.user?.id !== userId) return;
         setCloud(state);
-        if (revision > state.revision) {
+        // Unsynced edits go through the sync queue, which merges on a 409 and retries.
+        if (state.dirty) { if (latest.current.data && !afterFailedSync) void queueSync(latest.current.data); }
+        else if (revision > state.revision) {
           const before = latest.current.data;
           const result = await pullCloud();
           if (stopped || latest.current.data !== before || latest.current.edit || saving.current) return;
           if (result.state.dirty) {
-            if (result.data) setResolution({ local: before!, remote: result.data, remoteState: result.state });
+            if (result.data) void queueSync(before!);
           } else if (result.data) {
             await replaceData(result.data);
             const adopted = await adoptCloudSnapshot(result.state, false, result.data);
@@ -446,17 +451,39 @@ export default function App() {
     pendingSync.current = next;
     if (syncRunning.current || !cloud?.signedIn) return;
     syncRunning.current = true;
+    let merges = 0, failed = false;
     try {
       while (pendingSync.current) {
-        const snapshot = pendingSync.current;
+        const snapshot: Data = pendingSync.current;
         pendingSync.current = null;
         activeSync.current = snapshot;
         await markCloudDirty();
-        setCloud(await pushCloud(snapshot));
+        try { setCloud(await pushCloud(snapshot)); }
+        catch (error) {
+          // Another device uploaded first: merge row by row, then upload the result.
+          if ((error as { status?: number }).status !== 409 || merges++ >= 3) throw error;
+          let remote: Awaited<ReturnType<typeof pullCloud>>;
+          try { remote = await pullCloud(); }
+          catch (download) {
+            // The ledger changed while downloading; retry with the newest copy.
+            if (!latest.current.data || latest.current.data === snapshot) throw download;
+            pendingSync.current ||= latest.current.data;
+            activeSync.current = null;
+            continue;
+          }
+          const merged: Data | null = remote.data && await mergeCloudChanges(snapshot, remote.data, remote.state);
+          if (merged) pendingSync.current ||= merged;
+          else if (latest.current.data !== snapshot && latest.current.data) pendingSync.current ||= latest.current.data;
+          else {
+            if (remote.data) setResolution({ local: snapshot, remote: remote.data, remoteState: remote.state });
+            throw error;
+          }
+        }
         activeSync.current = null;
       }
       if (userInitiated) setToast("Cloud backup saved. Google Sheet is updating.");
     } catch (error: unknown) {
+      failed = true;
       pendingSync.current = null;
       activeSync.current = null;
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
@@ -464,8 +491,22 @@ export default function App() {
       setToast(status === 409 ? "Google has newer data. Review before syncing again." : "Saved offline. Automatic sync will retry when Saku is active.");
     } finally {
       syncRunning.current = false;
-      void reconcileRef.current?.();
+      void reconcileRef.current?.(failed);
     }
+  }
+  /** Saves the three-way merge of local and cloud edits; null when the user must choose. */
+  async function mergeCloudChanges(local: Data, remote: Data, remoteState: CloudState, requireCurrent = true) {
+    if (saving.current || (requireCurrent && latest.current.data !== local)) return null;
+    const merged = await mergeWithSyncBase(local, remote, remoteState);
+    if (!merged.data || saving.current || (requireCurrent && latest.current.data !== local)) return null;
+    saving.current = true;
+    try {
+      await saveData(merged.data);
+      setCloud(await resolveCloudWithLocal(remoteState, remote));
+      setData(merged.data);
+      latest.current = { ...latest.current, data: merged.data };
+      return merged.data;
+    } finally { saving.current = false; }
   }
   async function attemptMirror(userInitiated = false) {
     if (mirrorRunning.current || !cloud?.signedIn || !cloud.sheetPending || !cloud.spreadsheetUrl) return;

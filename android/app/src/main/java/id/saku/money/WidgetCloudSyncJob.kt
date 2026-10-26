@@ -93,6 +93,7 @@ class WidgetCloudSyncJob : JobService() {
             if (response.status !in 200..299) return terminal(response.status)
 
             val result = JSONObject(response.body)
+            if (stored != null && result.has("revision")) LedgerDatabase.saveSyncBase(this, userId, result.getInt("revision"), ledger)
             val currentStored = LedgerDatabase.load(this, userId)
             val currentLedger = currentStored?.ledger?.toString() ?: prefs.getString(ledgerKey, null)
             val unchanged = if (stored != null) currentStored?.revision == stored.revision && LedgerDatabase.acknowledge(this, userId, stored.revision) else currentLedger == ledgerText
@@ -120,6 +121,7 @@ class WidgetCloudSyncJob : JobService() {
         if (stored != null && LedgerDatabase.load(this, expectedUserId)?.revision != stored.revision) return false
         val cloud = prefs.getString("saku-cloud-state-v1", null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return true
         if (cloud.optJSONObject("user")?.optString("id") != expectedUserId) return true
+        if (stored != null) remote.revision?.let { LedgerDatabase.saveSyncBase(this, expectedUserId, it, remoteLedger) }
         if (stored != null && !LedgerDatabase.acknowledge(this, expectedUserId, stored.revision)) return false
         cloud.put("dirty", false)
             .put("revision", remote.revision ?: cloud.optInt("revision", 0))

@@ -3,7 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { type Data, emptyData, validateData } from "./domain";
-import { markCloudDirty } from "./cloud";
+import { markCloudDirty, removeSyncBase } from "./cloud";
 import { refreshHomeWidgets, scheduleCloudSync } from "./homeWidget";
 import { deleteOwnerImportDrafts, importConsentKey } from "./importDraft";
 import { clearNotificationInbox } from "./notificationCapture";
@@ -56,6 +56,7 @@ export async function removeUserData(userId: string) {
   localStorage.removeItem(importConsentKey(userId));
   if (Capacitor.isNativePlatform()) await removeNativeLedger(userId);
   await Preferences.remove({ key: userKey(userId) });
+  await removeSyncBase(userId);
   if (activeUserId === userId) { activeUserId = ""; activeRevision = 0; }
   await refreshHomeWidgets();
 }

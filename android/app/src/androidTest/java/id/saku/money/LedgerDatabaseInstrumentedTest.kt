@@ -39,6 +39,13 @@ class LedgerDatabaseInstrumentedTest {
             assertEquals("Lunch", WidgetLedger.load(context)!!.ledger.getJSONArray("transactions").getJSONObject(0).getString("name"))
             assertFalse(LedgerDatabase.acknowledge(context, userId, 1))
             assertTrue(LedgerDatabase.acknowledge(context, userId, 2))
+            LedgerDatabase.saveSyncBase(context, userId, 9, LedgerDatabase.load(context, userId)!!.ledger)
+            LedgerDatabase.saveSyncBase(context, userId, 10, LedgerDatabase.load(context, userId)!!.ledger)
+            db.rawQuery("SELECT revision, data_json FROM ledger_sync_base WHERE user_id = ?", arrayOf(userId)).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(10L, cursor.getLong(0))
+                assertEquals("Lunch", JSONObject(cursor.getString(1)).getJSONArray("transactions").getJSONObject(0).getString("name"))
+            }
             assertTrue(WidgetLedger.undo(context, id))
             assertEquals(0, LedgerDatabase.load(context, userId)!!.ledger.getJSONArray("transactions").length())
             assertEquals(2L, LedgerDatabase.load(context, userId)!!.syncedRevision)
@@ -46,6 +53,8 @@ class LedgerDatabaseInstrumentedTest {
         } finally {
             db.execSQL("DELETE FROM ledger_transaction WHERE user_id = ?", arrayOf(userId))
             db.execSQL("DELETE FROM ledger_meta WHERE user_id = ?", arrayOf(userId))
+            db.execSQL("CREATE TABLE IF NOT EXISTS ledger_sync_base (user_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, data_json TEXT NOT NULL)")
+            db.execSQL("DELETE FROM ledger_sync_base WHERE user_id = ?", arrayOf(userId))
             db.close()
             prefs.edit().apply {
                 if (oldCloud == null) remove("saku-cloud-state-v1") else putString("saku-cloud-state-v1", oldCloud)

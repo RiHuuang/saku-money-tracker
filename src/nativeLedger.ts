@@ -34,6 +34,11 @@ async function database() {
       );
       CREATE INDEX IF NOT EXISTS ledger_transaction_order
         ON ledger_transaction (user_id, position);
+      CREATE TABLE IF NOT EXISTS ledger_sync_base (
+        user_id TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL,
+        data_json TEXT NOT NULL
+      );
     `);
     return db;
   })().catch((error) => { connection = undefined; throw error; });
@@ -119,6 +124,21 @@ export function acknowledgeNativeLedger(userId: string, snapshot?: Data) {
   });
 }
 
+/** The last snapshot the cloud acknowledged; deletions since then are rows missing locally. */
+export function loadNativeSyncBase(userId: string) {
+  return exclusive(async () => {
+    const row = (await (await database()).query("SELECT revision, data_json FROM ledger_sync_base WHERE user_id = ?", [userId])).values?.[0];
+    return row ? { revision: Number(row.revision), data: validateData(JSON.parse(row.data_json)) } : null;
+  });
+}
+
+export function saveNativeSyncBase(userId: string, revision: number, snapshot: Data) {
+  return exclusive(async () => {
+    await (await database()).run(`INSERT INTO ledger_sync_base (user_id, revision, data_json) VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET revision = excluded.revision, data_json = excluded.data_json`, [userId, revision, JSON.stringify(validateData(snapshot))]);
+  });
+}
+
 export function removeNativeLedger(userId: string) {
   return exclusive(async () => {
     const db = await database();
@@ -126,6 +146,7 @@ export function removeNativeLedger(userId: string) {
     try {
       await db.run("DELETE FROM ledger_transaction WHERE user_id = ?", [userId], false);
       await db.run("DELETE FROM ledger_meta WHERE user_id = ?", [userId], false);
+      await db.run("DELETE FROM ledger_sync_base WHERE user_id = ?", [userId], false);
       await db.commitTransaction();
     } catch (error) {
       await db.rollbackTransaction();

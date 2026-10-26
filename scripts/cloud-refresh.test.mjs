@@ -12,7 +12,7 @@ const bundle = await build({
       : path === "@capacitor/preferences"
         ? "export const Preferences=globalThis.sakuSessionFixture.preferences;"
       : path === "./nativeLedger"
-        ? "export const acknowledgeNativeLedger=async()=>true;"
+        ? "export const acknowledgeNativeLedger=async()=>true; export const loadNativeSyncBase=async()=>null; export const saveNativeSyncBase=async()=>{};"
         : "export const refreshHomeWidgets=async()=>{};" }));
   } }],
 });
