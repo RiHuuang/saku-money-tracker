@@ -2264,13 +2264,26 @@ function SettingsView({
     [cloudBusy, setCloudBusy] = useState(false),
     [pullConfirm, setPullConfirm] = useState(false),
     [deleteConfirm, setDeleteConfirm] = useState(false),
-    [deleteText, setDeleteText] = useState("");
+    [deleteText, setDeleteText] = useState(""),
+    [signOutConfirm, setSignOutConfirm] = useState(false);
   const profileFile = useRef<HTMLInputElement>(null);
   async function cloudAction(action: () => Promise<void>) {
     setCloudBusy(true);
     try { await action(); }
     catch (error) { notify(error instanceof Error ? error.message : "Cloud action failed."); }
     finally { setCloudBusy(false); }
+  }
+  async function signOut() {
+    const userId = cloud?.user?.id;
+    await signOutGoogle();
+    // A browser may be shared, so the web keeps no ledger after sign-out. Android keeps it for offline reopen.
+    if (!Capacitor.isNativePlatform() && userId) {
+      await removeUserData(userId);
+      setData(emptyData());
+    }
+    setCloud(await loadCloudState());
+    setSignOutConfirm(false);
+    notify("Signed out on this device");
   }
   async function backup() {
     try {
@@ -2451,11 +2464,7 @@ function SettingsView({
               {cloud.sheetPending && <button className="button secondary" disabled={cloudBusy} onClick={() => void cloudAction(async () => { setCloud(await connectGoogleDrive()); notify("Google Drive connected"); })}><ExternalLink size={17} />{cloud.spreadsheetUrl ? "Reconnect Google Drive" : "Connect Google Drive"}</button>}
               <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(true)}><Download size={17} />Restore cloud copy</button>
               {cloud.spreadsheetUrl && <a className="button secondary" href={cloud.spreadsheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} />Open Sheet</a>}
-              <button className="button text-button" disabled={cloudBusy} onClick={() => void cloudAction(async () => {
-                await signOutGoogle();
-                setCloud(await loadCloudState());
-                notify("Signed out on this device");
-              })}><LogOut size={16} />Sign out</button>
+              <button className="button text-button" disabled={cloudBusy} onClick={() => { if (!Capacitor.isNativePlatform() && cloud.dirty) setSignOutConfirm(true); else void cloudAction(() => signOut()); }}><LogOut size={16} />Sign out</button>
             </div>
             <small className="cloud-note">Changes sync automatically, including widget entries while Saku is closed. {cloud.lastSyncedAt ? `Last synced ${new Date(cloud.lastSyncedAt).toLocaleString()}` : "Not backed up yet."}</small>
             {cloud.sheetPending && <p className="inline-warning">Your cloud snapshot is saved, but Google Sheets mirroring is still pending.</p>}
@@ -2549,6 +2558,19 @@ function SettingsView({
               setPullConfirm(false);
               notify("Cloud backup restored");
             })}>Restore cloud copy</button>
+          </div>
+        </Modal>
+      )}
+      {signOutConfirm && (
+        <Modal title="You have unsynced changes" subtitle="Signing out removes this workspace from this browser. Sync first to keep your latest changes in Saku Cloud." onClose={() => setSignOutConfirm(false)}>
+          <div className="form-footer">
+            <button className="button secondary" disabled={cloudBusy} onClick={() => setSignOutConfirm(false)}>Cancel</button>
+            <button className="button danger-button" disabled={cloudBusy} onClick={() => void cloudAction(() => signOut())}><LogOut size={16} />Sign out and discard</button>
+            <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(async () => {
+              await syncNow();
+              if ((await loadCloudState()).dirty) { notify("Sync did not finish. Your changes are still on this device."); return; }
+              await signOut();
+            })}><Upload size={17} />Sync and sign out</button>
           </div>
         </Modal>
       )}
