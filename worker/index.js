@@ -115,13 +115,13 @@ async function beginLogin(env, tokens, agreementVersion, transport) {
   return pendingToken;
 }
 
-async function finishLogin(env, pendingToken, transport) {
+async function finishLogin(env, pendingToken, transport, label = "") {
   if (typeof pendingToken !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(pendingToken)) throw fault(401, "Google sign-in expired; try again");
   const row = await env.DB.prepare("DELETE FROM oauth_logins WHERE token_hash=? AND transport=? AND expires_at>? RETURNING payload")
     .bind(await hashToken(pendingToken), transport, Date.now()).first();
   if (!row) throw fault(401, "Google sign-in expired; try again");
   const { tokens, agreementVersion } = JSON.parse(await decrypt(row.payload, encryptionKey(env.TOKEN_ENCRYPTION_KEY)));
-  return signIn(env, tokens, agreementVersion);
+  return signIn(env, tokens, agreementVersion, label);
 }
 
 async function getUser(env, uid) {
@@ -207,17 +207,28 @@ function sheetChange(input) {
 // A rotated refresh token stays recognisable briefly, so two clients refreshing at once (the app and its
 // widget sync job) look like a race rather than theft. The columns are added on first use, like the AI budget tables.
 const REFRESH_RACE_MS = 60_000;
-let sessionColumnsReady = false;
+// Remembered per database binding, so each database is checked once per isolate.
+const sessionColumnsReady = new WeakSet();
 async function ensureSessionColumns(env) {
-  if (sessionColumnsReady) return;
-  const { results } = await env.DB.prepare("PRAGMA table_info(sessions)").all();
-  const columns = new Set(results.map((column) => column.name));
+  if (sessionColumnsReady.has(env.DB)) return;
+  const row = await env.DB.prepare("SELECT group_concat(name) AS names FROM pragma_table_info('sessions')").first();
+  const columns = new Set(String(row?.names || "").split(","));
   if (!columns.has("previous_refresh_hash")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN previous_refresh_hash TEXT").run();
   if (!columns.has("rotated_at")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN rotated_at INTEGER").run();
-  sessionColumnsReady = true;
+  if (!columns.has("label")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN label TEXT").run();
+  if (!columns.has("created_at")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN created_at INTEGER").run();
+  sessionColumnsReady.add(env.DB);
 }
 
-async function issueSession(env, uid, existingId, expectedRefreshHash) {
+// A short, recognisable name for the devices list. Never the IP address or the full user agent.
+export function deviceLabel(transport, userAgent = "") {
+  if (transport === "android") return "Android app";
+  const browser = /Edg\//.test(userAgent) ? "Edge" : /Firefox\//.test(userAgent) ? "Firefox" : /Chrome\//.test(userAgent) ? "Chrome" : /Safari\//.test(userAgent) ? "Safari" : "A browser";
+  const system = /Android/.test(userAgent) ? "Android" : /iPhone|iPad/.test(userAgent) ? "iOS" : /Windows/.test(userAgent) ? "Windows" : /Mac OS X/.test(userAgent) ? "macOS" : /CrOS/.test(userAgent) ? "ChromeOS" : /Linux/.test(userAgent) ? "Linux" : "";
+  return system ? `${browser} on ${system}` : browser;
+}
+
+async function issueSession(env, uid, existingId, expectedRefreshHash, label = "") {
   const id = existingId || crypto.randomUUID();
   const accessSecret = tokenPart(), refreshSecret = tokenPart(), now = Date.now();
   const [accessHash, refreshHash] = await Promise.all([hashToken(accessSecret), hashToken(refreshSecret)]);
@@ -227,8 +238,9 @@ async function issueSession(env, uid, existingId, expectedRefreshHash) {
       .bind(now, accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now, id, uid, expectedRefreshHash, now).run();
     if (!updated.meta.changes) throw fault(401, "Refresh session changed; retry with the current session");
   } else {
-    await env.DB.prepare("INSERT INTO sessions (id,uid,access_hash,refresh_hash,access_expires_at,refresh_expires_at,updated_at) VALUES (?,?,?,?,?,?,?)")
-      .bind(id, uid, accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now).run();
+    await ensureSessionColumns(env);
+    await env.DB.prepare("INSERT INTO sessions (id,uid,access_hash,refresh_hash,access_expires_at,refresh_expires_at,updated_at,label,created_at) VALUES (?,?,?,?,?,?,?,?,?)")
+      .bind(id, uid, accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now, label.slice(0, 40), now).run();
   }
   return { accessToken: sessionToken(id, accessSecret), refreshToken: sessionToken(id, refreshSecret) };
 }
@@ -315,7 +327,7 @@ async function provisionSheet(accessToken) {
   return { folderId: folder.id, spreadsheetId: spreadsheet.spreadsheetId, spreadsheetUrl: spreadsheet.spreadsheetUrl };
 }
 
-async function signIn(env, tokens, agreementVersion) {
+async function signIn(env, tokens, agreementVersion, label = "") {
   if (!agreementVersions.has(agreementVersion)) throw fault(400, "Accept the current Saku agreement before signing in");
   const profile = await profileFromToken(tokens.id_token, env.GOOGLE_OAUTH_CLIENT_ID);
   const existing = await getUser(env, profile.sub);
@@ -343,7 +355,7 @@ async function signIn(env, tokens, agreementVersion) {
   if (!existing?.spreadsheetId && drive.spreadsheetId) Object.assign(changes, { folderId: drive.folderId, spreadsheetId: drive.spreadsheetId, spreadsheetUrl: drive.spreadsheetUrl, sheetPending: true });
   if (encryptedRefreshToken) changes[driveGranted ? "googleRefreshToken" : "googleIdentityRefreshToken"] = encryptedRefreshToken;
   const saved = await putUser(env, profile.sub, user, changes);
-  const session = await issueSession(env, profile.sub);
+  const session = await issueSession(env, profile.sub, undefined, undefined, label);
   return { session, user: publicUser(profile.sub, saved), sync: { revision: saved.revision, spreadsheetUrl: saved.spreadsheetUrl || "", sheetPending: saved.sheetPending } };
 }
 
@@ -521,7 +533,7 @@ async function route(request, env) {
   }
   if (request.method === "GET" && path === "/auth/google/finish") {
     if (env.PUBLIC_LOGIN_ENABLED !== "true") throw fault(503, "Public login is not enabled yet");
-    const result = await finishLogin(env, cookies(request).saku_login_pending, "browser");
+    const result = await finishLogin(env, cookies(request).saku_login_pending, "browser", deviceLabel("browser", request.headers.get("user-agent") || ""));
     const csrf = tokenPart();
     const headers = new Headers({ location: `${url.origin}/?auth=ok`, "cache-control": "no-store" });
     headers.append("set-cookie", cookie("saku_access", result.session.accessToken, 15 * 60));
@@ -580,7 +592,7 @@ async function route(request, env) {
   if (request.method === "POST" && path === "/v1/auth/google/finish") {
     if (env.PUBLIC_LOGIN_ENABLED !== "true") throw fault(503, "Public login is not enabled yet");
     const input = await readBody(request);
-    const result = await finishLogin(env, input.pendingToken, "android");
+    const result = await finishLogin(env, input.pendingToken, "android", deviceLabel("android"));
     return reply({ ...result.session, user: result.user, sync: result.sync }, 200, cors);
   }
   if (request.method === "POST" && path === "/v1/auth/refresh") {
@@ -609,7 +621,7 @@ async function route(request, env) {
   const auth = await authenticate(request, env);
   const expectedUid = request.headers.get("x-saku-user-id");
   if (expectedUid && expectedUid !== auth.uid) throw fault(409, "Google account changed during synchronization");
-  if (auth.browser && request.method !== "GET" && (path.startsWith("/v2/") || path === "/v1/me" || path === "/v1/live-ticket") && expectedUid !== auth.uid) throw fault(403, "Account identity is required");
+  if (auth.browser && request.method !== "GET" && (path.startsWith("/v2/") || path === "/v1/me" || path.startsWith("/v1/sessions") || path === "/v1/live-ticket") && expectedUid !== auth.uid) throw fault(403, "Account identity is required");
   const user = auth.user;
   if (!user) throw fault(404, "Account not found");
   if (user.deleting && !(request.method === "DELETE" && path === "/v1/me")) throw fault(410, "Account deletion is in progress");
@@ -636,6 +648,20 @@ async function route(request, env) {
       if (error?.status === 429) throw error;
       throw fault(502, "Could not extract this page. It remains in your local draft for retry.");
     }
+  }
+  if (request.method === "GET" && path === "/v1/sessions") {
+    await ensureSessionColumns(env);
+    const { results } = await env.DB.prepare("SELECT id,label,created_at,updated_at FROM sessions WHERE uid=? AND refresh_expires_at>? ORDER BY updated_at DESC").bind(auth.uid, Date.now()).all();
+    return reply({ sessions: results.map((row) => ({ id: row.id, label: row.label || "Earlier sign-in", createdAt: row.created_at || null, lastActiveAt: row.updated_at, current: row.id === auth.sessionId })) }, 200, cors);
+  }
+  const sessionPath = path.match(/^\/v1\/sessions\/([0-9a-f-]{36})$/);
+  if (request.method === "DELETE" && sessionPath) {
+    // Scoped to the caller's own sessions: another account's id simply isn't found.
+    const deleted = await env.DB.prepare("DELETE FROM sessions WHERE id=? AND uid=?").bind(sessionPath[1], auth.uid).run();
+    if (!deleted.meta.changes) throw fault(404, "Device not found");
+    await liveRevoke(env, auth.uid, sessionPath[1]);
+    const current = sessionPath[1] === auth.sessionId;
+    return current && auth.browser ? clearBrowserSession(reply({ ok: true, current })) : reply({ ok: true, current }, 200, cors);
   }
   if (request.method === "POST" && path === "/v1/auth/logout") {
     await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(auth.sessionId).run();

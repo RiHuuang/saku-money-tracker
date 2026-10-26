@@ -350,6 +350,15 @@ export async function updateProfile(name: string, image?: string) {
   await savePublic({ ...current, user });
   return { ...current, signedIn: true, configured: true, user } as CloudState;
 }
+export type SignedInDevice = { id: string; label: string; createdAt: number | null; lastActiveAt: number; current: boolean };
+export async function listDevices(): Promise<SignedInDevice[]> {
+  const user = (await publicState()).user;
+  return (await (await requestsFor(user?.id)("/v1/sessions")).json()).sessions;
+}
+export async function signOutDevice(id: string) {
+  const user = (await publicState()).user;
+  await requestsFor(user?.id)(`/v1/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
 export async function loadAvatarUrl(version?: string) {
   try {
     const user = (await publicState()).user;

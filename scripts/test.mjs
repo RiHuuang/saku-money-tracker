@@ -26,6 +26,7 @@ try {
     await import("../worker/live.test.mjs");
     await import("../worker/live-route.test.mjs");
     await import("../worker/refresh-reuse.test.mjs");
+    await import("../worker/sessions-route.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });

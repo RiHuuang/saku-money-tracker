@@ -106,6 +106,9 @@ import {
   pushCloud,
   signInGoogle,
   signOutGoogle,
+  listDevices,
+  signOutDevice,
+  type SignedInDevice,
   updateProfile,
   type CloudState,
 } from "./cloud";
@@ -2235,6 +2238,7 @@ function SettingsView({
             </div>
             <small className="cloud-note">Changes sync automatically, including widget entries while Saku is closed. {cloud.lastSyncedAt ? `Last synced ${new Date(cloud.lastSyncedAt).toLocaleString()}` : "Not backed up yet."}</small>
             {cloud.sheetPending && <p className="inline-warning">Your cloud snapshot is saved, but Google Sheets mirroring is still pending.</p>}
+            <SignedInDevices notify={notify} onSignedOutHere={async () => { await signOutGoogle(); setCloud(await loadCloudState()); }} />
           </div>
         )}
       </section>
@@ -2350,3 +2354,24 @@ function SettingsView({
     </div>
   );
 }
+function SignedInDevices({ notify, onSignedOutHere }: { notify: (message: string) => void; onSignedOutHere: () => Promise<void> }) {
+  const [devices, setDevices] = useState<SignedInDevice[] | null>(null), [busy, setBusy] = useState("");
+  const load = () => listDevices().then(setDevices).catch(() => setDevices([]));
+  useEffect(() => { void load(); }, []);
+  async function signOut(device: SignedInDevice) {
+    setBusy(device.id);
+    try {
+      await signOutDevice(device.id);
+      if (device.current) { await onSignedOutHere(); return; }
+      notify(`${device.label} signed out`);
+      await load();
+    } catch { notify("That device could not be signed out. Try again."); }
+    finally { setBusy(""); }
+  }
+  if (!devices?.length) return null;
+  return <div className="signed-in-devices">
+    <strong>Signed-in devices</strong>
+    <ul>{devices.map((device) => <li key={device.id}><span><b>{device.label}{device.current ? " · this device" : ""}</b><small>Last active {new Date(device.lastActiveAt).toLocaleString()}</small></span><button className="button text-button" disabled={!!busy} onClick={() => void signOut(device)}><LogOut size={15} />{busy === device.id ? "Signing out..." : "Sign out"}</button></li>)}</ul>
+  </div>;
+}
+
