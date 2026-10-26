@@ -1,0 +1,86 @@
+{
+ "packageName": "id.dana",
+ "note": "Synthetic messages modelled on common phrasing; replace with redacted real samples.",
+ "cases": [
+  {
+   "title": "DANA",
+   "text": "Kamu berhasil bayar Rp20.000 ke Warung Sate Pak Kumis.",
+   "expected": {
+    "amount": 20000,
+    "direction": "expense",
+    "rawMerchant": "Warung Sate Pak Kumis",
+    "balance": null
+   }
+  },
+  {
+   "title": "DANA",
+   "text": "Kamu menerima Rp100.000 dari Tono.",
+   "expected": {
+    "amount": 100000,
+    "direction": "income",
+    "rawMerchant": "Tono",
+    "balance": null
+   }
+  },
+  {
+   "title": "DANA",
+   "text": "Kirim uang Rp75.000 ke Yuni berhasil.",
+   "expected": {
+    "amount": 75000,
+    "direction": "expense",
+    "rawMerchant": "Yuni",
+    "balance": null
+   }
+  },
+  {
+   "title": "DANA",
+   "text": "Isi saldo DANA Rp200.000 berhasil.",
+   "expected": {
+    "amount": 200000,
+    "direction": "income",
+    "rawMerchant": "DANA",
+    "balance": null
+   }
+  },
+  {
+   "title": "DANA",
+   "text": "Pembayaran Rp20.000 ke Warung Sate kedaluwarsa.",
+   "expected": null
+  },
+  {
+   "title": "DANA",
+   "text": "Pembayaran Rp35.000 di Kopi Janji Jiwa berhasil. Saldo DANA kamu sekarang Rp265.000.",
+   "expected": {
+    "amount": 35000,
+    "direction": "expense",
+    "rawMerchant": "Kopi Janji Jiwa",
+    "balance": 265000
+   }
+  },
+  {
+   "title": "DANA",
+   "text": "Bayar tagihan PLN Rp150.000 berhasil.",
+   "expected": {
+    "amount": 150000,
+    "direction": "expense",
+    "rawMerchant": "",
+    "balance": null
+   }
+  },
+  {
+   "title": "DANA",
+   "text": "Kode OTP DANA 551204, jangan bagikan kode ini.",
+   "expected": null
+  },
+  {
+   "title": "DANA",
+   "text": "Cashback Rp2.000 diterima dari Kopi Janji Jiwa.",
+   "expected": {
+    "amount": 2000,
+    "direction": "income",
+    "rawMerchant": "Kopi Janji Jiwa",
+    "balance": null
+   }
+  }
+ ]
+}

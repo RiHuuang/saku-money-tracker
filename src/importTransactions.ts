@@ -10,13 +10,29 @@ export function importRowAccount(row: Pick<ImportRow, "account">, source: Pick<I
   return [...data.accounts, ...data.creditCards.map((card) => card.name)].includes(row.account) ? row.account : "";
 }
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Names a source by its printed funding method, or by its file name when a row shows none.
+export function detectImportAccount(rows: readonly Pick<ImportRow, "paymentMethod">[], source: Pick<ImportSource, "name" | "mixedAccounts">, data: Data): string {
+  if (source.mixedAccounts || !rows.length) return "";
+  const names = [...data.accounts, ...data.creditCards.map((card) => card.name)];
+  const matches = (text: string) => names.filter((name) => new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRegExp(name.toLocaleLowerCase("id-ID"))}(?:$|[^\\p{L}\\p{N}])`, "u").test(text.toLocaleLowerCase("id-ID")));
+  const found = new Set<string>();
+  for (const row of rows) {
+    const named = matches(row.paymentMethod?.trim() || source.name);
+    if (named.length !== 1) return "";
+    found.add(named[0]);
+  }
+  return found.size === 1 ? [...found][0] : "";
+}
+export const importRowName = (row: Pick<ImportRow, "name" | "cleanName">) => (row.cleanName?.trim() || row.name).trim();
+
 export const usesDeferredFunding = (row: Pick<ImportRow, "name" | "paymentMethod">) => /pay[\s-]?later/i.test(`${row.name} ${row.paymentMethod || ""}`);
 const looksLikeTransfer = (name: string) => /\b(?:top[\s-]?up|isi saldo|pindah dana|move money|antar[\s-]?kantong|transfer|trsf|trf)\b/i.test(name);
 const looksUnsettled = (name: string) => /\b(?:expired|kedaluwarsa|kadaluarsa|dibatalkan|cancelled|canceled|pending|tertunda|gagal)\b/i.test(name);
 const namesOnlyWallet = (name: string) => /^(?:shopee\s*pay|gopay|ovo|dana|linkaja)(?:\s+(?:pembayaran|payment))?$/i.test(name.trim());
 
 export function importPatchNeedsSourceRecheck(patch: Partial<ImportRow>): boolean {
-  return ["date", "name", "amount", "direction", "activity", "paymentMethod"].some((field) => field in patch);
+  return ["date", "name", "cleanName", "amount", "direction", "activity", "paymentMethod"].some((field) => field in patch);
 }
 
 export function suggestImportDecision(row: Pick<ImportRow, "date" | "name" | "paymentMethod" | "amount" | "direction" | "activity">, month: string): ImportRow["decision"] {
@@ -61,7 +77,8 @@ export function importRowsNeedingDuplicateConfirmation(rows: readonly ImportRow[
   return new Set(rows.filter((row) => {
     if (row.decision === "skip" || wasSaved(row)) return false;
     const key = duplicateKey(row, accountFor(row));
-    return existing.has(key) || !!existingValues?.has(valueKey(row, accountFor(row))) || (counts.get(key) || 0) > 1 || (sources.get(duplicateKey(row, ""))?.size || 0) > 1;
+    // Saved imports carry the cleaned name, so the ledger is checked under both spellings.
+    return existing.has(key) || existing.has(duplicateKey({ ...row, name: importRowName(row) }, accountFor(row))) || !!existingValues?.has(valueKey(row, accountFor(row))) || (counts.get(key) || 0) > 1 || (sources.get(duplicateKey(row, ""))?.size || 0) > 1;
   }).map((row) => row.id));
 }
 
@@ -104,6 +121,10 @@ export function importRowAlreadySaved(row: ImportRow, draft: ImportDraft | null,
   return !!draft?.saved.some((item) => item.pairedRowId === row.id && data.transactions.some((transaction) => transaction.id === item.id));
 }
 
+export function importRowsWaiting(drafts: readonly ImportDraft[], data: Data): number {
+  return drafts.reduce((total, draft) => total + draft.rows.filter((row) => row.decision !== "skip" && !importRowAlreadySaved(row, draft, data)).length, 0);
+}
+
 export function importRowReady(row: ImportRow, account: string, data: Data, currentDay = today()): boolean {
   if (row.decision !== "ready" || !validDate(row.date) || row.date > currentDay || !validAmount(row.amount) || !row.name.trim() || row.direction === "unknown") return false;
   if (["pending", "failed", "reward", "unknown"].includes(row.activity)) return false;
@@ -121,7 +142,8 @@ export function importRowReady(row: ImportRow, account: string, data: Data, curr
 
 export function importedTransactions(row: ImportRow, account: string, sourceName: string, data: Data, pairedRowId?: string): Transaction[] {
   if (!importRowReady(row, account, data)) throw new Error("Review this row before saving");
-  const note = `Imported from ${/\.pdf$/i.test(sourceName) ? "PDF statement" : "screenshot"}, page ${row.page}`;
+  const name = importRowName(row);
+  const note = `${name !== row.name.trim() ? `${row.name.trim()} · ` : ""}Imported from ${/\.pdf$/i.test(sourceName) ? "PDF statement" : "screenshot"}, page ${row.page}`;
   if (row.activity === "transfer" || row.activity === "topup") {
     const from = row.direction === "expense" ? account : row.counterparty!;
     const to = row.direction === "expense" ? row.counterparty! : account;
@@ -132,7 +154,7 @@ export function importedTransactions(row: ImportRow, account: string, sourceName
     return [outgoing, incoming];
   }
   const card = data.creditCards.find((item) => item.name === account);
-  const base: Transaction = { id: row.id, name: row.name.trim(), amount: row.amount, type: row.direction as "expense" | "income", date: row.date, account, pocketId: row.direction === "income" ? "" : row.pocketId, note, verified: true };
+  const base: Transaction = { id: row.id, name, amount: row.amount, type: row.direction as "expense" | "income", date: row.date, account, pocketId: row.direction === "income" ? "" : row.pocketId, note, verified: true };
   if (card) return [{ ...base, kind: "card_purchase", cardId: card.id, installments: 1, firstDueMonth: row.firstDueMonth }];
   if (row.activity === "card_payment") return [{ ...base, kind: "card_payment", cardId: row.cardId, pocketId: "" }];
   return [base];

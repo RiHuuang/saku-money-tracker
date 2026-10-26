@@ -13,6 +13,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GoogleAuthPlugin.class);
         registerPlugin(HomeWidgetPlugin.class);
         registerPlugin(AppUpdatePlugin.class);
+        registerPlugin(NotificationCapturePlugin.class);
+        registerPlugin(AppLockPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

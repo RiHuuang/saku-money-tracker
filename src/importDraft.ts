@@ -6,6 +6,7 @@ export type ImportRow = {
   date: string;
   dateEvidence?: string;
   name: string;
+  cleanName?: string;
   paymentMethod?: string;
   amount: number;
   direction: "expense" | "income" | "unknown";
@@ -22,6 +23,7 @@ export type ImportSource = {
   name: string;
   account: string;
   accountConfirmed?: boolean;
+  accountDetected?: boolean;
   mixedAccounts?: boolean;
   datesChecked?: boolean;
   file: File;

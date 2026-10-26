@@ -1,0 +1,81 @@
+{
+ "packageName": "id.co.bankbkemobile.digitalbank",
+ "note": "Synthetic messages modelled on common phrasing; replace with redacted real samples.",
+ "cases": [
+  {
+   "title": "SeaBank",
+   "text": "Transaksi QRIS Rp15.000 di NASI GORENG PAK MIN berhasil.",
+   "expected": {
+    "amount": 15000,
+    "direction": "expense",
+    "rawMerchant": "NASI GORENG PAK MIN",
+    "balance": null
+   }
+  },
+  {
+   "title": "SeaBank",
+   "text": "Dana masuk Rp750.000 dari DEWI LESTARI.",
+   "expected": {
+    "amount": 750000,
+    "direction": "income",
+    "rawMerchant": "DEWI LESTARI",
+    "balance": null
+   }
+  },
+  {
+   "title": "SeaBank",
+   "text": "Transfer keluar Rp250.000 ke RUDI HARTONO berhasil.",
+   "expected": {
+    "amount": 250000,
+    "direction": "expense",
+    "rawMerchant": "RUDI HARTONO",
+    "balance": null
+   }
+  },
+  {
+   "title": "SeaBank",
+   "text": "Top Up ShopeePay Rp60.000 berhasil.",
+   "expected": {
+    "amount": 60000,
+    "direction": "expense",
+    "rawMerchant": "ShopeePay",
+    "balance": null
+   }
+  },
+  {
+   "title": "SeaBank",
+   "text": "Transfer Rp250.000 ke RUDI HARTONO gagal.",
+   "expected": null
+  },
+  {
+   "title": "SeaBank",
+   "text": "Transaksi QRIS Rp27.000 di BAKMI GM berhasil. Saldo tersedia Rp1.980.000.",
+   "expected": {
+    "amount": 27000,
+    "direction": "expense",
+    "rawMerchant": "BAKMI GM",
+    "balance": 1980000
+   }
+  },
+  {
+   "title": "SeaBank",
+   "text": "Bunga harian Rp1.234 masuk ke rekening kamu.",
+   "expected": {
+    "amount": 1234,
+    "direction": "income",
+    "rawMerchant": "",
+    "balance": null
+   }
+  },
+  {
+   "title": "SeaBank",
+   "text": "Promo hingga Rp100.000 untuk nasabah baru!",
+   "expected": null
+  },
+  {
+   "title": "SeaBank",
+   "text": "Pengingat: tagihan akan jatuh tempo besok sebesar Rp300.000.",
+   "expected": null
+  }
+ ]
+}

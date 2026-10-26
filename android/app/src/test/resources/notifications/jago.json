@@ -1,0 +1,81 @@
+{
+ "packageName": "com.jago.digitalBanking",
+ "note": "Synthetic messages modelled on common phrasing; replace with redacted real samples.",
+ "cases": [
+  {
+   "title": "Jago",
+   "text": "Kamu bayar Rp48.500 di ALFAMART pakai Kartu Jago.",
+   "expected": {
+    "amount": 48500,
+    "direction": "expense",
+    "rawMerchant": "ALFAMART",
+    "balance": null
+   }
+  },
+  {
+   "title": "Jago",
+   "text": "Uang masuk Rp2.000.000 dari PT CONTOH JAYA ke Kantong Utama.",
+   "expected": {
+    "amount": 2000000,
+    "direction": "income",
+    "rawMerchant": "PT CONTOH JAYA",
+    "balance": null
+   }
+  },
+  {
+   "title": "Jago",
+   "text": "Kirim uang Rp150.000 ke ANDI WIJAYA berhasil.",
+   "expected": {
+    "amount": 150000,
+    "direction": "expense",
+    "rawMerchant": "ANDI WIJAYA",
+    "balance": null
+   }
+  },
+  {
+   "title": "Jago",
+   "text": "Top up DANA Rp50.000 berhasil dari Kantong Utama.",
+   "expected": {
+    "amount": 50000,
+    "direction": "expense",
+    "rawMerchant": "DANA",
+    "balance": null
+   }
+  },
+  {
+   "title": "Jago",
+   "text": "Pembayaran Rp48.500 di ALFAMART ditolak.",
+   "expected": null
+  },
+  {
+   "title": "Jago",
+   "text": "Pembayaran Rp32.000 di WARUNG BU SRI berhasil. Saldo Kantong Utama: Rp1.120.500",
+   "expected": {
+    "amount": 32000,
+    "direction": "expense",
+    "rawMerchant": "WARUNG BU SRI",
+    "balance": 1120500
+   }
+  },
+  {
+   "title": "Jago",
+   "text": "Transaksi Rp 99.000,00 di SPOTIFY berhasil.",
+   "expected": {
+    "amount": 99000,
+    "direction": "expense",
+    "rawMerchant": "SPOTIFY",
+    "balance": null
+   }
+  },
+  {
+   "title": "Jago",
+   "text": "Nikmati promo diskon Rp20.000 untuk transaksi pertama!",
+   "expected": null
+  },
+  {
+   "title": "Jago",
+   "text": "Transfer Rp500.000 ke BAMBANG sedang diproses.",
+   "expected": null
+  }
+ ]
+}

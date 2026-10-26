@@ -28,7 +28,7 @@ class WidgetConfigActivity : AppCompatActivity() {
         val prefs = WidgetLedger.widgetPreferences(this)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad); setBackgroundColor(if (dark) 0xff192c24.toInt() else 0xfff7f6f0.toInt()) }
         root.addView(TextView(this).apply { text = "Saku widget"; textSize = 24f; setTextColor(ink) })
-        val privacy = CheckBox(this).apply { text = "Hide money amounts"; setTextColor(ink); isChecked = prefs.getBoolean("privacy:$widgetId", false) }
+        val privacy = CheckBox(this).apply { text = "Hide money amounts"; setTextColor(ink); isChecked = prefs.getBoolean("privacy:$widgetId", AppLockSettings.enabled(this@WidgetConfigActivity)) }
         root.addView(privacy)
         val isFavorites = AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId)?.provider?.className == FavoritesWidgetProvider::class.java.name
         val favoriteChecks = mutableListOf<Pair<String, CheckBox>>()

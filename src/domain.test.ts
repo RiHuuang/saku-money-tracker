@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import {
   bankRows,
   accountBalance,
   balanceAdjustment,
   cardBalance,
   cardDue,
+  catchUpGap,
+  daysAgo,
+  frequentExpenses,
+  lastPocketFor,
   budgetFor,
   demoData,
   dueRules,
@@ -340,4 +344,71 @@ test("recurring bills show only unrecorded, unskipped occurrences", () => {
   d.transactions.push({ id: "paid", name: "Wi-Fi", amount: 100000, type: "expense", pocketId: "bills", account: "BCA", date: "2026-09-30", note: "", recurringRuleId: "wifi", occurrenceMonth: "2026-09" });
   assert.deepEqual(dueRules(d, "2026-10-31"), []);
   assert.doesNotThrow(() => validateData(d));
+});
+
+test("catchUpGap counts days since the last real entry or checked day, capped at 14", () => {
+  const data = emptyData();
+  data.accounts = ["Cash"];
+  assert.deepEqual(catchUpGap(data, "2026-10-25"), []);
+  const row = (id: string, date: string, extra: object = {}) => ({ id, name: id, amount: 1000, type: "expense", date, pocketId: "", account: "Cash", note: "", ...extra }) as typeof data.transactions[number];
+  data.transactions = [row("open", "2026-10-20", { type: "income", kind: "opening_balance" })];
+  assert.deepEqual(catchUpGap(data, "2026-10-23"), ["2026-10-21", "2026-10-22", "2026-10-23"]);
+  data.transactions.push(row("coffee", "2026-10-22"), row("rent", "2026-10-24", { recurringRuleId: "r1" }), row("later", "2026-11-02"));
+  assert.deepEqual(catchUpGap(data, "2026-10-25"), ["2026-10-23", "2026-10-24", "2026-10-25"]);
+  assert.deepEqual(catchUpGap(data, "2026-10-25", ["2026-10-23", "2026-10-24"]), ["2026-10-25"]);
+  assert.deepEqual(catchUpGap(data, "2026-10-25", ["2026-10-25"]), []);
+  data.transactions.push(row("today", "2026-10-25"));
+  assert.deepEqual(catchUpGap(data, "2026-10-25"), []);
+  const gap = catchUpGap(data, "2026-12-01");
+  assert.equal(gap.length, 14);
+  assert.deepEqual([gap[0], gap.at(-1)], ["2026-11-18", "2026-12-01"]);
+});
+
+test("snapshots without checkedDays load, and invalid checked days are rejected", () => {
+  const { checkedDays: _, ...old } = emptyData();
+  assert.deepEqual(validateData(JSON.parse(JSON.stringify(old))).checkedDays, []);
+  assert.deepEqual(validateData({ ...emptyData(), checkedDays: ["2026-10-23"] }).checkedDays, ["2026-10-23"]);
+  assert.throws(() => validateData({ ...emptyData(), checkedDays: ["23 Oct"] }));
+  assert.throws(() => validateData({ ...emptyData(), checkedDays: ["2026-10-23", "2026-10-23"] }));
+});
+
+test("daysAgo uses the local calendar day, not UTC", () => {
+  const zone = process.env.TZ;
+  process.env.TZ = "Asia/Jakarta";
+  mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-25T17:30:00Z") });
+  try {
+    assert.deepEqual([daysAgo(0), daysAgo(1), daysAgo(2)], ["2026-10-26", "2026-10-25", "2026-10-24"]);
+    assert.equal(daysAgo(26), "2026-09-30");
+  } finally {
+    mock.timers.reset();
+    if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone;
+  }
+});
+
+test("lastPocketFor uses the most recent expense with the same name", () => {
+  const data = emptyData();
+  data.accounts = ["Cash"];
+  const row = (id: string, name: string, date: string, pocketId: string, extra: object = {}) => ({ id, name, amount: 1000, type: "expense", date, pocketId, account: "Cash", note: "", ...extra }) as typeof data.transactions[number];
+  data.transactions = [row("a", "Grab", "2026-10-01", "food"), row("b", "grab ", "2026-10-20", "transport"), row("c", "Grab", "2026-10-10", "food"), row("d", "Kopi", "2026-10-05", ""), row("e", "Grab", "2026-10-30", "", { type: "income" })];
+  assert.equal(lastPocketFor(data, " GRAB"), "transport");
+  assert.equal(lastPocketFor(data, "Kopi"), "");
+  assert.equal(lastPocketFor(data, "Bakso"), undefined);
+  assert.equal(lastPocketFor(data, "  "), undefined);
+});
+
+test("frequentExpenses suggests the most used recent expenses that aren't quick entries", () => {
+  const data = emptyData();
+  data.accounts = ["Cash"];
+  data.favorites = [{ id: "f1", name: "Parkir", amount: 5000, type: "expense", pocketId: "", account: "Cash" }];
+  const row = (id: string, name: string, date: string, amount: number, extra: object = {}) => ({ id, name, amount, type: "expense", date, pocketId: "", account: "Cash", note: "", ...extra }) as typeof data.transactions[number];
+  data.transactions = [
+    row("k1", "Kopi", "2026-10-01", 25000), row("k2", "kopi ", "2026-10-20", 28000), row("k3", "Kopi", "2026-10-10", 26000),
+    row("g1", "Grab", "2026-10-21", 15000), row("g2", "Grab", "2026-10-22", 18000),
+    row("p1", "parkir", "2026-10-22", 5000), row("old", "Old", "2026-08-01", 1000), row("old2", "Old", "2026-08-02", 1000), row("old3", "Old", "2026-08-03", 1000),
+    row("r1", "Rent", "2026-10-05", 900000, { recurringRuleId: "r" }), row("r2", "Rent", "2026-09-05", 900000, { recurringRuleId: "r" }),
+    row("s1", "Salary", "2026-10-01", 9000000, { type: "income" }), row("x1", "Bakso", "2026-10-23", 20000),
+  ];
+  const suggested = frequentExpenses(data, "2026-10-25");
+  assert.deepEqual(suggested.map((f) => [f.name, f.amount]), [["kopi ", 28000], ["Grab", 18000], ["Bakso", 20000]]);
+  assert.equal(frequentExpenses(data, "2026-10-25", 1).length, 1);
 });

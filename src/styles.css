@@ -25,6 +25,26 @@
 .catchup-steps span:first-child { color: var(--teal); }
 .catchup-steps { align-items: center; flex-wrap: wrap; gap: 8px; }
 .catchup-steps > svg { color: #9bb1aa; }
+.notification-access-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0; color: var(--ink); font-size: 13px; }
+.notification-apps { display: grid; gap: 8px; margin-bottom: 16px; }
+.notification-app { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.notification-app small { color: var(--muted); }
+.notification-app-account { min-width: 160px; }
+.notification-disclosure { display: grid; gap: 10px; margin-bottom: 20px; font-size: 13px; line-height: 1.55; }
+.notification-disclosure ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; }
+.catch-up-card { display: flex; align-items: flex-start; gap: 14px; padding: 18px 18px 18px 20px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 24px #173f2510; }
+.catch-up-card > svg { flex: none; margin-top: 2px; color: var(--teal); }
+.catch-up-card > div { flex: 1; min-width: 0; }
+.catch-up-card strong { display: block; font-size: 14px; line-height: 1.4; }
+.catch-up-card small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.catch-up-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.catch-up-dismiss { flex: none; margin: -6px -6px 0 0; }
+.catch-up-day { display: grid; gap: 16px; margin: 4px 0 22px; }
+.catch-up-day-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.catch-up-day-list button { display: flex; width: 100%; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.catch-up-day-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catch-up-day-list strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.catch-up-day-empty { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 13px; }
 .catchup-panel { padding: 26px; margin: 18px 0; background: var(--surface); border-radius: 22px; box-shadow: 0 10px 35px #153b2b0b; }
 .catchup-panel-head, .catchup-source, .catchup-actions, .catchup-save, .catchup-finish { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .catchup-panel-head h3 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
@@ -47,6 +67,8 @@
 .catchup-icon:hover { background: var(--surface); }
 .catchup-consent { display: flex; align-items: start; gap: 10px; margin: 20px 0 14px; max-width: 650px; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .catchup-consent input { margin-top: 3px; }
+.catchup-consent-text { margin: 4px 0 22px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.catchup-row-raw { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .catchup-processed { display: flex; align-items: center; gap: 8px; margin: 16px 0 12px; color: var(--teal); font-size: 12px; font-weight: 600; line-height: 1.5; }
 .catchup-actions { justify-content: flex-start; flex-wrap: wrap; }
 .catchup-delete-confirm { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 14px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
@@ -384,14 +406,18 @@ input[type="checkbox"] {
 .side-nav button.active svg {
   stroke-width: 2.2;
 }
-.nav-new {
-  font-size: 8px;
-  letter-spacing: 0;
-  background: #f3f0e8;
-  color: #9b8750;
-  padding: 3px 5px;
-  border-radius: 3px;
+.nav-badge {
+  min-width: 18px;
+  padding: 2px 5px;
   margin-left: auto;
+  border-radius: 999px;
+  background: var(--teal);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -2604,9 +2630,6 @@ main {
     gap: 10px;
     padding-inline: 12px;
   }
-  .nav-new {
-    font-size: 7px;
-  }
   .heading-actions {
     gap: 8px;
   }
@@ -2707,9 +2730,6 @@ main {
   .workspace-label {
     font-size: 8px;
     margin-inline: 10px;
-  }
-  .nav-new {
-    display: none;
   }
   .brand {
     padding-inline: 7px;
@@ -3099,6 +3119,13 @@ main {
     font-size: 8px;
     color: #91a098;
     position: relative;
+  }
+  .bottom-nav .nav-badge {
+    position: absolute;
+    top: -4px;
+    left: calc(50% + 6px);
+    margin: 0;
+    font-size: 9px;
   }
   .bottom-nav button.active {
     color: var(--teal);

@@ -42,6 +42,8 @@ import {
   balanceAdjustment,
   budgetFor,
   cardBalance,
+  catchUpGap,
+  dayLabel,
   emptyData,
   exportCSV,
   isIncome,
@@ -50,9 +52,12 @@ import {
   receiptSuggestion,
   money,
   monthLabel,
+  shiftDate,
+  lastPocketFor,
   shiftMonth,
   summary,
   today,
+  daysAgo,
   uid,
   validAmount,
   validateData,
@@ -62,6 +67,12 @@ import {
   type RecurringRule,
   type Transaction,
 } from "./domain";
+import { learnMerchant, suggestMerchant } from "./merchants";
+import { listImportDrafts } from "./importDraft";
+import { notificationCapture, notificationCaptureSupported } from "./notificationCapture";
+import NotificationAccess from "./NotificationAccess";
+import { importRowsWaiting } from "./importTransactions";
+import { applyRecentsPrivacy, appLockStatus, appLockSupported, authenticate, defaultAppLock, loadAppLock, saveAppLock, shouldLock, type AppLockSettings, type LockAfter } from "./appLock";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
 import {
   DirectionIcon,
@@ -82,6 +93,9 @@ const Statements = lazy(() => import("./Statements"));
 const CsvStatements = lazy(() => import("./CsvStatements"));
 const CatchUp = lazy(() => import("./CatchUp"));
 const Plans = lazy(() => import("./Plans"));
+const CatchUpDays = lazy(() => import("./CatchUpDays"));
+const NotificationReview = lazy(() => import("./NotificationReview"));
+const learnsMerchant = (t: Transaction) => t.type === "expense" && (!t.kind || t.kind === "card_purchase");
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
@@ -101,17 +115,19 @@ import {
   deleteCloudAccount,
   legalUrl,
   markCloudDirty,
+  mergeWithSyncBase,
   mirrorCloud,
   pullCloud,
   pushCloud,
   signInGoogle,
   signOutGoogle,
   updateProfile,
+  acceptAgreement,
   type CloudState,
 } from "./cloud";
 
 type Edit =
-  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string }
+  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string; date?: string }
   | { type: "balance_adjustment"; account: string; value?: Transaction }
   | { type: "pocket"; value?: Pocket }
   | { type: "pocket_delete"; value: Pocket }
@@ -120,6 +136,7 @@ type Edit =
   | { type: "start" }
   | null;
 const cloudImportEnabled = true;
+const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "transactions", label: "Activity", icon: ArrowDownLeft },
@@ -129,7 +146,7 @@ const navigation = [
   { id: "check", label: cloudImportEnabled ? "Catch up" : "Check", icon: FileCheck2 },
 ] as const;
 const mobileNavigation = [
-  navigation[0], navigation[1], navigation[2], navigation[3],
+  navigation[0], navigation[1], navigation[5], navigation[2],
   { id: "more", label: "More", icon: Menu },
 ] as const;
 const pocketHasReferences = (data: Data, pocketId: string) =>
@@ -140,14 +157,24 @@ export default function App() {
     [loadError, setLoadError] = useState(""),
     [view, setView] = useState<View>("overview"),
     [month, setMonth] = useState(today().slice(0, 7)),
-    [checkTab, setCheckTab] = useState<"catchup" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
+    [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
     [edit, setEdit] = useState<Edit>(null),
     [toast, setToast] = useState(""),
     [busy, setBusy] = useState(false),
     [cloud, setCloud] = useState<CloudState | null>(null),
     [loginBusy, setLoginBusy] = useState(false),
     [resolution, setResolution] = useState<{ local: Data; remote: Data; remoteState?: CloudState } | null>(null),
-    [avatarUrl, setAvatarUrl] = useState("");
+    [avatarUrl, setAvatarUrl] = useState(""),
+    [catchUpSheet, setCatchUpSheet] = useState<{ days: string[]; index: number } | null>(null),
+    [catchUpDismissed, setCatchUpDismissed] = useState(() => { try { return localStorage.getItem(catchUpDismissedKey) || ""; } catch { return ""; } }),
+    [importWaiting, setImportWaiting] = useState(0),
+    [waitingRecount, setWaitingRecount] = useState(0),
+    // Native builds start covered until the lock setting is read, so no amount can flash before authentication.
+    [lockState, setLockState] = useState<"checking" | "covered" | "locked" | "open">(appLockSupported() ? "checking" : "open"),
+    [appLock, setAppLock] = useState<AppLockSettings>(defaultAppLock);
+  const appLockRef = useRef(defaultAppLock);
+  const hiddenAt = useRef<number | null>(null);
+  const authenticating = useRef(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [previousView, setPreviousView] = useState<View>("overview");
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
@@ -158,9 +185,9 @@ export default function App() {
   const activeSync = useRef<Data | null>(null);
   const syncRunning = useRef(false);
   const mirrorRunning = useRef(false);
-  const latest = useRef({ data, cloud, edit });
-  latest.current = { data, cloud, edit };
-  const reconcileRef = useRef<(() => Promise<void>) | null>(null);
+  const latest = useRef({ data, cloud, edit, resolution });
+  latest.current = { data, cloud, edit, resolution };
+  const reconcileRef = useRef<((afterFailedSync?: boolean) => Promise<void>) | null>(null);
   const selectedPocket = data?.pockets.find((p) => p.id === selectedPocketId);
   function openPocket(id: string) { go("pockets"); setSelectedPocketId(id); setPocketAllHistory(false); }
   function openTransaction(value: Transaction) {
@@ -191,14 +218,16 @@ export default function App() {
       if (!useful(local)) throw new Error("Could not reach Saku Cloud. Connect to the internet and retry before setting up a workspace. Your cloud data has not changed.");
       // A saved local ledger remains available offline.
     }
-    const newerCleanCloud = scoped && !state.dirty && remoteState && remoteState.revision > state.revision && useful(remote);
-    if (useful(local) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
+    const localNeedsReview = scoped && (remoteState?.dirty ?? state.dirty);
+    if (localNeedsReview && local && remote && remoteState && await mergeCloudChanges(local, remote, remoteState, false)) return;
+    const newerCleanCloud = scoped && remoteState && !remoteState.dirty && remoteState.revision > state.revision && useful(remote);
+    if ((useful(local) || localNeedsReview) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
       setResolution({ local: local!, remote: remote || emptyData(), remoteState });
       return;
     }
-    const chosen = newerCleanCloud ? remote! : useful(local) ? local! : useful(remote) ? remote! : emptyData();
+    const chosen = newerCleanCloud ? remote! : useful(local) || localNeedsReview ? local! : useful(remote) ? remote! : emptyData();
     await replaceData(chosen);
-    if (remoteState && !remoteState.dirty && remote && JSON.stringify(chosen) === JSON.stringify(remote)) setCloud(await adoptCloudSnapshot(remoteState));
+    if (remoteState && !remoteState.dirty && remote && JSON.stringify(chosen) === JSON.stringify(remote)) setCloud(await adoptCloudSnapshot(remoteState, false, chosen));
     setData(chosen);
     if (!useful(chosen)) setEdit({ type: "start" });
   }
@@ -223,27 +252,30 @@ export default function App() {
     let running = false, retry = 0, needed = true, signal = 0;
     const userId = cloud.user.id;
     const visible = () => document.visibilityState === "visible" && navigator.onLine !== false;
-    const reconcile = async () => {
+    // After a failed sync, only an outside signal (a notice, reconnecting) retries it.
+    const reconcile = async (afterFailedSync = false) => {
       signal++;
       needed = true;
       if (running || !visible() || stopped) return;
       const current = latest.current;
-      if (current.edit || saving.current || syncRunning.current || !current.data || current.cloud?.user?.id !== userId) return;
+      if (current.edit || current.resolution || saving.current || syncRunning.current || !current.data || current.cloud?.user?.id !== userId) return;
       const startedWith = signal;
       running = true;
       try {
         const { revision, state } = await refreshCloudMetadata();
         if (stopped || latest.current.cloud?.user?.id !== userId) return;
         setCloud(state);
-        if (revision > state.revision) {
+        // Unsynced edits go through the sync queue, which merges on a 409 and retries.
+        if (state.dirty) { if (latest.current.data && !afterFailedSync) void queueSync(latest.current.data); }
+        else if (revision > state.revision) {
           const before = latest.current.data;
           const result = await pullCloud();
           if (stopped || latest.current.data !== before || latest.current.edit || saving.current) return;
           if (result.state.dirty) {
-            if (result.data) setResolution({ local: before!, remote: result.data, remoteState: result.state });
+            if (result.data) void queueSync(before!);
           } else if (result.data) {
             await replaceData(result.data);
-            const adopted = await adoptCloudSnapshot(result.state);
+            const adopted = await adoptCloudSnapshot(result.state, false, result.data);
             setData(result.data);
             setCloud(adopted);
           }
@@ -308,6 +340,53 @@ export default function App() {
   useEffect(() => {
     void loadTheme().then(setThemePreference).catch(() => {});
   }, []);
+  async function unlock() {
+    if (authenticating.current) return;
+    authenticating.current = true;
+    const unlocked = await authenticate("Unlock Saku");
+    authenticating.current = false;
+    hiddenAt.current = null;
+    setLockState(unlocked ? "open" : "locked");
+  }
+  async function changeAppLock(next: AppLockSettings, confirm: boolean) {
+    if (confirm) {
+      authenticating.current = true;
+      const confirmed = await authenticate(next.enabled ? "Turn on App lock" : "Turn off App lock");
+      authenticating.current = false;
+      if (!confirmed) return false;
+    }
+    await saveAppLock(next);
+    appLockRef.current = next;
+    setAppLock(next);
+    return true;
+  }
+  useEffect(() => {
+    if (!appLockSupported()) return;
+    void loadAppLock().then(async (settings) => {
+      appLockRef.current = settings;
+      setAppLock(settings);
+      await applyRecentsPrivacy(settings).catch(() => {});
+      if (settings.enabled) { setLockState("locked"); void unlock(); } else setLockState("open");
+    }).catch(() => setLockState("open"));
+    const listener = NativeApp.addListener("appStateChange", ({ isActive }) => {
+      // The device-credential screen pauses Saku too; that pause is part of unlocking, not leaving.
+      if (authenticating.current || !appLockRef.current.enabled) return;
+      if (!isActive) { hiddenAt.current = Date.now(); setLockState((state) => state === "open" ? "covered" : state); return; }
+      if (shouldLock(appLockRef.current, hiddenAt.current, Date.now())) { setLockState("locked"); void unlock(); }
+      else { hiddenAt.current = null; setLockState((state) => state === "covered" ? "open" : state); }
+    });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+  useEffect(() => {
+    // Recount after leaving Catch up or saving, so the badge reflects rows still waiting in local drafts.
+    if (!data) { setImportWaiting(0); return; }
+    let live = true;
+    void Promise.all([
+      cloud?.signedIn && cloud.user?.id ? listImportDrafts(cloud.user.id).then((drafts) => importRowsWaiting(drafts, data)).catch(() => 0) : 0,
+      notificationCaptureSupported() ? notificationCapture.inbox().then((inbox) => inbox.items.length).catch(() => 0) : 0,
+    ]).then(([drafts, inbox]) => { if (live) setImportWaiting(drafts + inbox); });
+    return () => { live = false; };
+  }, [data, view, cloud?.signedIn, cloud?.user?.id, waitingRecount]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);
@@ -336,7 +415,10 @@ export default function App() {
   }, [edit, view, previousView, selectedPocketId]);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    const openQuickAdd = (url?: string) => { if (url?.startsWith("saku://quick-add")) { setView("overview"); setEdit({ type: "transaction" }); } };
+    const openQuickAdd = (url?: string) => {
+      if (url?.startsWith("saku://quick-add")) { setView("overview"); setEdit({ type: "transaction" }); }
+      if (url?.startsWith("saku://review")) { setView("check"); setCheckTab("notifications"); }
+    };
     void NativeApp.getLaunchUrl().then((result) => openQuickAdd(result?.url));
     const listener = NativeApp.addListener("appUrlOpen", (event) => openQuickAdd(event.url));
     return () => { void listener.then((h) => h.remove()); };
@@ -369,17 +451,39 @@ export default function App() {
     pendingSync.current = next;
     if (syncRunning.current || !cloud?.signedIn) return;
     syncRunning.current = true;
+    let merges = 0, failed = false;
     try {
       while (pendingSync.current) {
-        const snapshot = pendingSync.current;
+        const snapshot: Data = pendingSync.current;
         pendingSync.current = null;
         activeSync.current = snapshot;
         await markCloudDirty();
-        setCloud(await pushCloud(snapshot));
+        try { setCloud(await pushCloud(snapshot)); }
+        catch (error) {
+          // Another device uploaded first: merge row by row, then upload the result.
+          if ((error as { status?: number }).status !== 409 || merges++ >= 3) throw error;
+          let remote: Awaited<ReturnType<typeof pullCloud>>;
+          try { remote = await pullCloud(); }
+          catch (download) {
+            // The ledger changed while downloading; retry with the newest copy.
+            if (!latest.current.data || latest.current.data === snapshot) throw download;
+            pendingSync.current ||= latest.current.data;
+            activeSync.current = null;
+            continue;
+          }
+          const merged: Data | null = remote.data && await mergeCloudChanges(snapshot, remote.data, remote.state);
+          if (merged) pendingSync.current ||= merged;
+          else if (latest.current.data !== snapshot && latest.current.data) pendingSync.current ||= latest.current.data;
+          else {
+            if (remote.data) setResolution({ local: snapshot, remote: remote.data, remoteState: remote.state });
+            throw error;
+          }
+        }
         activeSync.current = null;
       }
       if (userInitiated) setToast("Cloud backup saved. Google Sheet is updating.");
     } catch (error: unknown) {
+      failed = true;
       pendingSync.current = null;
       activeSync.current = null;
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
@@ -387,8 +491,22 @@ export default function App() {
       setToast(status === 409 ? "Google has newer data. Review before syncing again." : "Saved offline. Automatic sync will retry when Saku is active.");
     } finally {
       syncRunning.current = false;
-      void reconcileRef.current?.();
+      void reconcileRef.current?.(failed);
     }
+  }
+  /** Saves the three-way merge of local and cloud edits; null when the user must choose. */
+  async function mergeCloudChanges(local: Data, remote: Data, remoteState: CloudState, requireCurrent = true) {
+    if (saving.current || (requireCurrent && latest.current.data !== local)) return null;
+    const merged = await mergeWithSyncBase(local, remote, remoteState);
+    if (!merged.data || saving.current || (requireCurrent && latest.current.data !== local)) return null;
+    saving.current = true;
+    try {
+      await saveData(merged.data);
+      setCloud(await resolveCloudWithLocal(remoteState, remote));
+      setData(merged.data);
+      latest.current = { ...latest.current, data: merged.data };
+      return merged.data;
+    } finally { saving.current = false; }
   }
   async function attemptMirror(userInitiated = false) {
     if (mirrorRunning.current || !cloud?.signedIn || !cloud.sheetPending || !cloud.spreadsheetUrl) return;
@@ -413,6 +531,14 @@ export default function App() {
       );
     }
   }
+  if (lockState !== "open")
+    return (
+      <div className="loading app-lock">
+        <span className="brand-mark"><LockKeyhole /></span>
+        <h1>Saku</h1>
+        {lockState === "locked" && <><p>Saku is locked.</p><button className="button primary" onClick={() => void unlock()}>Unlock</button></>}
+      </div>
+    );
   if (cloud && !cloud.signedIn)
     return <LoginScreen configured={cloud.configured} busy={loginBusy} error={loadError} onLogin={async () => {
       setLoginBusy(true); setLoadError("");
@@ -420,9 +546,16 @@ export default function App() {
       catch (error) { setLoadError(error instanceof Error ? error.message : "Google sign-in failed."); }
       finally { setLoginBusy(false); }
     }} />;
+  if (cloud?.signedIn && typeof cloud.user?.agreementVersion === "string" && cloud.user.agreementVersion !== AGREEMENT_VERSION)
+    return <AgreementUpdate busy={loginBusy} error={loadError} onAccept={async () => {
+      setLoginBusy(true); setLoadError("");
+      try { setCloud(await acceptAgreement()); }
+      catch (error) { setLoadError(error instanceof Error ? error.message : "The agreement could not be saved. Try again."); }
+      finally { setLoginBusy(false); }
+    }} onSignOut={async () => { await signOutGoogle(); setCloud(await loadCloudState()); }} />;
   if (resolution)
     return <WorkspaceChoice local={resolution.local} remote={resolution.remote} onChoose={async (chosen, localWins) => {
-      if (localWins) { await saveData(chosen); if (resolution.remoteState) setCloud(await resolveCloudWithLocal(resolution.remoteState)); else setCloud((value) => value ? { ...value, dirty: true } : value); setData(chosen); void queueSync(chosen); } else { await replaceData(chosen); if (resolution.remoteState) setCloud(await adoptCloudSnapshot(resolution.remoteState, true)); } setData(chosen); setResolution(null); if (!chosen.transactions.length && !chosen.pockets.length && !chosen.accounts.length) setEdit({ type: "start" });
+      if (localWins) { await saveData(chosen); if (resolution.remoteState) setCloud(await resolveCloudWithLocal(resolution.remoteState)); else setCloud((value) => value ? { ...value, dirty: true } : value); setData(chosen); void queueSync(chosen); } else { await replaceData(chosen); if (resolution.remoteState) setCloud(await adoptCloudSnapshot(resolution.remoteState, true, chosen)); } setData(chosen); setResolution(null); if (!chosen.transactions.length && !chosen.pockets.length && !chosen.accounts.length) setEdit({ type: "start" });
     }} onBackup={() => void download(`saku-local-backup-${today()}.json`, JSON.stringify(resolution.local, null, 2), "application/json")} />;
   if (!data)
     return (
@@ -468,6 +601,10 @@ export default function App() {
   const weekSpend = weekTransactions.reduce((n, t) => n + personalAmount(t), 0);
   const weekTop = data.pockets.map((p) => ({ name: p.name, amount: weekTransactions.filter((t) => t.pocketId === p.id).reduce((n, t) => n + personalAmount(t), 0) })).sort((a, b) => b.amount - a.amount)[0];
   const currentAvailable = summary(data, today().slice(0, 7)).available;
+  const catchUpDays = catchUpDismissed === today() ? [] : catchUpGap(data, today());
+  const catchUpAnchorChecked = catchUpDays.length > 0 && data.checkedDays.includes(shiftDate(catchUpDays[0], -1)) && !data.transactions.some((t) => t.date === shiftDate(catchUpDays[0], -1) && t.kind !== "opening_balance");
+  const showCatchUp = catchUpDays.length > 0 && data.transactions.some((t) => t.date <= shiftDate(today(), -2));
+  function dismissCatchUp() { setCatchUpDismissed(today()); try { localStorage.setItem(catchUpDismissedKey, today()); } catch { /* Dismissal is a convenience only. */ } }
   const titles: Record<View, [string, string]> = {
     overview: ["Your everyday money", "Home"],
     transactions: ["Find and review entries", "Activity"],
@@ -513,7 +650,7 @@ export default function App() {
             >
               <n.icon size={20} />
               {n.label}
-              {n.id === "check" && <span className="nav-new">NEW</span>}
+              {n.id === "check" && importWaiting > 0 && <span className="nav-badge" aria-label={`${importWaiting} waiting`}>{importWaiting > 99 ? "99+" : importWaiting}</span>}
             </button>
           ))}
         </nav>
@@ -641,11 +778,12 @@ export default function App() {
           </section>
           {view === "more" && <section className="more-list" aria-label="More destinations">
             <button onClick={() => go("insights")}><BarChart3 /><span><strong>Insights</strong><small>See trends and spending breakdowns</small></span><ChevronRight /></button>
-            <button onClick={() => go("check")}><FileCheck2 /><span><strong>{cloudImportEnabled ? "Catch up" : "Check"}</strong><small>{cloudImportEnabled ? "Import screenshots and statements" : nativeAIAvailable ? "Review CSV and PDF statements" : "Compare CSV with your records"}</small></span><ChevronRight /></button>
+            <button onClick={() => go("plans")}><CreditCard /><span><strong>Plans</strong><small>Credit cards and recurring bills</small></span><ChevronRight /></button>
             <button onClick={() => go("settings")}><Settings /><span><strong>Settings</strong><small>Accounts, appearance, backup and privacy</small></span><ChevronRight /></button>
           </section>}
           {view === "overview" && (
             <>
+              {showCatchUp && <section className="catch-up-card" aria-label="Days to catch up"><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? "Last entry over 2 weeks ago" : `${catchUpAnchorChecked ? "Checked up to" : "Last entry:"} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {catchUpDays.length} {catchUpDays.length === 1 ? "day" : "days"} to catch up</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>Fill in by day</button><button className="button secondary" onClick={() => { setCheckTab(cloudImportEnabled ? "catchup" : "csv"); go("check"); }}>{cloudImportEnabled ? "Import screenshot" : "Check a statement"}</button></div></div><button className="icon-button catch-up-dismiss" aria-label="Hide until tomorrow" title="Hide until tomorrow" onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
                 <button className="balance-panel balance-action" onClick={() => go("insights")} aria-label={`View insights for ${monthLabel(month)}`}>
                   <div className="balance-top">
@@ -1023,8 +1161,8 @@ export default function App() {
           )}
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>
-              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>Catch up</button><button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>Statement check</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>CSV on device</button></div>}
-              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
+              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>Catch up</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>Notifications</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>Statement check</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>CSV on device</button></div>}
+              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">Loading captured notifications...</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
               {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
           )}
@@ -1044,6 +1182,8 @@ export default function App() {
               themePreference={themePreference}
               onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast("Appearance could not be saved.")); }}
               onAdjustBalance={(account) => setEdit({ type: "balance_adjustment", account })}
+              appLock={appLock}
+              onAppLockChange={changeAppLock}
             />
           )}
         </main>
@@ -1058,13 +1198,14 @@ export default function App() {
             onClick={() => go(n.id)}
           >
             <n.icon size={21} />
+            {n.id === "check" && importWaiting > 0 && <span className="nav-badge" aria-label={`${importWaiting} waiting`}>{importWaiting > 99 ? "99+" : importWaiting}</span>}
             <span>
               {n.label}
             </span>
           </button>
         ))}
       </nav>
-      {edit?.type === "account_transfer" && <TransactionEditor data={data} transaction={edit.value} initialTransfer month={month} busy={busy} onClose={() => setEdit(null)} onSave={async () => {}} onDelete={async () => {}} onRepay={async () => {}} onTransfer={async (rows, oldTransferId) => {
+      {edit?.type === "account_transfer" && <TransactionEditor data={data} transaction={edit.value} initialTransfer month={month} busy={busy} onClose={() => setEdit(null)} onSave={async () => false} onDelete={async () => {}} onRepay={async () => {}} onTransfer={async (rows, oldTransferId) => {
         const kept = data.transactions.filter((t) => !oldTransferId || t.transferId !== oldTransferId);
         if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? "Transfer updated" : "Transfer recorded")) setEdit(null);
       }} onDeleteTransfer={async (transferId) => { if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, "Transfer deleted")) setEdit(null); }} />}
@@ -1086,20 +1227,22 @@ export default function App() {
         }}
       />}
       {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, "Pocket budget moved")) setEdit(null); }} />}
+      {catchUpSheet && !edit && <Suspense fallback={null}><CatchUpDays data={data} days={catchUpSheet.days} index={catchUpSheet.index} busy={busy} onIndex={(index) => setCatchUpSheet({ ...catchUpSheet, index })} onAdd={(date, favorite) => setEdit({ type: "transaction", date, favorite })} onEdit={(value) => openTransaction(value)} onNothingSpent={(day) => commit({ ...data, checkedDays: [...new Set([...data.checkedDays, day])].sort() }, "Marked as nothing spent")} onClose={() => setCatchUpSheet(null)} /></Suspense>}
       {edit?.type === "transaction" && (
         <TransactionEditor
-          key={edit.value?.id || edit.favorite?.id || edit.cardId || edit.pocketId || "new"}
+          key={edit.value?.id || edit.favorite?.id || edit.cardId || edit.pocketId || edit.date || "new"}
           data={data}
           transaction={edit.value}
           initialCardId={edit.cardId}
           initialPocketId={edit.pocketId}
+          initialDate={edit.date}
           favorite={edit.favorite}
           month={month}
           busy={busy}
           onClose={() => {
             if (!busy) setEdit(null);
           }}
-          onSave={async (t, rule, favorite) => {
+          onSave={async (t, rule, favorite, keepOpen) => {
             const recurring = rule === null
               ? data.recurring.map((r) => r.id === edit.value?.recurringRuleId ? { ...r, active: false } : r)
               : rule
@@ -1114,11 +1257,15 @@ export default function App() {
                     : [...data.transactions, t],
                   recurring,
                   favorites: favorite ? [...data.favorites, favorite] : data.favorites,
+                  merchantRules: learnsMerchant(t) ? learnMerchant(data, t.name, t) : data.merchantRules,
                 },
                 edit.value ? "Transaction updated" : "Transaction added",
               )
-            )
-              setEdit(null);
+            ) {
+              if (!keepOpen) setEdit(null);
+              return true;
+            }
+            return false;
           }}
           onDelete={async (id) => {
             if (
@@ -1394,6 +1541,7 @@ function TransactionEditor({
   initialTransfer,
   initialCardId,
   initialPocketId,
+  initialDate,
   favorite,
   month,
   busy,
@@ -1409,11 +1557,12 @@ function TransactionEditor({
   initialTransfer?: boolean;
   initialCardId?: string;
   initialPocketId?: string;
+  initialDate?: string;
   favorite?: Favorite;
   month: string;
   busy: boolean;
   onClose: () => void;
-  onSave: (t: Transaction, rule?: RecurringRule | null, favorite?: Favorite) => Promise<void>;
+  onSave: (t: Transaction, rule?: RecurringRule | null, favorite?: Favorite, keepOpen?: boolean) => Promise<boolean>;
   onDelete: (id: string) => Promise<void>;
   onRepay: (sourceId: string, amount: number, account: string, date: string) => Promise<void>;
   onTransfer: (rows: Transaction[], oldTransferId?: string) => Promise<void>;
@@ -1429,11 +1578,14 @@ function TransactionEditor({
     ),
     [name, setName] = useState(transaction?.name || favorite?.name || ""),
     [date, setDate] = useState(
-      transaction?.date || today(),
+      transaction?.date || initialDate || today(),
     ),
     [pocket, setPocket] = useState(
-      transaction?.pocketId || favorite?.pocketId || initialPocketId || data.pockets[0]?.id || "",
+      transaction ? transaction.pocketId : favorite?.pocketId || initialPocketId || "",
     ),
+    // An existing row, a quick entry or a pocket page already chose the pocket; only a blank new entry learns it from the name.
+    [pocketChosen, setPocketChosen] = useState(Boolean(transaction || favorite || initialPocketId)),
+    [pickingDate, setPickingDate] = useState(() => ![daysAgo(0), daysAgo(1), daysAgo(2)].includes(transaction?.date || initialDate || today())),
     [account, setAccount] = useState(transaction && transaction.kind !== "card_purchase" ? transaction.account : favorite && !favorite.cardId ? favorite.account : data.accounts[0]),
     [transferFrom, setTransferFrom] = useState(transferOutgoing?.account || data.accounts[0]),
     [transferTo, setTransferTo] = useState(transferIncoming?.account || data.accounts.find((item) => item !== data.accounts[0]) || data.accounts[0]),
@@ -1482,8 +1634,12 @@ function TransactionEditor({
     } catch (e) { setError(e instanceof Error ? e.message : "Could not scan receipt."); }
     finally { setScanning(false); }
   }
+  const amountField = useRef<HTMLDivElement>(null);
+  const keepOpen = useRef(false);
   async function submit(e: FormEvent) {
     e.preventDefault();
+    const addAnother = keepOpen.current;
+    keepOpen.current = false;
     if (!validAmount(Number(amount))) {
       setError("Enter a whole rupiah amount greater than zero.");
       return;
@@ -1540,8 +1696,18 @@ function TransactionEditor({
       id: uid(), name: saved.name, amount: saved.amount, type: saved.type, pocketId: saved.pocketId,
       account: saved.account, cardId: saved.kind === "card_purchase" ? saved.cardId : undefined,
     } satisfies Favorite : undefined;
-    await onSave(saved, rule, quick);
+    if (await onSave(saved, rule, quick, addAnother) && addAnother) {
+      setAmount(""); setName(""); setNote(""); setScanInfo(""); setError(""); setShared(false); setOwnAmount(""); setRecurring(false); setSaveFavorite(false);
+      if (!initialPocketId && !favorite) { setPocket(""); setPocketChosen(false); }
+      amountField.current?.querySelector("input")?.focus();
+    }
   }
+  function learnPocket() {
+    if (pocketChosen || type !== "expense" || special) return;
+    const learned = suggestMerchant(data, name)?.pocketId ?? lastPocketFor(data, name);
+    setPocket(learned !== undefined && (!learned || data.pockets.some((p) => p.id === learned)) ? learned : "");
+  }
+  const dateChoice = pickingDate ? "pick" : date === daysAgo(0) ? "0" : date === daysAgo(1) ? "1" : date === daysAgo(2) ? "2" : "pick";
   const accountChoices = data.accounts.map((name) => ({ value: name, label: name, description: `Recorded balance ${money(accountBalance(data, name))}` }));
   const paymentChoices = [
     ...data.accounts.map((name) => ({ value: `bank:${name}`, label: name, description: `Account · ${money(accountBalance(data, name))}` })),
@@ -1580,7 +1746,7 @@ function TransactionEditor({
           {modeControl}
           <label className="field">
             Amount
-            <div className="amount-input">
+            <div className="amount-input" ref={amountField}>
               <span>Rp</span>
               <MoneyInput
                 autoFocus
@@ -1602,6 +1768,7 @@ function TransactionEditor({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onBlur={learnPocket}
               placeholder={
                 type === "income"
                   ? "e.g. Monthly salary"
@@ -1622,21 +1789,15 @@ function TransactionEditor({
             transaction?.kind !== "card_payment" &&
             <label className="field">
               Pocket
-              <ChoiceField hideLabel label="Pocket" value={pocket} onValueChange={setPocket} options={pocketChoices} />
+              <ChoiceField hideLabel label="Pocket" value={pocket} onValueChange={(value) => { setPocket(value); setPocketChosen(true); }} options={pocketChoices} />
               <small>{pocket ? "Counts against this pocket." : "You can categorize this later."}</small>
             </label>
           )}
           <div className="form-columns">
-            <label className="field">
-              Date
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                max={today()}
-                required
-              />
-            </label>
+            <div className="field date-field">
+              <SegmentedChoice compact label="Date" value={dateChoice} onValueChange={(value) => { setPickingDate(value === "pick"); if (value !== "pick") setDate(daysAgo(Number(value))); }} options={[{ value: "0", label: "Today" }, { value: "1", label: "Yesterday" }, { value: "2", label: "2 days ago" }, { value: "pick", label: "Pick" }]} />
+              {dateChoice === "pick" && <input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} max={today()} required />}
+            </div>
             {(special || type === "income") && <label className="field">
               Account
               <ChoiceField hideLabel label="Account" value={account} onValueChange={setAccount} options={accountChoices} />
@@ -1709,6 +1870,7 @@ function TransactionEditor({
               >
                 Cancel
               </button>
+              {!transaction && <button className="button secondary" type="button" onClick={(event) => { keepOpen.current = true; event.currentTarget.form?.requestSubmit(); keepOpen.current = false; }}>Save & add another</button>}
               <button className="button primary" type="submit">
                 {busy
                   ? "Saving..."
@@ -1928,10 +2090,24 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
     <section className="login-panel">
       <span className="brand-mark"><Wallet /></span><h1>Saku</h1>
       <p>Know where your money lives, what it is for, and what is safe to spend.</p>
-      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. If you choose AI import, selected statement text and images are processed by Cloudflare AI. Original files and review drafts stay on this device. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
+      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. If you choose AI import, selected statement text and images are processed by Cloudflare AI. Original files and review drafts stay on this device. On Android you can also let Saku read notifications from bank and e-wallet apps you choose; they stay on the phone until you add them. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
       <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
       <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? "Connecting..." : "Continue with Google"}</button>
       {!configured && <p className="form-error">Google sign-in is not configured in this build.</p>}{error && <p className="form-error" role="alert">{error}</p>}
+    </section>
+  </main>;
+}
+function AgreementUpdate({ busy, error, onAccept, onSignOut }: { busy: boolean; error: string; onAccept: () => Promise<void>; onSignOut: () => Promise<void> }) {
+  const [accepted, setAccepted] = useState(false);
+  return <main className="login-screen">
+    <section className="login-panel">
+      <span className="brand-mark"><ShieldCheck /></span><h1>Updated agreement</h1>
+      <p>Saku's User Agreement and Privacy Notice now cover an optional Android feature: reading notifications from bank and e-wallet apps you choose. It stays off unless you turn it on, and notification text never leaves your phone.</p>
+      <p>Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p>
+      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
+      <button className="button primary login-button" disabled={!accepted || busy} onClick={() => void onAccept()}><Check size={18} />{busy ? "Saving..." : "Accept and continue"}</button>
+      <button className="button text-button" disabled={busy} onClick={() => void onSignOut()}><LogOut size={16} />Sign out instead</button>
+      {error && <p className="form-error" role="alert">{error}</p>}
     </section>
   </main>;
 }
@@ -2028,6 +2204,8 @@ function SettingsView({
   themePreference,
   onThemeChange,
   onAdjustBalance,
+  appLock,
+  onAppLockChange,
 }: {
   data: Data;
   commit: (d: Data, m: string) => Promise<boolean>;
@@ -2042,6 +2220,8 @@ function SettingsView({
   themePreference: ThemePreference;
   onThemeChange: (preference: ThemePreference) => void;
   onAdjustBalance: (account: string) => void;
+  appLock: AppLockSettings;
+  onAppLockChange: (next: AppLockSettings, confirm: boolean) => Promise<boolean>;
 }) {
   const [name, setName] = useState(data.name),
     [account, setAccount] = useState(""),
@@ -2096,6 +2276,8 @@ function SettingsView({
         </div>
       </section>
       <AppUpdateSettings />
+      {notificationCaptureSupported() && <NotificationAccess data={data} notify={notify} />}
+      {appLockSupported() && <AppLockSection settings={appLock} onChange={onAppLockChange} />}
       <section>
         <h2>Local profile</h2>
         <p>Your workspace on this device.</p>
@@ -2319,7 +2501,7 @@ function SettingsView({
               const result = await pullCloud();
               if (!result.data) { notify("There is no cloud backup yet."); setPullConfirm(false); return; }
               await replaceData(result.data);
-              setCloud(await adoptCloudSnapshot(result.state, true));
+              setCloud(await adoptCloudSnapshot(result.state, true, result.data));
               setData(result.data);
               setName(result.data.name);
               setPullConfirm(false);
@@ -2349,4 +2531,19 @@ function SettingsView({
       )}
     </div>
   );
+}
+function AppLockSection({ settings, onChange }: { settings: AppLockSettings; onChange: (next: AppLockSettings, confirm: boolean) => Promise<boolean> }) {
+  const [available, setAvailable] = useState<boolean | null>(null), [busy, setBusy] = useState(false);
+  useEffect(() => { void appLockStatus().then((status) => setAvailable(status.available)).catch(() => setAvailable(false)); }, []);
+  const change = (next: AppLockSettings, confirm = false) => { setBusy(true); void onChange(next, confirm).finally(() => setBusy(false)); };
+  return <section className="app-lock-section">
+    <h2>App lock</h2>
+    <p>Ask for your fingerprint, face or screen lock before Saku shows any amounts.</p>
+    {available === false && <p className="inline-warning">Set up a screen lock in Android settings to use App lock.</p>}
+    <label className="checkbox-label"><input type="checkbox" checked={settings.enabled} disabled={busy || (!available && !settings.enabled)} onChange={(event) => change({ ...settings, enabled: event.target.checked }, true)} /> Lock Saku</label>
+    {settings.enabled && <>
+      <SegmentedChoice compact label="Lock after" value={String(settings.after)} disabled={busy} onValueChange={(value) => change({ ...settings, after: Number(value) as LockAfter })} options={[{ value: "0", label: "Immediately" }, { value: "60", label: "1 min" }, { value: "300", label: "5 min" }]} />
+      <label className="checkbox-label"><input type="checkbox" checked={settings.hideInRecents} disabled={busy} onChange={(event) => change({ ...settings, hideInRecents: event.target.checked })} /> Hide Saku in Recents (also blocks screenshots)</label>
+    </>}
+  </section>;
 }
