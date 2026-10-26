@@ -62,6 +62,8 @@ import {
   type RecurringRule,
   type Transaction,
 } from "./domain";
+import { listImportDrafts } from "./importDraft";
+import { importRowsWaiting } from "./importTransactions";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
 import {
   DirectionIcon,
@@ -129,7 +131,7 @@ const navigation = [
   { id: "check", label: cloudImportEnabled ? "Catch up" : "Check", icon: FileCheck2 },
 ] as const;
 const mobileNavigation = [
-  navigation[0], navigation[1], navigation[2], navigation[3],
+  navigation[0], navigation[1], navigation[5], navigation[2],
   { id: "more", label: "More", icon: Menu },
 ] as const;
 const pocketHasReferences = (data: Data, pocketId: string) =>
@@ -147,7 +149,8 @@ export default function App() {
     [cloud, setCloud] = useState<CloudState | null>(null),
     [loginBusy, setLoginBusy] = useState(false),
     [resolution, setResolution] = useState<{ local: Data; remote: Data; remoteState?: CloudState } | null>(null),
-    [avatarUrl, setAvatarUrl] = useState("");
+    [avatarUrl, setAvatarUrl] = useState(""),
+    [importWaiting, setImportWaiting] = useState(0);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [previousView, setPreviousView] = useState<View>("overview");
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
@@ -308,6 +311,13 @@ export default function App() {
   useEffect(() => {
     void loadTheme().then(setThemePreference).catch(() => {});
   }, []);
+  useEffect(() => {
+    // Recount after leaving Catch up or saving, so the badge reflects rows still waiting in local drafts.
+    if (!data || !cloud?.signedIn || !cloud.user?.id) { setImportWaiting(0); return; }
+    let live = true;
+    void listImportDrafts(cloud.user.id).then((drafts) => { if (live) setImportWaiting(importRowsWaiting(drafts, data)); }).catch(() => { if (live) setImportWaiting(0); });
+    return () => { live = false; };
+  }, [data, view, cloud?.signedIn, cloud?.user?.id]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);
@@ -513,7 +523,7 @@ export default function App() {
             >
               <n.icon size={20} />
               {n.label}
-              {n.id === "check" && <span className="nav-new">NEW</span>}
+              {n.id === "check" && importWaiting > 0 && <span className="nav-badge" aria-label={`${importWaiting} waiting`}>{importWaiting > 99 ? "99+" : importWaiting}</span>}
             </button>
           ))}
         </nav>
@@ -641,7 +651,7 @@ export default function App() {
           </section>
           {view === "more" && <section className="more-list" aria-label="More destinations">
             <button onClick={() => go("insights")}><BarChart3 /><span><strong>Insights</strong><small>See trends and spending breakdowns</small></span><ChevronRight /></button>
-            <button onClick={() => go("check")}><FileCheck2 /><span><strong>{cloudImportEnabled ? "Catch up" : "Check"}</strong><small>{cloudImportEnabled ? "Import screenshots and statements" : nativeAIAvailable ? "Review CSV and PDF statements" : "Compare CSV with your records"}</small></span><ChevronRight /></button>
+            <button onClick={() => go("plans")}><CreditCard /><span><strong>Plans</strong><small>Credit cards and recurring bills</small></span><ChevronRight /></button>
             <button onClick={() => go("settings")}><Settings /><span><strong>Settings</strong><small>Accounts, appearance, backup and privacy</small></span><ChevronRight /></button>
           </section>}
           {view === "overview" && (
@@ -1058,6 +1068,7 @@ export default function App() {
             onClick={() => go(n.id)}
           >
             <n.icon size={21} />
+            {n.id === "check" && importWaiting > 0 && <span className="nav-badge" aria-label={`${importWaiting} waiting`}>{importWaiting > 99 ? "99+" : importWaiting}</span>}
             <span>
               {n.label}
             </span>
