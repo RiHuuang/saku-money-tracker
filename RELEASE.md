@@ -106,7 +106,7 @@ Deploy and validate the Worker before distributing the new Android build. The AP
 
 ## Build configuration
 
-For a **staging debug APK only**, set both API variables to `https://stage.sakumoney.my.id`, run `npm run build -- --mode staging`, then run `node --require ./scripts/os-userinfo.cjs ./node_modules/@capacitor/cli/bin/capacitor sync android` and `:app:assembleDebug` with JDK 21. The default Vite build rejects a staging API, and Gradle rejects staging for release builds. After saving the debug APK, clear both shell variables and run `npm run android:sync` to restore production web assets before any release work. Do not install this debug APK over the release-signed user app.
+For a **staging debug APK only**, set both API variables to `https://stage.sakumoney.my.id`, run `npm run build -- --mode staging`, then run `node --require ./scripts/os-userinfo.cjs ./node_modules/@capacitor/cli/bin/capacitor sync android` and `:app:assembleDirectDebug` with JDK 21. The default Vite build rejects a staging API, and Gradle rejects staging for release builds. After saving the debug APK, clear both shell variables and run `npm run android:sync` to restore production web assets before any release work. Do not install this debug APK over the release-signed user app.
 
 Create the ignored `.env.production`:
 
@@ -141,13 +141,14 @@ npm audit --omit=dev
 npm --prefix server test
 npx wrangler deploy --dry-run
 npm run android:sync
-cd android
-.\gradlew.bat clean lintRelease testReleaseUnitTest bundleRelease
+npm run android:release
 ```
 
-Upload `android/app/build/outputs/bundle/release/app-release.aab` first to Play's internal-testing track. Install the Play-generated build on physical devices; verify Google sign-in, sync, account deletion, widgets, PDF processing, low-storage handling, offline reopening, and upgrade from the previous build.
+The build has two flavors with the same `applicationId`. `direct` is the website APK and keeps the in-app updater and `REQUEST_INSTALL_PACKAGES`; `play` omits both, so Play builds never request `/v1/releases/android/latest`. `npm run android:release` runs `lintDirectRelease`, both release unit-test tasks, `assembleDirectRelease` and `bundlePlayRelease`. Confirm the Play build's permissions with `aapt2 dump permissions` on a universal APK built from the bundle: `REQUEST_INSTALL_PACKAGES` must be absent.
 
-If there is no Play listing, build `:app:assembleRelease` with the same signing variables and verify the certificate and checksum of `android/app/build/outputs/apk/release/app-release.apk` before direct distribution. Register that certificate's SHA-1 in the existing Google OAuth project, then test the **distributed APK itself** on a physical device. A newly signed release cannot update an installation signed with the debug key; export the device ledger first, uninstall the debug build only after its backup is verified, and restore the ledger after installing the release. Do not replace a working install or distribute the APK until Cloudflare login, restore, and the Paid-plan cutover checks pass.
+Upload `android/app/build/outputs/bundle/playRelease/app-play-release.aab` first to Play's internal-testing track. Install the Play-generated build on physical devices; verify Google sign-in, sync, account deletion, widgets, PDF processing, low-storage handling, offline reopening, and upgrade from the previous build.
+
+For the website, verify the certificate and checksum of `android/app/build/outputs/apk/direct/release/app-direct-release.apk` before direct distribution; `npm run android:publish` accepts only that direct-flavor APK (or a renamed `saku-x.y.z-buildN-release.apk` copy of it). Register that certificate's SHA-1 in the existing Google OAuth project, then test the **distributed APK itself** on a physical device. A newly signed release cannot update an installation signed with the debug key; export the device ledger first, uninstall the debug build only after its backup is verified, and restore the ledger after installing the release. Do not replace a working install or distribute the APK until Cloudflare login, restore, and the Paid-plan cutover checks pass.
 
 ## Before production rollout
 

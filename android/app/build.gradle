@@ -53,6 +53,12 @@ android {
         }
     }
     buildFeatures { buildConfig true }
+    // One app on two channels: the website APK updates itself, the Play build leaves updates to Play.
+    flavorDimensions = ["distribution"]
+    productFlavors {
+        direct { dimension "distribution" }
+        play { dimension "distribution" }
+    }
     signingConfigs {
         release {
             if (releaseSigningConfigured) {
