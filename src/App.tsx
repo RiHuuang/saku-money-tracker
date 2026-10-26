@@ -91,6 +91,7 @@ import {
   PocketCard,
   PocketIcon,
   SpendingRing,
+  SakuMark,
   SegmentedChoice,
   TransactionList,
 } from "./components";
@@ -598,7 +599,7 @@ export default function App() {
     return (
       <div className="loading">
         <span className="brand-mark">
-          <Wallet />
+          <SakuMark />
         </span>
         <h1>Saku</h1>
         {loadError ? (
@@ -671,7 +672,7 @@ export default function App() {
           }}
         >
           <span className="brand-mark">
-            <Wallet size={25} />
+            <SakuMark size={25} />
           </span>
           <span>
             saku<span className="brand-period">.</span>
@@ -2114,7 +2115,7 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
   const [accepted, setAccepted] = useState(false);
   return <main className="login-screen">
     <section className="login-panel">
-      <span className="brand-mark"><Wallet /></span><h1>Saku</h1>
+      <span className="brand-mark"><SakuMark /></span><h1>Saku</h1>
       <p>{t("loginTagline")}</p>
       <details className="agreement"><summary>{t("agreementSummaryTitle")}</summary><p>{t("agreementSummary")} {t("readThe")} <a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a> {t("and")} <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a>.</p></details>
       <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
