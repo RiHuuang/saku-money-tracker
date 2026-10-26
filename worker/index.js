@@ -439,6 +439,10 @@ async function deleteAccount(env, uid, user, sessionId) {
 
 async function route(request, env) {
   const url = new URL(request.url), path = url.pathname, origin = request.headers.get("origin");
+  if ((path.startsWith("/auth/") || path.startsWith("/v1/auth/")) && env.AUTH_RATE_LIMITER) {
+    const { success } = await env.AUTH_RATE_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") || "unknown" });
+    if (!success) return reply({ error: "Too many sign-in requests; try again in a minute" }, 429, corsHeaders(origin, env));
+  }
   if (url.hostname === "saku.saku-money-manager.workers.dev") {
     const successor = "https://app.sakumoney.my.id";
     if (["GET", "HEAD"].includes(request.method) && (path === "/" || ["/privacy", "/terms", "/account-deletion"].includes(path))) {
@@ -474,6 +478,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/auth/google/start") {
     if (env.PUBLIC_LOGIN_ENABLED !== "true") throw fault(503, "Public login is not enabled yet");
     const state = tokenPart(), verifier = tokenPart(), challenge = await pkceChallenge(verifier);
+    await env.DB.prepare("DELETE FROM oauth_states WHERE expires_at<=?").bind(Date.now()).run();
     await env.DB.prepare("INSERT INTO oauth_states (state_hash,verifier,expires_at) VALUES (?,?,?)").bind(await hashToken(state), verifier, Date.now() + 10 * 60_000).run();
     const redirect = `${url.origin}/auth/google/callback`;
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
