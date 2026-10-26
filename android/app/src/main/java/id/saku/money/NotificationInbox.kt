@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.core.app.NotificationCompat
@@ -139,7 +140,8 @@ object NotificationInbox {
         if (!manager.areNotificationsEnabled()) return
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL, "Transactions to review", NotificationManager.IMPORTANCE_LOW))
-        val open = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply { putExtra("saku_open", "inbox"); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP) }
+        // Explicit and in-app only: the activity reports saku://review to the web layer, which opens the Notifications tab.
+        val open = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("saku://review")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_saku)
             .setContentTitle("Saku")
@@ -148,7 +150,7 @@ object NotificationInbox {
             .setOnlyAlertOnce(true)
             .setGroup("saku_inbox")
             .setAutoCancel(true)
-            .apply { if (open != null) setContentIntent(PendingIntent.getActivity(context, SUMMARY_ID, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)) }
+            .setContentIntent(PendingIntent.getActivity(context, SUMMARY_ID, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             .build()
         runCatching { manager.notify(SUMMARY_ID, notification) }
     }

@@ -69,6 +69,7 @@ import {
 } from "./domain";
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { listImportDrafts } from "./importDraft";
+import { notificationCapture, notificationCaptureSupported } from "./notificationCapture";
 import { importRowsWaiting } from "./importTransactions";
 import { applyRecentsPrivacy, appLockStatus, appLockSupported, authenticate, defaultAppLock, loadAppLock, saveAppLock, shouldLock, type AppLockSettings, type LockAfter } from "./appLock";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
@@ -92,6 +93,7 @@ const CsvStatements = lazy(() => import("./CsvStatements"));
 const CatchUp = lazy(() => import("./CatchUp"));
 const Plans = lazy(() => import("./Plans"));
 const CatchUpDays = lazy(() => import("./CatchUpDays"));
+const NotificationReview = lazy(() => import("./NotificationReview"));
 const learnsMerchant = (t: Transaction) => t.type === "expense" && (!t.kind || t.kind === "card_purchase");
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
@@ -152,7 +154,7 @@ export default function App() {
     [loadError, setLoadError] = useState(""),
     [view, setView] = useState<View>("overview"),
     [month, setMonth] = useState(today().slice(0, 7)),
-    [checkTab, setCheckTab] = useState<"catchup" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
+    [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
     [edit, setEdit] = useState<Edit>(null),
     [toast, setToast] = useState(""),
     [busy, setBusy] = useState(false),
@@ -163,6 +165,7 @@ export default function App() {
     [catchUpSheet, setCatchUpSheet] = useState<{ days: string[]; index: number } | null>(null),
     [catchUpDismissed, setCatchUpDismissed] = useState(() => { try { return localStorage.getItem(catchUpDismissedKey) || ""; } catch { return ""; } }),
     [importWaiting, setImportWaiting] = useState(0),
+    [waitingRecount, setWaitingRecount] = useState(0),
     // Native builds start covered until the lock setting is read, so no amount can flash before authentication.
     [lockState, setLockState] = useState<"checking" | "covered" | "locked" | "open">(appLockSupported() ? "checking" : "open"),
     [appLock, setAppLock] = useState<AppLockSettings>(defaultAppLock);
@@ -368,11 +371,14 @@ export default function App() {
   }, []);
   useEffect(() => {
     // Recount after leaving Catch up or saving, so the badge reflects rows still waiting in local drafts.
-    if (!data || !cloud?.signedIn || !cloud.user?.id) { setImportWaiting(0); return; }
+    if (!data) { setImportWaiting(0); return; }
     let live = true;
-    void listImportDrafts(cloud.user.id).then((drafts) => { if (live) setImportWaiting(importRowsWaiting(drafts, data)); }).catch(() => { if (live) setImportWaiting(0); });
+    void Promise.all([
+      cloud?.signedIn && cloud.user?.id ? listImportDrafts(cloud.user.id).then((drafts) => importRowsWaiting(drafts, data)).catch(() => 0) : 0,
+      notificationCaptureSupported() ? notificationCapture.inbox().then((inbox) => inbox.items.length).catch(() => 0) : 0,
+    ]).then(([drafts, inbox]) => { if (live) setImportWaiting(drafts + inbox); });
     return () => { live = false; };
-  }, [data, view, cloud?.signedIn, cloud?.user?.id]);
+  }, [data, view, cloud?.signedIn, cloud?.user?.id, waitingRecount]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);
@@ -401,7 +407,10 @@ export default function App() {
   }, [edit, view, previousView, selectedPocketId]);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    const openQuickAdd = (url?: string) => { if (url?.startsWith("saku://quick-add")) { setView("overview"); setEdit({ type: "transaction" }); } };
+    const openQuickAdd = (url?: string) => {
+      if (url?.startsWith("saku://quick-add")) { setView("overview"); setEdit({ type: "transaction" }); }
+      if (url?.startsWith("saku://review")) { setView("check"); setCheckTab("notifications"); }
+    };
     void NativeApp.getLaunchUrl().then((result) => openQuickAdd(result?.url));
     const listener = NativeApp.addListener("appUrlOpen", (event) => openQuickAdd(event.url));
     return () => { void listener.then((h) => h.remove()); };
@@ -1101,8 +1110,8 @@ export default function App() {
           )}
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>
-              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>Catch up</button><button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>Statement check</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>CSV on device</button></div>}
-              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
+              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>Catch up</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>Notifications</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>Statement check</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>CSV on device</button></div>}
+              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">Loading captured notifications...</p>}><NotificationReview data={data} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
               {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
           )}
