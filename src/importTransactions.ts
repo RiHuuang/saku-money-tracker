@@ -1,5 +1,6 @@
 import { today, validAmount, validDate, type Data, type Transaction } from "./domain";
 import type { ImportDraft, ImportRow, ImportSource } from "./importDraft";
+import { t } from "./i18n";
 
 export function confirmedImportAccount(source: Pick<ImportSource, "account" | "accountConfirmed"> | undefined, data: Data): string {
   return source?.accountConfirmed && [...data.accounts, ...data.creditCards.map((card) => card.name)].includes(source.account) ? source.account : "";
@@ -90,30 +91,30 @@ export function importMatchesNeedSourceDateCheck(draft: ImportDraft | null, matc
 }
 
 export function importRowReviewIssue(row: ImportRow, account: string, data: Data, duplicate: boolean, currentDay = today()): string {
-  if (row.activity === "pending") return "Payment appears pending. Recheck it when your account shows a final result.";
-  if (row.activity === "failed") return "Payment appears failed or expired. Check before recording a charge.";
-  if (row.activity === "reward") return "Points or rewards are not a rupiah transaction.";
+  if (row.activity === "pending") return t("reviewPending");
+  if (row.activity === "failed") return t("reviewFailed");
+  if (row.activity === "reward") return t("reviewReward");
   if (row.activity === "pay_later") {
-    if (!data.creditCards.some((card) => card.name === account)) return "Choose the PayLater or credit account that funded this purchase. Add it in Cards first if needed.";
-    if (!row.firstDueMonth || !validDate(`${row.firstDueMonth}-01`) || validDate(row.date) && row.firstDueMonth < row.date.slice(0, 7)) return "Choose a valid first due month for this PayLater purchase.";
+    if (!data.creditCards.some((card) => card.name === account)) return t("reviewPayLaterAccount");
+    if (!row.firstDueMonth || !validDate(`${row.firstDueMonth}-01`) || validDate(row.date) && row.firstDueMonth < row.date.slice(0, 7)) return t("reviewPayLaterMonth");
   }
-  if (!account) return "Choose the Saku account used for this transaction.";
-  if (!validDate(row.date)) return "Check the transaction date.";
-  if (row.date > currentDay) return "This date is in the future. Check the source.";
-  if (!validAmount(row.amount)) return "Enter a valid whole-rupiah amount.";
-  if (!row.name.trim()) return "Add a description.";
-  if (row.direction === "unknown") return "Choose whether money came in or went out.";
-  if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return "This row is marked Money out, but its activity is money received. Check the source and correct whichever field is wrong.";
-  if (["purchase", "fee", "card_payment", "pay_later"].includes(row.activity) && row.direction !== "expense") return "This row is marked Money in, but its activity is a payment. Check the source and correct whichever field is wrong.";
-  if (row.activity === "unknown") return "Choose what happened before adding this row.";
-  if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return "Choose the other Saku account for this transfer.";
-  if (row.activity === "card_payment" && !row.cardId) return "Choose the credit card that was paid.";
-  if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !row.firstDueMonth) return "Choose the first due month for this card purchase.";
-  if (duplicate && !row.confirmedSeparate) return "Confirm that this really is a separate transaction.";
-  if (row.activity === "income") return "Confirm this came from someone else, not another account of yours.";
-  if (namesOnlyWallet(row.name)) return "Check whether this wallet payment was spending or a transfer to your own wallet.";
-  if (row.direction === "expense" && row.amount >= 1_000_000) return "Check this large amount and whether it was a purchase or a transfer.";
-  return "Review the details and choose Add to Saku when you are sure.";
+  if (!account) return t("reviewAccount");
+  if (!validDate(row.date)) return t("reviewDate");
+  if (row.date > currentDay) return t("reviewFuture");
+  if (!validAmount(row.amount)) return t("reviewAmount");
+  if (!row.name.trim()) return t("reviewDescription");
+  if (row.direction === "unknown") return t("reviewDirection");
+  if (["refund", "income", "interest"].includes(row.activity) && row.direction !== "income") return t("reviewIncomeDirection");
+  if (["purchase", "fee", "card_payment", "pay_later"].includes(row.activity) && row.direction !== "expense") return t("reviewExpenseDirection");
+  if (row.activity === "unknown") return t("reviewActivity");
+  if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return t("reviewOtherAccount");
+  if (row.activity === "card_payment" && !row.cardId) return t("reviewPaidCard");
+  if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !row.firstDueMonth) return t("reviewFirstDue");
+  if (duplicate && !row.confirmedSeparate) return t("reviewSeparate");
+  if (row.activity === "income") return t("reviewExternalIncome");
+  if (namesOnlyWallet(row.name)) return t("reviewWallet");
+  if (row.direction === "expense" && row.amount >= 1_000_000) return t("reviewLargeAmount");
+  return t("reviewDefault");
 }
 
 export function importRowAlreadySaved(row: ImportRow, draft: ImportDraft | null, data: Data): boolean {
