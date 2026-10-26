@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, confirmedImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -257,3 +257,26 @@ test("both sides of a paired top-up remain recognizable if the local draft write
   assert.deepEqual(walletFirst.map((transaction) => transaction.verified), [true, true]);
   assert.equal(validateData({ ...ledger, transactions: walletFirst }).transactions.length, 2);
 });
+
+test("auto-picks a source account only when every row names exactly one Saku account", () => {
+  const rows = [{ paymentMethod: "BCA" }, { paymentMethod: "bca" }, { paymentMethod: "" }];
+  assert.equal(detectImportAccount(rows, { name: "bca-october.png" }, ledger), "BCA", "one match, with the file name covering a row without a payment method");
+  assert.equal(detectImportAccount([{ paymentMethod: "BCA" }], { name: "x.png" }, ledger), "BCA");
+  assert.equal(detectImportAccount([{ paymentMethod: "BCA" }, { paymentMethod: "GoPay" }], { name: "x.png" }, ledger), "", "two accounts across rows");
+  assert.equal(detectImportAccount([{ paymentMethod: "BCA Visa" }], { name: "x.png" }, ledger), "", "two names match one row");
+  assert.equal(detectImportAccount([{ paymentMethod: "BCA" }], { name: "x.png", mixedAccounts: true }, ledger), "", "mixed sources are never picked");
+  assert.equal(detectImportAccount([{ paymentMethod: "ABCAPAY" }], { name: "x.png" }, ledger), "", "whole words only");
+  assert.equal(detectImportAccount([{ paymentMethod: "" }], { name: "screenshot.png" }, ledger), "");
+  assert.equal(detectImportAccount([], { name: "bca.png" }, ledger), "");
+});
+
+test("saved imports use the cleaned name, keep the printed text, and still catch duplicates", () => {
+  const row = { ...base, id: "clean-1", name: "QRIS ALFAMART 0123 JKT", cleanName: "Alfamart" };
+  const [saved] = importedTransactions(row, "BCA", "bca.png", ledger);
+  assert.equal(saved.name, "Alfamart");
+  assert.equal(saved.note, "QRIS ALFAMART 0123 JKT · Imported from screenshot, page 1");
+  assert.equal(importedTransactions({ ...base, cleanName: "Coffee" }, "BCA", "bca.png", ledger)[0].note, "Imported from screenshot, page 1");
+  const again = { ...row, id: "clean-2" };
+  assert.deepEqual([...importRowsNeedingDuplicateConfirmation([again], [saved], () => "BCA", () => false)], ["clean-2"]);
+});
+
