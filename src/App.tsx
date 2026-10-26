@@ -62,6 +62,7 @@ import {
   type RecurringRule,
   type Transaction,
 } from "./domain";
+import { applyRecentsPrivacy, appLockStatus, appLockSupported, authenticate, defaultAppLock, loadAppLock, saveAppLock, shouldLock, type AppLockSettings, type LockAfter } from "./appLock";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
 import {
   DirectionIcon,
@@ -147,7 +148,13 @@ export default function App() {
     [cloud, setCloud] = useState<CloudState | null>(null),
     [loginBusy, setLoginBusy] = useState(false),
     [resolution, setResolution] = useState<{ local: Data; remote: Data; remoteState?: CloudState } | null>(null),
-    [avatarUrl, setAvatarUrl] = useState("");
+    [avatarUrl, setAvatarUrl] = useState(""),
+    // Native builds start covered until the lock setting is read, so no amount can flash before authentication.
+    [lockState, setLockState] = useState<"checking" | "covered" | "locked" | "open">(appLockSupported() ? "checking" : "open"),
+    [appLock, setAppLock] = useState<AppLockSettings>(defaultAppLock);
+  const appLockRef = useRef(defaultAppLock);
+  const hiddenAt = useRef<number | null>(null);
+  const authenticating = useRef(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [previousView, setPreviousView] = useState<View>("overview");
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
@@ -308,6 +315,43 @@ export default function App() {
   useEffect(() => {
     void loadTheme().then(setThemePreference).catch(() => {});
   }, []);
+  async function unlock() {
+    if (authenticating.current) return;
+    authenticating.current = true;
+    const unlocked = await authenticate("Unlock Saku");
+    authenticating.current = false;
+    hiddenAt.current = null;
+    setLockState(unlocked ? "open" : "locked");
+  }
+  async function changeAppLock(next: AppLockSettings, confirm: boolean) {
+    if (confirm) {
+      authenticating.current = true;
+      const confirmed = await authenticate(next.enabled ? "Turn on App lock" : "Turn off App lock");
+      authenticating.current = false;
+      if (!confirmed) return false;
+    }
+    await saveAppLock(next);
+    appLockRef.current = next;
+    setAppLock(next);
+    return true;
+  }
+  useEffect(() => {
+    if (!appLockSupported()) return;
+    void loadAppLock().then(async (settings) => {
+      appLockRef.current = settings;
+      setAppLock(settings);
+      await applyRecentsPrivacy(settings).catch(() => {});
+      if (settings.enabled) { setLockState("locked"); void unlock(); } else setLockState("open");
+    }).catch(() => setLockState("open"));
+    const listener = NativeApp.addListener("appStateChange", ({ isActive }) => {
+      // The device-credential screen pauses Saku too; that pause is part of unlocking, not leaving.
+      if (authenticating.current || !appLockRef.current.enabled) return;
+      if (!isActive) { hiddenAt.current = Date.now(); setLockState((state) => state === "open" ? "covered" : state); return; }
+      if (shouldLock(appLockRef.current, hiddenAt.current, Date.now())) { setLockState("locked"); void unlock(); }
+      else { hiddenAt.current = null; setLockState((state) => state === "covered" ? "open" : state); }
+    });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);
@@ -413,6 +457,14 @@ export default function App() {
       );
     }
   }
+  if (lockState !== "open")
+    return (
+      <div className="loading app-lock">
+        <span className="brand-mark"><LockKeyhole /></span>
+        <h1>Saku</h1>
+        {lockState === "locked" && <><p>Saku is locked.</p><button className="button primary" onClick={() => void unlock()}>Unlock</button></>}
+      </div>
+    );
   if (cloud && !cloud.signedIn)
     return <LoginScreen configured={cloud.configured} busy={loginBusy} error={loadError} onLogin={async () => {
       setLoginBusy(true); setLoadError("");
@@ -1044,6 +1096,8 @@ export default function App() {
               themePreference={themePreference}
               onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast("Appearance could not be saved.")); }}
               onAdjustBalance={(account) => setEdit({ type: "balance_adjustment", account })}
+              appLock={appLock}
+              onAppLockChange={changeAppLock}
             />
           )}
         </main>
@@ -2028,6 +2082,8 @@ function SettingsView({
   themePreference,
   onThemeChange,
   onAdjustBalance,
+  appLock,
+  onAppLockChange,
 }: {
   data: Data;
   commit: (d: Data, m: string) => Promise<boolean>;
@@ -2042,6 +2098,8 @@ function SettingsView({
   themePreference: ThemePreference;
   onThemeChange: (preference: ThemePreference) => void;
   onAdjustBalance: (account: string) => void;
+  appLock: AppLockSettings;
+  onAppLockChange: (next: AppLockSettings, confirm: boolean) => Promise<boolean>;
 }) {
   const [name, setName] = useState(data.name),
     [account, setAccount] = useState(""),
@@ -2096,6 +2154,7 @@ function SettingsView({
         </div>
       </section>
       <AppUpdateSettings />
+      {appLockSupported() && <AppLockSection settings={appLock} onChange={onAppLockChange} />}
       <section>
         <h2>Local profile</h2>
         <p>Your workspace on this device.</p>
@@ -2349,4 +2408,19 @@ function SettingsView({
       )}
     </div>
   );
+}
+function AppLockSection({ settings, onChange }: { settings: AppLockSettings; onChange: (next: AppLockSettings, confirm: boolean) => Promise<boolean> }) {
+  const [available, setAvailable] = useState<boolean | null>(null), [busy, setBusy] = useState(false);
+  useEffect(() => { void appLockStatus().then((status) => setAvailable(status.available)).catch(() => setAvailable(false)); }, []);
+  const change = (next: AppLockSettings, confirm = false) => { setBusy(true); void onChange(next, confirm).finally(() => setBusy(false)); };
+  return <section className="app-lock-section">
+    <h2>App lock</h2>
+    <p>Ask for your fingerprint, face or screen lock before Saku shows any amounts.</p>
+    {available === false && <p className="inline-warning">Set up a screen lock in Android settings to use App lock.</p>}
+    <label className="checkbox-label"><input type="checkbox" checked={settings.enabled} disabled={busy || (!available && !settings.enabled)} onChange={(event) => change({ ...settings, enabled: event.target.checked }, true)} /> Lock Saku</label>
+    {settings.enabled && <>
+      <SegmentedChoice compact label="Lock after" value={String(settings.after)} disabled={busy} onValueChange={(value) => change({ ...settings, after: Number(value) as LockAfter })} options={[{ value: "0", label: "Immediately" }, { value: "60", label: "1 min" }, { value: "300", label: "5 min" }]} />
+      <label className="checkbox-label"><input type="checkbox" checked={settings.hideInRecents} disabled={busy} onChange={(event) => change({ ...settings, hideInRecents: event.target.checked })} /> Hide Saku in Recents (also blocks screenshots)</label>
+    </>}
+  </section>;
 }
