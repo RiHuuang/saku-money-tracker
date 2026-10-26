@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties, type InputHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
+import { localeTag, t as translate } from "./i18n";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -40,7 +41,7 @@ const icons: Record<string, LucideIcon> = {
 export function MoneyInput({ value, onValueChange, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & { value: string | number; onValueChange: (value: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
   const digits = String(value ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-  const shown = digits ? Number(digits).toLocaleString("en-US") : "";
+  const shown = digits ? Number(digits).toLocaleString("id-ID") : "";
   return <input {...props} ref={ref} type="text" inputMode="numeric" value={shown} onChange={(event) => {
     const caret = event.currentTarget.selectionStart || 0;
     const digitCaret = event.currentTarget.value.slice(0, caret).replace(/\D/g, "").length;
@@ -388,7 +389,7 @@ export function TransactionList({
         const p = pockets.find((p) => p.id === t.pocketId);
         return (
           <div className="transaction-group-entry" key={t.id}>
-          {groupDates && (index === 0 || transactions[index - 1].date !== t.date) && <h3 className="transaction-date-heading">{new Date(`${t.date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</h3>}
+          {groupDates && (index === 0 || transactions[index - 1].date !== t.date) && <h3 className="transaction-date-heading">{new Date(`${t.date}T12:00:00`).toLocaleDateString(localeTag(), { weekday: "long", day: "numeric", month: "long" })}</h3>}
           <button
             className="transaction-row"
             onClick={() => onEdit(t)}
@@ -410,12 +411,12 @@ export function TransactionList({
                 )}
               </strong>
               <span>
-                {t.kind === "account_transfer" ? "Account transfer" : t.kind === "balance_adjustment" ? "Balance adjustment" : t.kind === "opening_balance" ? "Opening balance" : t.kind === "card_payment" ? "Card payment" : t.kind === "reimbursement" ? "Repaid by friend" : t.type === "income" ? "Income" : p?.name || "Unassigned"}{" "}
+                {t.kind === "account_transfer" ? "Account transfer" : t.kind === "balance_adjustment" ? "Balance adjustment" : t.kind === "opening_balance" ? "Opening balance" : t.kind === "card_payment" ? "Card payment" : t.kind === "reimbursement" ? "Repaid by friend" : t.type === "income" ? translate("income") : p?.name || translate("unassigned")}{" "}
                 <span className="dot">·</span> {t.account}
               </span>
             </span>
             <span className="transaction-date">
-              {new Date(`${t.date}T12:00:00`).toLocaleDateString("en-GB", {
+              {new Date(`${t.date}T12:00:00`).toLocaleDateString(localeTag(), {
                 day: "numeric",
                 month: "short",
               })}
@@ -427,7 +428,7 @@ export function TransactionList({
               {money(isSpending(t) ? personalAmount(t) : t.amount)}
               {t.split && <small>of {money(t.amount)} paid</small>}
               <small>
-                {new Date(`${t.date}T12:00:00`).toLocaleDateString("en-GB", {
+                {new Date(`${t.date}T12:00:00`).toLocaleDateString(localeTag(), {
                   day: "numeric",
                   month: "short",
                 })}
