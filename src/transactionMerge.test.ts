@@ -52,3 +52,29 @@ test("an unverified flag written by the editor is not a change", () => {
   assert.deepEqual(mergeTransactionSnapshots(base, withRows({ ...row("keep"), verified: false }), withRows(row("keep", 3000))).data?.transactions.map((item) => item.amount), [3000]);
   assert.deepEqual(mergeTransactionSnapshots(base, withRows({ ...row("keep"), amount: 1200, verified: true }), cloud).conflicts, ["keep"]);
 });
+
+test("independent additions on two devices also merge their learned merchant rules", () => {
+  const rule = (key: string, updatedAt: string, pocketId = "") => ({ key, name: key, pocketId, updatedAt });
+  const base = { ...withRows(), merchantRules: [rule("shared", "2026-10-01T00:00:00.000Z")] };
+  const phone = { ...withRows(row("phone")), merchantRules: [...base.merchantRules, rule("phone", "2026-10-26T01:00:00.000Z")] };
+  const web = { ...withRows(row("web")), merchantRules: [...base.merchantRules, rule("web", "2026-10-26T02:00:00.000Z")] };
+  const merged = mergeTransactionSnapshots(base, phone, web);
+  assert.deepEqual(merged.conflicts, []);
+  assert.deepEqual(merged.data?.merchantRules.map((item) => item.key), ["shared", "phone", "web"]);
+  const newer = mergeTransactionSnapshots(base, { ...base, merchantRules: [rule("shared", "2026-10-26T01:00:00.000Z", "food")] }, { ...base, merchantRules: [rule("shared", "2026-10-26T03:00:00.000Z", "fun")] });
+  assert.deepEqual(newer.data?.merchantRules.map((item) => item.updatedAt), ["2026-10-26T03:00:00.000Z"], "the newer rule wins");
+});
+
+test("settings merge per field and per item, and only real clashes need review", () => {
+  const base = { ...withRows(), checkedDays: ["2026-10-01"] };
+  const phone = { ...base, name: "Phone name", checkedDays: ["2026-10-01", "2026-10-02"] };
+  const web = { ...base, accounts: [...base.accounts, "Jago"], checkedDays: ["2026-10-01", "2026-10-03"] };
+  const merged = mergeTransactionSnapshots(base, phone, web);
+  assert.deepEqual(merged.conflicts, []);
+  assert.equal(merged.data?.name, "Phone name");
+  assert.ok(merged.data?.accounts.includes("Jago"));
+  assert.deepEqual(merged.data?.checkedDays, ["2026-10-01", "2026-10-02", "2026-10-03"]);
+  const pocket = (name: string) => ({ ...emptyData(), pockets: [{ id: "p1", name, color: "#176b55", budget: 0, rollover: false }] } as unknown as Data);
+  const pockets = pocket("Food");
+  assert.deepEqual(mergeTransactionSnapshots(pockets, { ...pockets, pockets: pocket("Meals").pockets }, { ...pockets, pockets: pocket("Groceries").pockets }).conflicts, ["workspace"]);
+});

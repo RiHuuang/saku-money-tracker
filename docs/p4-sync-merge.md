@@ -62,11 +62,20 @@ choice only for ambiguous edits, never a silent overwrite.
   the durable tombstone list, and no separate store is needed.
 - A base whose revision is newer than the cloud's, or that belongs to another
   user, is ignored and the existing review screen is shown.
-- The foreground app merges at three points: a 409 during upload (up to three
-  merges per sync run), a live notice of a newer cloud copy while this device
-  has unsynced edits, and opening the workspace with unsynced edits. Each saves
-  the merge, records the cloud revision, and uploads; an edit made meanwhile
-  restarts from the newest local ledger instead.
+- Workspace settings merge per field rather than as one unit. List fields merge
+  item by item by `id` or `key` (plain lists by value); an item edited on both
+  sides with an `updatedAt` (learned merchant rules) keeps the newer one. Every
+  added transaction also adds a merchant rule, so a single settings unit made
+  any two independent additions conflict. `verified: false` and a missing flag
+  compare equal.
+- The foreground app merges in two places: the sync queue on a 409 (up to three
+  merges per sync run) and opening the workspace with unsynced edits. A live
+  notice or reconnect with unsynced edits hands the ledger to the sync queue
+  rather than merging separately, so two merges never race; it is also how a
+  failed sync is retried, except right after that failure. A conflict the merge
+  cannot resolve opens the review screen from the queue, and reconcile pauses
+  while it is open. If the ledger changes during the conflict download, the
+  queue restarts from the newest local copy.
 - The closed-app widget job records the base but does not merge. On a 409 with
   different content it leaves the ledger dirty, and the app merges it on next
   open.
