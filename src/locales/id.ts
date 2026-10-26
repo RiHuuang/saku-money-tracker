@@ -28,4 +28,5 @@ export const id = {
   compareRows: "Cocokkan baris ini dengan {source}: tanggal, jumlah, dan arah uangnya.",
   csvOnDevice: "CSV di perangkat", notificationsTab: "Notifikasi",
   transactionAdded: "Transaksi ditambahkan", transactionUpdated: "Transaksi diperbarui", transactionRemoved: "Transaksi dihapus", undo: "Urungkan",
+  backupPasswordPrompt: "Kata sandi untuk cadangan yang dilindungi ini:",
 } satisfies Record<keyof typeof en, string>;

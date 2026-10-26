@@ -26,4 +26,5 @@ export const en = {
   compareRows: "Compare these rows with {source} for dates, amounts and money direction.",
   csvOnDevice: "CSV on device", notificationsTab: "Notifications",
   transactionAdded: "Transaction added", transactionUpdated: "Transaction updated", transactionRemoved: "Transaction removed", undo: "Undo",
+  backupPasswordPrompt: "Password for this protected backup:",
 } as const;
