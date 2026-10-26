@@ -5,6 +5,17 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Lets Settings show which supported bank and wallet apps are installed. -->
+    <queries>
+        <package android:name="com.bca" />
+        <package android:name="com.bca.mybca.omni.android" />
+        <package android:name="com.jago.digitalBanking" />
+        <package android:name="com.gojek.gopay" />
+        <package android:name="com.gojek.app" />
+        <package android:name="id.co.bankbkemobile.digitalbank" />
+        <package android:name="id.dana" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
@@ -67,6 +78,15 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_snapshot_info" />
         </receiver>
 
+        <service
+            android:name=".SakuNotificationListener"
+            android:label="@string/app_name"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
