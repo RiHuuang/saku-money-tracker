@@ -62,6 +62,7 @@ import {
   type RecurringRule,
   type Transaction,
 } from "./domain";
+import { MIN_PASSWORD_LENGTH, decryptBackup, encryptBackup, isEncryptedBackup, type EncryptedBackup } from "./backupCrypto";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
 import {
   DirectionIcon,
@@ -405,7 +406,13 @@ export default function App() {
     if (!file) return;
     try {
       if (file.size > 20000000) throw new Error("Backup is too large.");
-      const next = validateData(JSON.parse(await file.text()));
+      let parsed = JSON.parse(await file.text());
+      if (isEncryptedBackup(parsed)) {
+        const password = window.prompt("Password for this protected backup:") || "";
+        if (!password) return;
+        parsed = JSON.parse(await decryptBackup(parsed, password));
+      }
+      const next = validateData(parsed);
       if (await commit(next, "Backup restored")) setLoadError("");
     } catch (e) {
       setLoadError(
@@ -2047,6 +2054,12 @@ function SettingsView({
     [account, setAccount] = useState(""),
     [profileImage, setProfileImage] = useState<string | undefined>(),
     [restore, setRestore] = useState<Data | null>(null),
+    [protectOpen, setProtectOpen] = useState(false),
+    [lockedBackup, setLockedBackup] = useState<EncryptedBackup | null>(null),
+    [backupPassword, setBackupPassword] = useState(""),
+    [backupConfirm, setBackupConfirm] = useState(""),
+    [backupError, setBackupError] = useState(""),
+    [backupBusy, setBackupBusy] = useState(false),
     [cloudBusy, setCloudBusy] = useState(false),
     [pullConfirm, setPullConfirm] = useState(false),
     [deleteConfirm, setDeleteConfirm] = useState(false),
@@ -2069,11 +2082,32 @@ function SettingsView({
       notify("Backup could not be saved.");
     }
   }
+  async function protectedBackup() {
+    if (backupPassword !== backupConfirm) { setBackupError("The passwords don't match."); return; }
+    setBackupBusy(true); setBackupError("");
+    try {
+      await download(`saku-backup-${today()}.saku.json`, await encryptBackup(JSON.stringify(data), backupPassword), "application/json");
+      closeBackupDialog();
+    } catch (e) { setBackupError(e instanceof Error ? e.message : "Backup could not be saved."); }
+    finally { setBackupBusy(false); }
+  }
+  async function unlockBackup() {
+    if (!lockedBackup) return;
+    setBackupBusy(true); setBackupError("");
+    try {
+      setRestore(validateData(JSON.parse(await decryptBackup(lockedBackup, backupPassword))));
+      closeBackupDialog();
+    } catch (e) { setBackupError(e instanceof Error ? e.message : "Invalid backup."); }
+    finally { setBackupBusy(false); }
+  }
+  function closeBackupDialog() { setProtectOpen(false); setLockedBackup(null); setBackupPassword(""); setBackupConfirm(""); setBackupError(""); }
   async function readBackup(file?: File) {
     if (!file) return;
     try {
       if (file.size > 20000000) throw new Error("Backup is too large.");
-      setRestore(validateData(JSON.parse(await file.text())));
+      const parsed = JSON.parse(await file.text());
+      if (isEncryptedBackup(parsed)) { setLockedBackup(parsed); return; }
+      setRestore(validateData(parsed));
     } catch (e) {
       notify(e instanceof Error ? e.message : "Invalid backup.");
     }
@@ -2249,6 +2283,10 @@ function SettingsView({
             <Download size={17} />
             Back up data
           </button>
+          <button className="button secondary" onClick={() => setProtectOpen(true)}>
+            <LockKeyhole size={17} />
+            Back up with password
+          </button>
           <label className="button secondary">
             <Upload size={17} />
             Restore backup
@@ -2309,6 +2347,16 @@ function SettingsView({
               Restore backup
             </button>
           </div>
+        </Modal>
+      )}
+      {(protectOpen || lockedBackup) && (
+        <Modal title={lockedBackup ? "Open protected backup" : "Back up with password"} subtitle={lockedBackup ? "Enter the password used when this backup was made." : "The file is encrypted on this device. Saku can't recover a forgotten password."} onClose={() => { if (!backupBusy) closeBackupDialog(); }}>
+          <form onSubmit={(e) => { e.preventDefault(); void (lockedBackup ? unlockBackup() : protectedBackup()); }}>
+            <label className="field">Password<input type="password" autoComplete={lockedBackup ? "current-password" : "new-password"} minLength={lockedBackup ? 1 : MIN_PASSWORD_LENGTH} value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} required autoFocus /></label>
+            {!lockedBackup && <label className="field">Confirm password<input type="password" autoComplete="new-password" value={backupConfirm} onChange={(e) => setBackupConfirm(e.target.value)} required /></label>}
+            {backupError && <p className="form-error" role="alert">{backupError}</p>}
+            <div className="form-footer"><button type="button" className="button secondary" disabled={backupBusy} onClick={closeBackupDialog}>Cancel</button><button className="button primary" disabled={backupBusy}>{backupBusy ? "Working..." : lockedBackup ? "Open backup" : "Save protected backup"}</button></div>
+          </form>
         </Modal>
       )}
       {pullConfirm && (
