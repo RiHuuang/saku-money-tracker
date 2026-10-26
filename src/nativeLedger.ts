@@ -41,8 +41,7 @@ async function database() {
 }
 
 function metadata(data: Data) {
-  const { transactions: _transactions, ...rest } = data;
-  return JSON.stringify(rest);
+  return JSON.stringify({ ...data, transactions: [] });
 }
 
 async function read(db: SQLiteDBConnection, userId: string): Promise<{ data: Data; revision: number; syncedRevision: number } | null> {
