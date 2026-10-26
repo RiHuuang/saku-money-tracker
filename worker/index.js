@@ -3,6 +3,7 @@ import { createRemoteJWKSet } from "jose/jwks/remote";
 import { jwtVerify } from "jose/jwt/verify";
 import { decrypt, encrypt, encryptionKey, hashToken, pkceChallenge, timingSafeEqual, tokenPart } from "./crypto.js";
 import { avatarAfterSignIn, isGoogleAvatarUrl, sessionToken, splitSessionToken } from "../server/src/identity.js";
+import { CLEAN_RESERVATION, cleanMessages, parseCleanAnswer, validateCleanInput } from "./merchant-clean.js";
 import { aiImportAvailable, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
 export { UserLiveUpdates } from "./live.js";
 
@@ -435,7 +436,7 @@ async function deleteAccount(env, uid, user, sessionId) {
 function legalPage(path, env) {
   const email = escapeHtml(env.SUPPORT_EMAIL);
   const pages = {
-    "/privacy": ["Privacy Notice", `<p>Saku processes your Google account identifier, email, name, optional profile image, financial ledger, sync revision, and authentication tokens to provide sign-in and synchronization. Your ledger and image are stored privately using Cloudflare Workers, D1, and R2. A readable mirror is stored in a spreadsheet owned by your Google account. Google refresh tokens are encrypted; Saku session secrets are stored as hashes.</p><p>When you choose AI import, Saku sends selected statement text or page images to Cloudflare Workers AI for transaction extraction. The original files and review drafts remain on your device; Saku does not add them to ledger backups or Sheets. Accepted transactions sync as part of your ledger. You can export data, sign out, revoke Saku access in Google, or delete your account from Settings.</p><p>On Android you can choose to let Saku read notifications from the bank and e-wallet apps you select. Saku checks the app before reading anything else, keeps only the amount, direction, balance and merchant name with account and reference numbers removed, encrypts them on your phone and deletes them after seven days, on sign-out or on account deletion. Notification text is never uploaded or synced. Only transactions you add join your ledger. You can pause or turn this off in Settings or Android's notification access settings at any time.</p>`],
+    "/privacy": ["Privacy Notice", `<p>Saku processes your Google account identifier, email, name, optional profile image, financial ledger, sync revision, and authentication tokens to provide sign-in and synchronization. Your ledger and image are stored privately using Cloudflare Workers, D1, and R2. A readable mirror is stored in a spreadsheet owned by your Google account. Google refresh tokens are encrypted; Saku session secrets are stored as hashes.</p><p>When you choose AI import, Saku sends selected statement text or page images to Cloudflare Workers AI for transaction extraction. The original files and review drafts remain on your device; Saku does not add them to ledger backups or Sheets. Accepted transactions sync as part of your ledger. You can export data, sign out, revoke Saku access in Google, or delete your account from Settings.</p><p>On Android you can choose to let Saku read notifications from the bank and e-wallet apps you select. Saku checks the app before reading anything else, keeps only the amount, direction, balance and merchant name with account and reference numbers removed, encrypts them on your phone and deletes them after seven days, on sign-out or on account deletion. Notification text is never uploaded or synced. Only transactions you add join your ledger. You can pause or turn this off in Settings or Android's notification access settings at any time. If you also turn on name tidying, merchant names Saku hasn't seen before, with long numbers removed, are sent to Cloudflare Workers AI once each; amounts, accounts and notification text are not.</p>`],
     "/terms": ["User Agreement", `<p>Saku helps you record and review information you provide. It is not a bank or financial adviser. You remain responsible for checking entries, statement matches, budgets, taxes, and payments.</p><p>You retain ownership of your ledger. You authorize Saku to process it for sign-in, backup, automatic synchronization, profile images, and Google Sheets mirroring. Reading bank and e-wallet notifications on Android is optional, uses only the apps you enable, and creates suggestions you review; it never records a transaction without your confirmation. Offline features can continue without cloud service. You can export or delete your account from Settings.</p>`],
     "/account-deletion": ["Delete your Saku account", `<p>In Saku Settings, choose Delete account and type DELETE. This removes your Saku cloud identity, sessions, ledger snapshots, and profile image, revokes Google access, and asks Google Drive to trash the Saku-created folder. If you cannot access the app, email <a href="mailto:${email}">${email}</a> from the Google address used for Saku.</p>`],
   };
@@ -594,6 +595,21 @@ async function route(request, env) {
   if (!user) throw fault(404, "Account not found");
   if (user.deleting && !(request.method === "DELETE" && path === "/v1/me")) throw fault(410, "Account deletion is in progress");
   if (env.WRITE_ENABLED !== "true" && ((request.method === "PUT" && (path === "/v1/me" || path.startsWith("/v2/"))) || (request.method === "DELETE" && path === "/v1/me") || (request.method === "POST" && (path === "/v1/auth/google/drive" || path.startsWith("/v2/"))))) throw fault(503, "Cloud writes are paused for migration");
+  if (request.method === "POST" && path === "/v1/merchants/clean") {
+    if (expectedUid !== auth.uid) throw fault(403, "Account identity is required");
+    if (!aiImportAvailable(env)) throw fault(503, "AI name cleaning is unavailable");
+    let names;
+    try { names = validateCleanInput(await readBody(request, 8_000)); }
+    catch (error) { throw fault(400, error.message); }
+    const day = new Date().toISOString().slice(0, 10);
+    const reservation = await reserveImport(env.DB, day, auth.uid, CLEAN_RESERVATION);
+    if (!reservation.reserved) throw fault(429, reservation.limit === "user" ? "You've used today's AI allowance for your account." : "Saku's shared AI allowance is used for today.");
+    let answer;
+    try { answer = await env.AI.run(MODEL, { messages: cleanMessages(names), max_completion_tokens: 512, temperature: 0, seed: 0, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, store: false, n: 1 }); }
+    catch { await settleImport(env.DB, day, auth.uid, { usage: { prompt_tokens: 0, completion_tokens: 0 } }, CLEAN_RESERVATION); throw fault(502, "Names could not be tidied right now."); }
+    await settleImport(env.DB, day, auth.uid, answer, CLEAN_RESERVATION);
+    return reply({ results: parseCleanAnswer(answer, names) }, 200, cors);
+  }
   if (request.method === "POST" && path === "/v1/import/extract") {
     if (expectedUid !== auth.uid) throw fault(403, "Account identity is required");
     if (!aiImportAvailable(env)) throw fault(503, "AI import is unavailable");

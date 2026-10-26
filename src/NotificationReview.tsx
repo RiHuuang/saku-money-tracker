@@ -4,14 +4,16 @@ import { money, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
 import { learnMerchant } from "./merchants";
+import { cleanMerchantNames } from "./cloud";
+import { loadCleaningOptIn, namesToClean } from "./merchantCleaning";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
 import { inboxRows, type NotificationRow } from "./notificationRows";
 import { ChoiceField } from "./components";
 
 const friendlyDate = (date: string) => { const value = new Date(`${date}T12:00:00`); return `${value.toLocaleDateString("en-GB", { weekday: "short" })}, ${value.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`; };
 
-export default function NotificationReview({ data, commit, busy, notify, onCount }: {
-  data: Data; busy: boolean; notify: (message: string) => void; onCount: (count: number) => void;
+export default function NotificationReview({ data, userId, commit, busy, notify, onCount }: {
+  data: Data; userId?: string; busy: boolean; notify: (message: string) => void; onCount: (count: number) => void;
   commit: (data: Data, message: string) => Promise<boolean>;
 }) {
   const [items, setItems] = useState<InboxItem[] | null>(null);
@@ -23,6 +25,21 @@ export default function NotificationReview({ data, commit, busy, notify, onCount
     catch { setItems([]); notify("Captured notifications could not be read on this phone."); }
   };
   useEffect(() => { void load(); }, []);
+  const [cleaned, setCleaned] = useState(false);
+  useEffect(() => {
+    if (cleaned || !items?.length || !userId) return;
+    setCleaned(true);
+    void (async () => {
+      const names = namesToClean(inboxRows(items, data), data);
+      if (!names.length || !(await loadCleaningOptIn())) return;
+      try {
+        // Each answer becomes a merchant rule, so a name is sent at most once.
+        const results = await cleanMerchantNames(userId, names);
+        const merchantRules = results.reduce((rules, result) => learnMerchant({ ...data, merchantRules: rules }, result.name, { name: result.cleanName, pocketId: "" }), data.merchantRules);
+        if (merchantRules !== data.merchantRules) await commit({ ...data, merchantRules }, "Merchant names tidied");
+      } catch { /* Raw names stay usable; cleaning is a convenience. */ }
+    })();
+  }, [items, userId, cleaned]);
   const rows = useMemo(() => inboxRows(items || [], data).map((row): NotificationRow => ({ ...row, ...edits[row.id] })), [items, data, edits]);
   const accountFor = (row: ImportRow) => importRowAccount(row, undefined, data);
   // Statement-style matching: same account, day, amount and direction counts as a possible duplicate whatever it was named.

@@ -362,6 +362,9 @@ export async function acceptAgreement() {
   await savePublic({ ...current, user });
   return { ...current, signedIn: true, configured: true, user } as CloudState;
 }
+export async function cleanMerchantNames(userId: string, names: string[]): Promise<{ name: string; cleanName: string }[]> {
+  return (await (await requestsFor(userId)("/v1/merchants/clean", { method: "POST", body: JSON.stringify({ names }) })).json()).results;
+}
 export async function loadAvatarUrl(version?: string) {
   try {
     const user = (await publicState()).user;

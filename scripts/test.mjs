@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 
 const directory = await mkdtemp(join(tmpdir(), "saku-tests-"));
 try {
-  const tests = ["src/domain.test.ts", "src/pdfStatement.test.ts", "src/importTransactions.test.ts", "src/importFlow.test.ts", "src/appearance.test.ts", "src/appUpdateLogic.test.ts", "src/merchants.test.ts", "src/appLock.test.ts", "src/notificationRows.test.ts"];
+  const tests = ["src/domain.test.ts", "src/pdfStatement.test.ts", "src/importTransactions.test.ts", "src/importFlow.test.ts", "src/appearance.test.ts", "src/appUpdateLogic.test.ts", "src/merchants.test.ts", "src/appLock.test.ts", "src/notificationRows.test.ts", "src/merchantCleaning.test.ts"];
   const outputs = tests.map((file) => join(directory, file.split("/").at(-1).replace(".ts", ".mjs")));
   await Promise.all(tests.map((entryPoints, index) => build({ entryPoints: [entryPoints], outfile: outputs[index], bundle: true, platform: "node", format: "esm" })));
   const child = spawn(process.execPath, ["--test", ...outputs], { stdio: "inherit" });
@@ -26,6 +26,7 @@ try {
     await import("../worker/live.test.mjs");
     await import("../worker/live-route.test.mjs");
     await import("../worker/agreement-route.test.mjs");
+    await import("../worker/merchant-clean.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });

@@ -138,16 +138,16 @@ export function mergeImportPasses(firstRows, verifiedRows) {
   return [...merged, ...remaining.filter((candidate) => !candidate.used).map((candidate) => candidate.row)];
 }
 
-export function neuronsUsed(answer) {
+export function neuronsUsed(answer, reservation = RESERVATION) {
   const usage = answer?.usage;
-  if (!Number.isSafeInteger(usage?.prompt_tokens) || !Number.isSafeInteger(usage?.completion_tokens)) return RESERVATION;
+  if (!Number.isSafeInteger(usage?.prompt_tokens) || !Number.isSafeInteger(usage?.completion_tokens)) return reservation;
   const actual = Math.ceil((usage.prompt_tokens * 9091 + usage.completion_tokens * 27273) / 1_000_000);
-  return Math.max(1, Math.min(RESERVATION, actual));
+  return Math.max(1, Math.min(reservation, actual));
 }
 
 export const USER_BUDGET_TABLE = "CREATE TABLE IF NOT EXISTS import_ai_user_budget (uid TEXT NOT NULL, day TEXT NOT NULL, neurons INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(uid, day))";
 
-export async function reserveImport(db, day, uid) {
+export async function reserveImport(db, day, uid, reservation = RESERVATION) {
   // Environments created before AI import may not have received the additive
   // budget tables. Keep the route recoverable instead of failing every source
   // with a generic 502 until an operator notices the schema drift.
@@ -157,16 +157,16 @@ export async function reserveImport(db, day, uid) {
   const results = await db.batch([
     db.prepare("INSERT OR IGNORE INTO import_ai_budget(day,neurons) VALUES(?,0)").bind(day),
     db.prepare("INSERT OR IGNORE INTO import_ai_user_budget(uid,day,neurons) VALUES(?,?,0)").bind(uid, day),
-    db.prepare("UPDATE import_ai_budget SET neurons=neurons+? WHERE day=? AND neurons+?<=? AND (SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?)<? RETURNING neurons").bind(RESERVATION, day, RESERVATION, DAILY_CAP, uid, day, USER_DAILY_CAP),
-    db.prepare("UPDATE import_ai_user_budget SET neurons=neurons+? WHERE uid=? AND day=? AND changes()=1").bind(RESERVATION, uid, day),
+    db.prepare("UPDATE import_ai_budget SET neurons=neurons+? WHERE day=? AND neurons+?<=? AND (SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?)<? RETURNING neurons").bind(reservation, day, reservation, DAILY_CAP, uid, day, USER_DAILY_CAP),
+    db.prepare("UPDATE import_ai_user_budget SET neurons=neurons+? WHERE uid=? AND day=? AND changes()=1").bind(reservation, uid, day),
   ]);
   if (results[2].results?.length) return { reserved: true };
   const own = await db.prepare("SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?").bind(uid, day).first();
   return { reserved: false, limit: (own?.neurons ?? 0) >= USER_DAILY_CAP ? "user" : "shared" };
 }
 
-export async function settleImport(db, day, uid, answer) {
-  const refund = RESERVATION - neuronsUsed(answer);
+export async function settleImport(db, day, uid, answer, reservation = RESERVATION) {
+  const refund = reservation - neuronsUsed(answer, reservation);
   if (refund > 0) await db.batch([
     db.prepare("UPDATE import_ai_budget SET neurons=neurons-? WHERE day=?").bind(refund, day),
     db.prepare("UPDATE import_ai_user_budget SET neurons=neurons-? WHERE uid=? AND day=?").bind(refund, uid, day),

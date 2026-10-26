@@ -3,10 +3,12 @@ import { App as NativeApp } from "@capacitor/app";
 import { BellRing, Pause, Play, Settings } from "lucide-react";
 import type { Data } from "./domain";
 import { notificationCapture, type CaptureStatus } from "./notificationCapture";
+import { loadCleaningOptIn, saveCleaningOptIn } from "./merchantCleaning";
 import { ChoiceField, Modal } from "./components";
 
 export default function NotificationAccess({ data, notify }: { data: Data; notify: (message: string) => void }) {
-  const [status, setStatus] = useState<CaptureStatus | null>(null), [disclosure, setDisclosure] = useState(false), [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<CaptureStatus | null>(null), [disclosure, setDisclosure] = useState(false), [busy, setBusy] = useState(false), [cleaning, setCleaning] = useState(false);
+  useEffect(() => { void loadCleaningOptIn().then(setCleaning).catch(() => {}); }, []);
   const refresh = () => notificationCapture.status().then(setStatus).catch(() => notify("Notification access status is unavailable."));
   useEffect(() => {
     void refresh();
@@ -32,6 +34,7 @@ export default function NotificationAccess({ data, notify }: { data: Data; notif
       <label className="checkbox-label"><input type="checkbox" checked={!!app.account} disabled={busy || !app.installed || !data.accounts.length} onChange={(event) => void run(() => notificationCapture.setApp({ packageName: app.packageName, account: event.target.checked ? accountFor(app.suggestedAccount) : "" }))} /> {app.name}{!app.installed && <small> · not installed</small>}</label>
       {app.account && <ChoiceField className="notification-app-account" label={`Saku account for ${app.name}`} hideLabel value={data.accounts.includes(app.account) ? app.account : ""} disabled={busy} placeholder="Choose an account" onValueChange={(account) => void run(() => notificationCapture.setApp({ packageName: app.packageName, account }))} options={data.accounts.map((name) => ({ value: name, label: name }))} />}
     </div>)}</div>
+    <label className="checkbox-label"><input type="checkbox" checked={cleaning} onChange={(event) => { const next = event.target.checked; setCleaning(next); void saveCleaningOptIn(next).catch(() => notify("That change could not be saved.")); }} /> Tidy unknown merchant names with Cloudflare AI <small>Sends only names Saku hasn't seen, with long numbers removed: never amounts, accounts or notification text.</small></label>
     <div className="settings-actions">{status.granted ? <button className="button secondary" disabled={busy} onClick={() => void notificationCapture.openSettings()}><Settings size={16} />Manage notification access</button> : <button className="button primary" disabled={busy || !enabled.length} onClick={() => setDisclosure(true)}><BellRing size={16} />Allow notification access</button>}</div>
     {!status.granted && !enabled.length && <small className="cloud-note">Choose at least one app above first.</small>}
     {disclosure && <Modal title="Before you allow notification access" subtitle="Android will show a warning about reading notifications. Here is exactly what Saku does." onClose={() => setDisclosure(false)}>
