@@ -12,7 +12,7 @@ const PAIR_WINDOW_MS = 30 * 60 * 1000;
 const localDate = (ms: number) => { const date = new Date(ms); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
 const same = (a: string, b: string) => a.trim().toLocaleLowerCase("id-ID") === b.trim().toLocaleLowerCase("id-ID");
 
-export type NotificationRow = ImportRow & { occurredAt: number; appName: string; pairedWith?: string };
+export type NotificationRow = ImportRow & { occurredAt: number; appName: string; balance: number | null; pairedWith?: string };
 
 export function inboxRows(items: readonly InboxItem[], data: Data): NotificationRow[] {
   const accounts = [...data.accounts, ...data.creditCards.map((card) => card.name)];
@@ -26,7 +26,7 @@ export function inboxRows(items: readonly InboxItem[], data: Data): Notification
       id: item.id, sourceId: item.packageName, account, page: 0, date: localDate(item.occurredAt),
       name: item.rawMerchant || `${appName} ${item.direction === "income" ? "money in" : "payment"}`, cleanName: remembered?.name,
       amount: item.amount, direction: item.direction, activity: counterparty ? "topup" as const : item.direction === "income" ? "income" as const : "purchase" as const,
-      pocketId: remembered?.pocketId || "", counterparty, occurredAt: item.occurredAt, appName,
+      pocketId: remembered?.pocketId || "", counterparty, occurredAt: item.occurredAt, appName, balance: item.balance,
     };
     return { ...row, decision: suggestImportDecision(row, row.date.slice(0, 7)) };
   });

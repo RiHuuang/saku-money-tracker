@@ -36,6 +36,7 @@
 .catch-up-card > svg { flex: none; margin-top: 2px; color: var(--teal); }
 .catch-up-card > div { flex: 1; min-width: 0; }
 .catch-up-card strong { display: block; font-size: 14px; line-height: 1.4; }
+.catch-up-card small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 .catch-up-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .catch-up-dismiss { flex: none; margin: -6px -6px 0 0; }
 .catch-up-day { display: grid; gap: 16px; margin: 4px 0 22px; }

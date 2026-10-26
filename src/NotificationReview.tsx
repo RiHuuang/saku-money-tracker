@@ -9,6 +9,7 @@ import { loadCleaningOptIn, namesToClean } from "./merchantCleaning";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
 import { inboxRows, type NotificationRow } from "./notificationRows";
 import { ChoiceField } from "./components";
+import { checkinAdjustment, checkinGap, loadCheckins, mergeCheckins, saveCheckins, type BalanceCheckin } from "./balanceCheckins";
 
 const friendlyDate = (date: string) => { const value = new Date(`${date}T12:00:00`); return `${value.toLocaleDateString("en-GB", { weekday: "short" })}, ${value.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`; };
 
@@ -20,6 +21,14 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   const [edits, setEdits] = useState<Record<string, Partial<ImportRow>>>({});
   const [expanded, setExpanded] = useState("");
   const [saving, setSaving] = useState(false);
+  const [checkins, setCheckins] = useState<BalanceCheckin[]>([]);
+  useEffect(() => { void loadCheckins().then(setCheckins); }, []);
+  async function updateCheckins(next: BalanceCheckin[]) { setCheckins(next); await saveCheckins(next).catch(() => {}); }
+  async function acceptCheckin(checkin: BalanceCheckin) {
+    try {
+      if (await commit({ ...data, transactions: [...data.transactions, checkinAdjustment(data, checkin)] }, `${checkin.account} balance adjusted`)) await updateCheckins(checkins.filter((item) => item.id !== checkin.id));
+    } catch { notify("This balance could not be adjusted. Use Adjust balance on the account instead."); }
+  }
   const load = async () => {
     try { const next = (await notificationCapture.inbox()).items; setItems(next); onCount(next.length); }
     catch { setItems([]); notify("Captured notifications could not be read on this phone."); }
@@ -67,13 +76,21 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
         if (row.pairedWith) done.add(row.pairedWith);
       }
       if (!(await commit({ ...data, transactions: [...data.transactions, ...additions], merchantRules }, `${ready.length} notification ${ready.length === 1 ? "row" : "rows"} added`))) return;
+      // A balance printed in a saved notification can be checked once its payment is in the ledger.
+      const reported = ready.filter((row) => row.balance !== null && data.accounts.includes(accountFor(row))).map((row) => ({ id: row.id, account: accountFor(row), appName: row.appName, reported: row.balance!, occurredAt: row.occurredAt }));
+      if (reported.length) await updateCheckins(mergeCheckins(checkins, reported));
       await remove([...done]);
     } catch { notify("Some rows could not be added. Check them and try again."); }
     finally { setSaving(false); }
   }
   if (items === null) return <p className="loading-view">Loading captured notifications...</p>;
-  if (!rows.length) return <section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> No captured notifications waiting. New payments from your enabled bank and wallet apps appear here.</p></section>;
-  return <section className="catchup-panel catchup-review notification-review">
+  const openCheckins = checkins.filter((checkin) => checkinGap(data, checkin).worthAsking);
+  const checkinCards = openCheckins.map((checkin) => {
+    const { saku } = checkinGap(data, checkin);
+    return <section className="catch-up-card balance-checkin" key={checkin.id} aria-label={`${checkin.account} balance check`}><BellRing size={20} /><div><strong>{checkin.account} says {money(checkin.reported)}, Saku says {money(saku)}. Add a balance adjustment?</strong><small>From a {checkin.appName} notification on {friendlyDate(new Date(checkin.occurredAt).toLocaleDateString("en-CA"))}.</small><div className="catch-up-actions"><button className="button primary" disabled={busy} onClick={() => void acceptCheckin(checkin)}>Add adjustment</button><button className="button secondary" disabled={busy} onClick={() => void updateCheckins(checkins.filter((item) => item.id !== checkin.id))}>Dismiss</button></div></div></section>;
+  });
+  if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> No captured notifications waiting. New payments from your enabled bank and wallet apps appear here.</p></section></>;
+  return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
     <div className="catchup-panel-head"><div><h3>From your notifications</h3><p>Captured on this phone and kept for 7 days. Only what you add joins your ledger.</p></div></div>
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), open = expanded === row.id;
@@ -100,5 +117,5 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
       </div>;
     })}
     <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? "row" : "rows"} can be added now</strong><span>{rows.length - ready.length} kept for review on this phone.</span></div><button className="button primary" disabled={!ready.length || busy || saving} onClick={() => void save()}><Check size={16} /> Add {ready.length} clear {ready.length === 1 ? "row" : "rows"} <ArrowRight size={16} /></button></div>
-  </section>;
+  </section></>;
 }
