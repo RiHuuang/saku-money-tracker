@@ -204,13 +204,27 @@ function sheetChange(input) {
   return { range: input.range, before: input.before, after: input.after, count, width };
 }
 
+// A rotated refresh token stays recognisable briefly, so two clients refreshing at once (the app and its
+// widget sync job) look like a race rather than theft. The columns are added on first use, like the AI budget tables.
+const REFRESH_RACE_MS = 60_000;
+let sessionColumnsReady = false;
+async function ensureSessionColumns(env) {
+  if (sessionColumnsReady) return;
+  const { results } = await env.DB.prepare("PRAGMA table_info(sessions)").all();
+  const columns = new Set(results.map((column) => column.name));
+  if (!columns.has("previous_refresh_hash")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN previous_refresh_hash TEXT").run();
+  if (!columns.has("rotated_at")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN rotated_at INTEGER").run();
+  sessionColumnsReady = true;
+}
+
 async function issueSession(env, uid, existingId, expectedRefreshHash) {
   const id = existingId || crypto.randomUUID();
   const accessSecret = tokenPart(), refreshSecret = tokenPart(), now = Date.now();
   const [accessHash, refreshHash] = await Promise.all([hashToken(accessSecret), hashToken(refreshSecret)]);
   if (existingId) {
-    const updated = await env.DB.prepare("UPDATE sessions SET access_hash=?,refresh_hash=?,access_expires_at=?,refresh_expires_at=?,updated_at=? WHERE id=? AND uid=? AND refresh_hash=? AND refresh_expires_at>?")
-      .bind(accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now, id, uid, expectedRefreshHash, now).run();
+    await ensureSessionColumns(env);
+    const updated = await env.DB.prepare("UPDATE sessions SET previous_refresh_hash=refresh_hash,rotated_at=?,access_hash=?,refresh_hash=?,access_expires_at=?,refresh_expires_at=?,updated_at=? WHERE id=? AND uid=? AND refresh_hash=? AND refresh_expires_at>?")
+      .bind(now, accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now, id, uid, expectedRefreshHash, now).run();
     if (!updated.meta.changes) throw fault(401, "Refresh session changed; retry with the current session");
   } else {
     await env.DB.prepare("INSERT INTO sessions (id,uid,access_hash,refresh_hash,access_expires_at,refresh_expires_at,updated_at) VALUES (?,?,?,?,?,?,?)")
@@ -575,8 +589,18 @@ async function route(request, env) {
     const value = browser ? cookies(request).saku_refresh : (await readBody(request)).refreshToken;
     const parsed = splitSessionToken(value);
     if (!parsed) throw fault(401, "Invalid refresh session");
-    const row = await env.DB.prepare("SELECT uid,refresh_hash,refresh_expires_at FROM sessions WHERE id = ?").bind(parsed.id).first();
-    if (!row || row.refresh_expires_at < Date.now() || !timingSafeEqual(row.refresh_hash, await hashToken(parsed.secret))) throw fault(401, "Refresh session expired");
+    await ensureSessionColumns(env);
+    const row = await env.DB.prepare("SELECT uid,refresh_hash,refresh_expires_at,previous_refresh_hash,rotated_at FROM sessions WHERE id = ?").bind(parsed.id).first();
+    if (!row || row.refresh_expires_at < Date.now()) throw fault(401, "Refresh session expired");
+    const presented = await hashToken(parsed.secret);
+    if (!timingSafeEqual(row.refresh_hash, presented)) {
+      if (row.previous_refresh_hash && timingSafeEqual(row.previous_refresh_hash, presented) && Date.now() - (row.rotated_at || 0) <= REFRESH_RACE_MS)
+        throw fault(401, "Refresh session changed; retry with the current session");
+      // Any other stale secret for a live session means a copied token was used: end the session everywhere.
+      await env.DB.prepare("DELETE FROM sessions WHERE id=? AND refresh_hash=?").bind(parsed.id, row.refresh_hash).run();
+      await liveRevoke(env, row.uid, parsed.id);
+      throw fault(401, "Refresh session expired");
+    }
     const next = await issueSession(env, row.uid, parsed.id, row.refresh_hash);
     return browser ? setBrowserSession(reply({ ok: true }), next) : reply(next, 200, cors);
   }
