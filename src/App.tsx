@@ -75,6 +75,8 @@ import { notificationCapture, notificationCaptureSupported } from "./notificatio
 import NotificationAccess from "./NotificationAccess";
 import { importRowsWaiting } from "./importTransactions";
 import { applyRecentsPrivacy, appLockStatus, appLockSupported, authenticate, defaultAppLock, loadAppLock, saveAppLock, shouldLock, type AppLockSettings, type LockAfter } from "./appLock";
+import { LocalNotifications } from "@capacitor/local-notifications";
+import { cancelReminders, defaultReminder, loadReminder, remindersSupported, requestReminderPermission, saveReminder, scheduleReminders, type ReminderSettings } from "./reminders";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
 import {
   DirectionIcon,
@@ -171,6 +173,8 @@ export default function App() {
     [resolution, setResolution] = useState<{ local: Data; remote: Data; remoteState?: CloudState } | null>(null),
     [avatarUrl, setAvatarUrl] = useState(""),
     [catchUpSheet, setCatchUpSheet] = useState<{ days: string[]; index: number } | null>(null),
+    [reminder, setReminder] = useState<ReminderSettings>(defaultReminder),
+    [reminderTap, setReminderTap] = useState<{ kind: "catchup" | "card" } | null>(null),
     [catchUpDismissed, setCatchUpDismissed] = useState(() => { try { return localStorage.getItem(catchUpDismissedKey) || ""; } catch { return ""; } }),
     [importWaiting, setImportWaiting] = useState(0),
     [waitingRecount, setWaitingRecount] = useState(0),
@@ -198,6 +202,26 @@ export default function App() {
   latest.current = { data, cloud, edit, resolution };
   const reconcileRef = useRef<((afterFailedSync?: boolean) => Promise<void>) | null>(null);
   const selectedPocket = data?.pockets.find((p) => p.id === selectedPocketId);
+  useEffect(() => {
+    if (!remindersSupported()) return;
+    void loadReminder().then(setReminder).catch(() => {});
+    // A tap that cold-starts Saku is delivered once the listener attaches; it waits for the ledger below.
+    const listener = LocalNotifications.addListener("localNotificationActionPerformed", ({ notification }) => setReminderTap({ kind: notification.extra?.kind === "card" ? "card" : "catchup" }));
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+  useEffect(() => {
+    if (!remindersSupported() || !data) return;
+    void (reminder.enabled ? scheduleReminders(data, reminder) : cancelReminders()).catch(() => {});
+  }, [data, reminder]);
+  useEffect(() => {
+    if (!reminderTap || !data) return;
+    setReminderTap(null);
+    setSelectedPocketId(null);
+    if (reminderTap.kind === "card") { setView("plans"); return; }
+    setView("overview");
+    const days = catchUpGap(data, today());
+    if (days.length) setCatchUpSheet({ days, index: 0 }); else setEdit({ type: "transaction" });
+  }, [reminderTap, data]);
   function openPocket(id: string) { go("pockets"); setSelectedPocketId(id); setPocketAllHistory(false); }
   function openTransaction(value: Transaction) {
     setEdit(value.kind === "account_transfer"
@@ -1197,6 +1221,8 @@ export default function App() {
               onAdjustBalance={(account) => setEdit({ type: "balance_adjustment", account })}
               appLock={appLock}
               onAppLockChange={changeAppLock}
+              reminder={reminder}
+              onReminderChange={async (next) => { await saveReminder(next); setReminder(next); }}
             />
           )}
         </main>
@@ -2218,6 +2244,8 @@ function SettingsView({
   onAdjustBalance,
   appLock,
   onAppLockChange,
+  reminder,
+  onReminderChange,
 }: {
   data: Data;
   commit: (d: Data, m: string) => Promise<boolean>;
@@ -2236,6 +2264,8 @@ function SettingsView({
   onAdjustBalance: (account: string) => void;
   appLock: AppLockSettings;
   onAppLockChange: (next: AppLockSettings, confirm: boolean) => Promise<boolean>;
+  reminder: ReminderSettings;
+  onReminderChange: (next: ReminderSettings) => Promise<void>;
 }) {
   const [name, setName] = useState(data.name),
     [account, setAccount] = useState(""),
@@ -2299,6 +2329,7 @@ function SettingsView({
       <AppUpdateSettings />
       {notificationCaptureSupported() && <NotificationAccess data={data} notify={notify} />}
       {appLockSupported() && <AppLockSection settings={appLock} onChange={onAppLockChange} />}
+      {remindersSupported() && <ReminderSection settings={reminder} onChange={onReminderChange} notify={notify} />}
       <section>
         <h2>{t("localProfile")}</h2>
         <p>Your workspace on this device.</p>
@@ -2566,5 +2597,23 @@ function AppLockSection({ settings, onChange }: { settings: AppLockSettings; onC
       <SegmentedChoice compact label="Lock after" value={String(settings.after)} disabled={busy} onValueChange={(value) => change({ ...settings, after: Number(value) as LockAfter })} options={[{ value: "0", label: "Immediately" }, { value: "60", label: "1 min" }, { value: "300", label: "5 min" }]} />
       <label className="checkbox-label"><input type="checkbox" checked={settings.hideInRecents} disabled={busy} onChange={(event) => change({ ...settings, hideInRecents: event.target.checked })} /> Hide Saku in Recents (also blocks screenshots)</label>
     </>}
+  </section>;
+}
+
+function ReminderSection({ settings, onChange, notify }: { settings: ReminderSettings; onChange: (next: ReminderSettings) => Promise<void>; notify: (message: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  async function toggle(enabled: boolean) {
+    setBusy(true);
+    try {
+      if (enabled && !(await requestReminderPermission())) { notify("Allow notifications for Saku in Android settings to get reminders."); return; }
+      await onChange({ ...settings, enabled });
+    } catch { notify("The reminder setting could not be saved."); }
+    finally { setBusy(false); }
+  }
+  return <section className="reminder-section">
+    <h2>Daily reminder</h2>
+    <p>A quiet nudge in the evening to note what you spent. Card reminders arrive 3 days before a payment is due.</p>
+    <label className="checkbox-label"><input type="checkbox" checked={settings.enabled} disabled={busy} onChange={(event) => void toggle(event.target.checked)} /> Remind me each day</label>
+    {settings.enabled && <label className="field reminder-time">Time<input type="time" value={settings.time} disabled={busy} onChange={(event) => { if (/^\d{2}:\d{2}$/.test(event.target.value)) void onChange({ ...settings, time: event.target.value }); }} /></label>}
   </section>;
 }
