@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import {
   bankRows,
   accountBalance,
@@ -7,6 +7,8 @@ import {
   cardBalance,
   cardDue,
   catchUpGap,
+  daysAgo,
+  lastPocketFor,
   budgetFor,
   demoData,
   dueRules,
@@ -367,4 +369,28 @@ test("snapshots without checkedDays load, and invalid checked days are rejected"
   assert.deepEqual(validateData({ ...emptyData(), checkedDays: ["2026-10-23"] }).checkedDays, ["2026-10-23"]);
   assert.throws(() => validateData({ ...emptyData(), checkedDays: ["23 Oct"] }));
   assert.throws(() => validateData({ ...emptyData(), checkedDays: ["2026-10-23", "2026-10-23"] }));
+});
+
+test("daysAgo uses the local calendar day, not UTC", () => {
+  const zone = process.env.TZ;
+  process.env.TZ = "Asia/Jakarta";
+  mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-25T17:30:00Z") });
+  try {
+    assert.deepEqual([daysAgo(0), daysAgo(1), daysAgo(2)], ["2026-10-26", "2026-10-25", "2026-10-24"]);
+    assert.equal(daysAgo(26), "2026-09-30");
+  } finally {
+    mock.timers.reset();
+    if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone;
+  }
+});
+
+test("lastPocketFor uses the most recent expense with the same name", () => {
+  const data = emptyData();
+  data.accounts = ["Cash"];
+  const row = (id: string, name: string, date: string, pocketId: string, extra: object = {}) => ({ id, name, amount: 1000, type: "expense", date, pocketId, account: "Cash", note: "", ...extra }) as typeof data.transactions[number];
+  data.transactions = [row("a", "Grab", "2026-10-01", "food"), row("b", "grab ", "2026-10-20", "transport"), row("c", "Grab", "2026-10-10", "food"), row("d", "Kopi", "2026-10-05", ""), row("e", "Grab", "2026-10-30", "", { type: "income" })];
+  assert.equal(lastPocketFor(data, " GRAB"), "transport");
+  assert.equal(lastPocketFor(data, "Kopi"), "");
+  assert.equal(lastPocketFor(data, "Bakso"), undefined);
+  assert.equal(lastPocketFor(data, "  "), undefined);
 });

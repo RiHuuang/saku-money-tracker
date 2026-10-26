@@ -96,10 +96,21 @@ export const ICONS = [
   "gift",
 ];
 export const uid = () => crypto.randomUUID();
-export const today = () => {
+export const daysAgo = (days: number) => {
   const d = new Date();
+  d.setDate(d.getDate() - days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+export const today = () => daysAgo(0);
+// Before merchant memory (P1-5), a name matches only exactly, ignoring case and outer spaces.
+export function lastPocketFor(data: Data, name: string) {
+  const key = name.trim().toLocaleLowerCase("id-ID");
+  if (!key) return undefined;
+  let match: Transaction | undefined;
+  for (const t of data.transactions)
+    if (t.type === "expense" && (!t.kind || t.kind === "card_purchase") && t.name.trim().toLocaleLowerCase("id-ID") === key && (!match || t.date >= match.date)) match = t;
+  return match?.pocketId;
+}
 export const money = (n: number) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
