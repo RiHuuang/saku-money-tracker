@@ -54,21 +54,19 @@ object LedgerDatabase {
                 }
                 check(current == expectedRevision) { "Ledger changed on this device. Try again." }
                 val transactions = ledger.getJSONArray("transactions")
+                val existing = mutableMapOf<String, Pair<Int, String>>()
+                db.rawQuery("SELECT transaction_id, position, payload FROM ledger_transaction WHERE user_id = ?", arrayOf(userId)).use { cursor ->
+                    while (cursor.moveToNext()) existing[cursor.getString(0)] = cursor.getInt(1) to cursor.getString(2)
+                }
                 val ids = mutableSetOf<String>()
                 for (index in 0 until transactions.length()) {
                     val row = transactions.getJSONObject(index)
                     val id = row.getString("id")
                     check(ids.add(id)) { "Duplicate transaction ID" }
-                    db.execSQL("INSERT INTO ledger_transaction (user_id, transaction_id, position, payload) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, transaction_id) DO UPDATE SET position = excluded.position, payload = excluded.payload", arrayOf<Any>(userId, id, index, row.toString()))
+                    val json = row.toString()
+                    if (existing[id] != (index to json)) db.execSQL("INSERT INTO ledger_transaction (user_id, transaction_id, position, payload) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, transaction_id) DO UPDATE SET position = excluded.position, payload = excluded.payload", arrayOf<Any>(userId, id, index, json))
                 }
-                val stale = mutableListOf<String>()
-                db.rawQuery("SELECT transaction_id FROM ledger_transaction WHERE user_id = ?", arrayOf(userId)).use { cursor ->
-                    while (cursor.moveToNext()) {
-                        val id = cursor.getString(0)
-                        if (!ids.contains(id)) stale.add(id)
-                    }
-                }
-                stale.forEach { id -> db.execSQL("DELETE FROM ledger_transaction WHERE user_id = ? AND transaction_id = ?", arrayOf(userId, id)) }
+                existing.keys.filterNot(ids::contains).forEach { id -> db.execSQL("DELETE FROM ledger_transaction WHERE user_id = ? AND transaction_id = ?", arrayOf(userId, id)) }
                 db.execSQL("UPDATE ledger_meta SET revision = revision + 1 WHERE user_id = ?", arrayOf(userId))
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
