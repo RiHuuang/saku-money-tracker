@@ -65,6 +65,24 @@ try {
   assert.equal(urls.length, 3, "retry must preserve the completed cursor");
 
   db.prepare("UPDATE sheet_jobs SET cursor=0 WHERE uid='sheet-cache'").run();
+  const healthyFetch = globalThis.fetch, originalError = console.error;
+  const privateMessage = "private Google diagnostic", logged = [];
+  globalThis.fetch = async (url) => {
+    assert.ok(String(url).startsWith("https://sheets.googleapis.com/"));
+    return Response.json({ error: { message: privateMessage } }, { status: 403 });
+  };
+  console.error = (...args) => logged.push(args);
+  try {
+    const rejected = await call(headers, "/v2/sheets/batch", batch);
+    assert.equal(rejected.status, 502);
+    assert.ok(!(await rejected.text()).includes(privateMessage));
+    assert.ok(logged.some((args) => args.includes(privateMessage)));
+  } finally {
+    globalThis.fetch = healthyFetch;
+    console.error = originalError;
+  }
+
+  db.prepare("UPDATE sheet_jobs SET cursor=0 WHERE uid='sheet-cache'").run();
   patch("sheet-cache", { googleSheetsAccessExpiresAt: 0 });
   assert.equal((await call(headers, "/v2/sheets/batch", batch)).status, 428);
   patch("sheet-cache", { googleSheetsAccessExpiresAt: Date.now() + 600000, googleRefreshToken: await encrypt("changed-grant", key) });
