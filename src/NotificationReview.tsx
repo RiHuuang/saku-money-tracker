@@ -10,8 +10,9 @@ import { notificationCapture, type InboxItem } from "./notificationCapture";
 import { inboxRows, type NotificationRow } from "./notificationRows";
 import { ChoiceField } from "./components";
 import { checkinAdjustment, checkinGap, loadCheckins, mergeCheckins, saveCheckins, type BalanceCheckin } from "./balanceCheckins";
+import { localeTag, t } from "./i18n";
 
-const friendlyDate = (date: string) => { const value = new Date(`${date}T12:00:00`); return `${value.toLocaleDateString("en-GB", { weekday: "short" })}, ${value.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`; };
+const friendlyDate = (date: string) => { const value = new Date(`${date}T12:00:00`); return `${value.toLocaleDateString(localeTag(), { weekday: "short" })}, ${value.toLocaleDateString(localeTag(), { day: "numeric", month: "short" })}`; };
 
 export default function NotificationReview({ data, userId, commit, busy, notify, onCount }: {
   data: Data; userId?: string; busy: boolean; notify: (message: string) => void; onCount: (count: number) => void;
@@ -27,11 +28,11 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   async function acceptCheckin(checkin: BalanceCheckin) {
     try {
       if (await commit({ ...data, transactions: [...data.transactions, checkinAdjustment(data, checkin)] }, `${checkin.account} balance adjusted`)) await updateCheckins(checkins.filter((item) => item.id !== checkin.id));
-    } catch { notify("This balance could not be adjusted. Use Adjust balance on the account instead."); }
+    } catch { notify(t("adjustmentError")); }
   }
   const load = async () => {
     try { const next = (await notificationCapture.inbox()).items; setItems(next); onCount(next.length); }
-    catch { setItems([]); notify("Captured notifications could not be read on this phone."); }
+    catch { setItems([]); notify(t("notificationReadError")); }
   };
   useEffect(() => { void load(); }, []);
   const [cleaned, setCleaned] = useState(false);
@@ -70,7 +71,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
       for (const row of ready) {
         const account = accountFor(row);
         const created = importedTransactions(row, account, "notification", data, row.pairedWith);
-        additions.push(...created.map((transaction) => ({ ...transaction, note: `${importRowName(row) !== row.name.trim() ? `${row.name.trim()} · ` : ""}From ${row.appName} notification` })));
+        additions.push(...created.map((transaction) => ({ ...transaction, note: `${importRowName(row) !== row.name.trim() ? `${row.name.trim()} · ` : ""}${t("notificationSource", { app: row.appName })}` })));
         if (row.direction === "expense" && row.activity === "purchase") merchantRules = learnMerchant({ ...data, merchantRules }, row.name, { name: importRowName(row), pocketId: row.pocketId });
         done.add(row.id);
         if (row.pairedWith) done.add(row.pairedWith);
@@ -80,42 +81,42 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
       const reported = ready.filter((row) => row.balance !== null && data.accounts.includes(accountFor(row))).map((row) => ({ id: row.id, account: accountFor(row), appName: row.appName, reported: row.balance!, occurredAt: row.occurredAt }));
       if (reported.length) await updateCheckins(mergeCheckins(checkins, reported));
       await remove([...done]);
-    } catch { notify("Some rows could not be added. Check them and try again."); }
+    } catch { notify(t("notificationAddError")); }
     finally { setSaving(false); }
   }
-  if (items === null) return <p className="loading-view">Loading captured notifications...</p>;
+  if (items === null) return <p className="loading-view">{t("loadingNotifications")}</p>;
   const openCheckins = checkins.filter((checkin) => checkinGap(data, checkin).worthAsking);
   const checkinCards = openCheckins.map((checkin) => {
     const { saku } = checkinGap(data, checkin);
-    return <section className="catch-up-card balance-checkin" key={checkin.id} aria-label={`${checkin.account} balance check`}><BellRing size={20} /><div><strong>{checkin.account} says {money(checkin.reported)}, Saku says {money(saku)}. Add a balance adjustment?</strong><small>From a {checkin.appName} notification on {friendlyDate(new Date(checkin.occurredAt).toLocaleDateString("en-CA"))}.</small><div className="catch-up-actions"><button className="button primary" disabled={busy} onClick={() => void acceptCheckin(checkin)}>Add adjustment</button><button className="button secondary" disabled={busy} onClick={() => void updateCheckins(checkins.filter((item) => item.id !== checkin.id))}>Dismiss</button></div></div></section>;
+    return <section className="catch-up-card balance-checkin" key={checkin.id} aria-label={t("balanceCheck", { account: checkin.account })}><BellRing size={20} /><div><strong>{t("balanceComparison", { account: checkin.account, reported: money(checkin.reported), saku: money(saku) })}</strong><small>{t("balanceSource", { app: checkin.appName, date: friendlyDate(new Date(checkin.occurredAt).toLocaleDateString("en-CA")) })}</small><div className="catch-up-actions"><button className="button primary" disabled={busy} onClick={() => void acceptCheckin(checkin)}>{t("addAdjustment")}</button><button className="button secondary" disabled={busy} onClick={() => void updateCheckins(checkins.filter((item) => item.id !== checkin.id))}>{t("dismiss")}</button></div></div></section>;
   });
-  if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> No captured notifications waiting. New payments from your enabled bank and wallet apps appear here.</p></section></>;
+  if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> {t("notificationsEmpty")}</p></section></>;
   return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
-    <div className="catchup-panel-head"><div><h3>From your notifications</h3><p>Captured on this phone and kept for 7 days. Only what you add joins your ledger.</p></div></div>
+    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div>
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), open = expanded === row.id;
       const hint = rowReady || row.decision === "skip" ? "" : importRowReviewIssue(row, account, data, duplicate);
       return <div className="catchup-row" key={row.id}>
         <button type="button" className="catchup-row-summary" aria-expanded={open} onClick={() => setExpanded(open ? "" : row.id)}>
-          <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date}>{friendlyDate(row.date)}</time><small className="catchup-row-account">{account || "Choose account"} · {row.appName}</small></span><strong>{importRowName(row)}</strong>{importRowName(row) !== row.name.trim() && <small className="catchup-row-raw">{row.name}</small>}{row.pairedWith && row.decision === "skip" ? <small className="catchup-row-hint">Recorded with the matching transfer.</small> : hint && <small className="catchup-row-hint">{hint}</small>}</span>
-          <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : "+"}{money(row.amount)}</strong><small className={rowReady ? "is-ready" : ""}>{row.decision === "skip" ? "Not importing" : rowReady ? "Will add" : "Open to review"}</small></span>
+          <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date}>{friendlyDate(row.date)}</time><small className="catchup-row-account">{account || t("chooseAccount")} · {row.appName}</small></span><strong>{importRowName(row)}</strong>{importRowName(row) !== row.name.trim() && <small className="catchup-row-raw">{row.name}</small>}{row.pairedWith && row.decision === "skip" ? <small className="catchup-row-hint">{t("recordedWithTransfer")}</small> : hint && <small className="catchup-row-hint">{hint}</small>}</span>
+          <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : "+"}{money(row.amount)}</strong><small className={rowReady ? "is-ready" : ""}>{row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : t("openReview")}</small></span>
           <ChevronDown size={16} aria-hidden="true" />
         </button>
         {open && <div className="catchup-row-details">
-          <div className="catchup-row-main"><label className="catchup-field">Description<input value={importRowName(row)} maxLength={100} onChange={(event) => edit(row.id, { cleanName: event.target.value })} /></label></div>
+          <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={importRowName(row)} maxLength={100} onChange={(event) => edit(row.id, { cleanName: event.target.value })} /></label></div>
           <div className="catchup-row-meta">
-            <ChoiceField className="catchup-field" label="Saku account" value={account} onValueChange={(value) => edit(row.id, { account: value, confirmedSeparate: false })} placeholder="Choose the account used" options={[...data.accounts.map((item) => ({ value: item, label: item })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: "Credit card" }))]} />
-            {row.direction === "expense" && row.activity === "purchase" && <ChoiceField className="catchup-field" label="Budget pocket (optional)" value={row.pocketId} onValueChange={(value) => edit(row.id, { pocketId: value })} options={[{ value: "", label: "No pocket", description: "Categorize this later" }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
-            {duplicate && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => edit(row.id, { confirmedSeparate: event.target.checked })} /> This is a separate transaction</label>}
-            <div className="catchup-decision"><strong>What should Saku do with this?</strong><div role="group" aria-label={`Import choice for ${importRowName(row)}`}>
-              <button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} onClick={() => edit(row.id, { decision: "ready" })}>Add to Saku<small>Include when details are complete</small></button>
-              <button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} onClick={() => edit(row.id, { decision: "later" })}>Review later<small>Keep it here for up to 7 days</small></button>
-              <button type="button" onClick={() => void remove([row.id])}>Don't import<small>Remove it from this phone</small></button>
+            <ChoiceField className="catchup-field" label={t("sakuAccount")} value={account} onValueChange={(value) => edit(row.id, { account: value, confirmedSeparate: false })} placeholder={t("chooseUsedAccount")} options={[...data.accounts.map((item) => ({ value: item, label: item })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: t("creditCard") }))]} />
+            {row.direction === "expense" && row.activity === "purchase" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={row.pocketId} onValueChange={(value) => edit(row.id, { pocketId: value })} options={[{ value: "", label: t("noPocket"), description: t("categorizeLater") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
+            {duplicate && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => edit(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
+            <div className="catchup-decision"><strong>{t("whatToDo")}</strong><div role="group" aria-label={t("importChoiceFor", { name: importRowName(row) })}>
+              <button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} onClick={() => edit(row.id, { decision: "ready" })}>{t("addToSaku")}<small>{t("includeComplete")}</small></button>
+              <button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} onClick={() => edit(row.id, { decision: "later" })}>{t("reviewLater")}<small>{t("keepSevenDays")}</small></button>
+              <button type="button" onClick={() => void remove([row.id])}>{t("dontImport")}<small>{t("removeFromPhone")}</small></button>
             </div></div>
           </div>
         </div>}
       </div>;
     })}
-    <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? "row" : "rows"} can be added now</strong><span>{rows.length - ready.length} kept for review on this phone.</span></div><button className="button primary" disabled={!ready.length || busy || saving} onClick={() => void save()}><Check size={16} /> Add {ready.length} clear {ready.length === 1 ? "row" : "rows"} <ArrowRight size={16} /></button></div>
+    <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? t("row") : t("rows")} {t("canAddNow")}</strong><span>{t("keptOnPhone", { count: rows.length - ready.length })}</span></div><button className="button primary" disabled={!ready.length || busy || saving} onClick={() => void save()}><Check size={16} /> {t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") })} <ArrowRight size={16} /></button></div>
   </section></>;
 }
