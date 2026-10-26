@@ -1457,7 +1457,6 @@ main {
   box-shadow: 0 8px 22px rgb(25 73 59 / .06);
   transition: border-color .18s, box-shadow .18s;
 }
-.setup-account-card:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px rgb(32 118 92 / .12); }
 .setup-account-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; color: var(--teal); background: var(--accent-soft); }
 .setup-account-card .field { min-width: 0; margin: 0; }
 .setup-account-card .field > input, .setup-account-card .amount-input { margin-top: 7px; }
@@ -1545,15 +1544,16 @@ main {
   font-size: 17px;
   color: #97a59f;
 }
-.field .amount-input input {
+.amount-input input {
   border: 0;
   padding: 8px 0;
   margin: 0;
   font-size: 25px;
   font-weight: 500;
-  outline-offset: 0;
+  outline: none;
   background: transparent;
 }
+.amount-input:focus-within { outline: 3px solid var(--teal); outline-offset: 2px; }
 .form-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4190,3 +4190,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .insights-view .insight-stats small { grid-column: 2; }
   .insights-view .chart-panel .section-heading { flex-wrap: wrap; gap: 9px; }
 }
+
+.field .amount-input input:not([type='checkbox']), .setup-row .amount-input input { border: 0; background: transparent; outline: none; }
