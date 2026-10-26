@@ -3,7 +3,7 @@ import { createRemoteJWKSet } from "jose/jwks/remote";
 import { jwtVerify } from "jose/jwt/verify";
 import { decrypt, encrypt, encryptionKey, hashToken, pkceChallenge, timingSafeEqual, tokenPart } from "./crypto.js";
 import { avatarAfterSignIn, isGoogleAvatarUrl, sessionToken, splitSessionToken } from "../server/src/identity.js";
-import { aiImportAvailable, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, validateImportInput } from "./import-ai.js";
+import { aiImportAvailable, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
 export { UserLiveUpdates } from "./live.js";
 
 let jwks;
@@ -418,7 +418,9 @@ async function deleteAccount(env, uid, user, sessionId) {
     const started = await env.DB.prepare("UPDATE users SET data=json_set(data,'$.deleting',json('true')) WHERE uid=? AND coalesce(json_extract(data,'$.deleting'),0)=0 AND EXISTS(SELECT 1 FROM sessions WHERE id=? AND uid=users.uid)")
       .bind(uid, sessionId).run();
     if (started.meta.changes) {
+      await env.DB.prepare(USER_BUDGET_TABLE).run();
       await env.DB.batch([
+        env.DB.prepare("DELETE FROM import_ai_user_budget WHERE uid=?").bind(uid),
         env.DB.prepare("DELETE FROM sessions WHERE uid=? AND id<>?").bind(uid, sessionId),
         env.DB.prepare("DELETE FROM snapshot_upload_parts WHERE id IN (SELECT id FROM snapshot_uploads WHERE uid=?)").bind(uid),
         env.DB.prepare("DELETE FROM snapshot_uploads WHERE uid=?").bind(uid),
@@ -601,9 +603,10 @@ async function route(request, env) {
     catch (error) { throw fault(400, error.message); }
     const day = new Date().toISOString().slice(0, 10);
     const runPass = async (messages) => {
-      if (!(await reserveImport(env.DB, day))) throw fault(429, "Daily AI import allowance is used. Your draft is saved on this device; try again after 07:00 WIB.");
+      const reservation = await reserveImport(env.DB, day, auth.uid);
+      if (!reservation.reserved) throw fault(429, reservation.limit === "user" ? "You've used today's AI import allowance for your account. Your draft is saved on this device; try again after 07:00 WIB." : "Saku's shared AI import allowance is used for today. Your draft is saved on this device; try again after 07:00 WIB.");
       const answer = await env.AI.run(MODEL, { messages, max_completion_tokens: 4096, temperature: 0, seed: 0, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, store: false, n: 1 });
-      await settleImport(env.DB, day, answer);
+      await settleImport(env.DB, day, auth.uid, answer);
       return answer;
     };
     try {

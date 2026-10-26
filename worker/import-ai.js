@@ -5,6 +5,9 @@ export const DAILY_CAP = 4000;
 // 256,000 input tokens and 4,096 output tokens cost under 2,440 neurons.
 // Reserving 2,500 also covers requests whose usage is not returned.
 export const RESERVATION = 2500;
+// One person may not spend the shared allowance alone. A pass is admitted while the
+// user's settled usage is below this cap, so one call can overshoot it by its own size.
+export const USER_DAILY_CAP = 1200;
 export const aiImportAvailable = (env) => env.AI_IMPORT_ENABLED === "true" && Boolean(env.AI);
 
 export function validateImportInput(input) {
@@ -142,17 +145,30 @@ export function neuronsUsed(answer) {
   return Math.max(1, Math.min(RESERVATION, actual));
 }
 
-export async function reserveImport(db, day) {
+export const USER_BUDGET_TABLE = "CREATE TABLE IF NOT EXISTS import_ai_user_budget (uid TEXT NOT NULL, day TEXT NOT NULL, neurons INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(uid, day))";
+
+export async function reserveImport(db, day, uid) {
   // Environments created before AI import may not have received the additive
-  // budget table. Keep the route recoverable instead of failing every source
+  // budget tables. Keep the route recoverable instead of failing every source
   // with a generic 502 until an operator notices the schema drift.
   await db.prepare("CREATE TABLE IF NOT EXISTS import_ai_budget (day TEXT PRIMARY KEY, neurons INTEGER NOT NULL DEFAULT 0)").run();
-  await db.prepare("INSERT OR IGNORE INTO import_ai_budget(day,neurons) VALUES(?,0)").bind(day).run();
-  const reserved = await db.prepare("UPDATE import_ai_budget SET neurons=neurons+? WHERE day=? AND neurons+?<=? RETURNING neurons").bind(RESERVATION, day, RESERVATION, DAILY_CAP).first();
-  return Boolean(reserved);
+  await db.prepare(USER_BUDGET_TABLE).run();
+  // The user's row moves only when the shared row did (changes() reads the previous statement in the batch transaction).
+  const results = await db.batch([
+    db.prepare("INSERT OR IGNORE INTO import_ai_budget(day,neurons) VALUES(?,0)").bind(day),
+    db.prepare("INSERT OR IGNORE INTO import_ai_user_budget(uid,day,neurons) VALUES(?,?,0)").bind(uid, day),
+    db.prepare("UPDATE import_ai_budget SET neurons=neurons+? WHERE day=? AND neurons+?<=? AND (SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?)<? RETURNING neurons").bind(RESERVATION, day, RESERVATION, DAILY_CAP, uid, day, USER_DAILY_CAP),
+    db.prepare("UPDATE import_ai_user_budget SET neurons=neurons+? WHERE uid=? AND day=? AND changes()=1").bind(RESERVATION, uid, day),
+  ]);
+  if (results[2].results?.length) return { reserved: true };
+  const own = await db.prepare("SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?").bind(uid, day).first();
+  return { reserved: false, limit: (own?.neurons ?? 0) >= USER_DAILY_CAP ? "user" : "shared" };
 }
 
-export async function settleImport(db, day, answer) {
+export async function settleImport(db, day, uid, answer) {
   const refund = RESERVATION - neuronsUsed(answer);
-  if (refund > 0) await db.prepare("UPDATE import_ai_budget SET neurons=neurons-? WHERE day=?").bind(refund, day).run();
+  if (refund > 0) await db.batch([
+    db.prepare("UPDATE import_ai_budget SET neurons=neurons-? WHERE day=?").bind(refund, day),
+    db.prepare("UPDATE import_ai_user_budget SET neurons=neurons-? WHERE uid=? AND day=?").bind(refund, uid, day),
+  ]);
 }
