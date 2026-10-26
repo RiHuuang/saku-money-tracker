@@ -1,0 +1,86 @@
+{
+ "packageName": "com.gojek.gopay",
+ "note": "Synthetic messages modelled on common phrasing; replace with redacted real samples.",
+ "cases": [
+  {
+   "title": "GoPay",
+   "text": "Pembayaran Rp23.000 ke GRAB* A-5XK2 RIDE berhasil.",
+   "expected": {
+    "amount": 23000,
+    "direction": "expense",
+    "rawMerchant": "GRAB* A-5XK2 RIDE",
+    "balance": null
+   }
+  },
+  {
+   "title": "GoPay",
+   "text": "Kamu terima Rp50.000 dari Rina.",
+   "expected": {
+    "amount": 50000,
+    "direction": "income",
+    "rawMerchant": "Rina",
+    "balance": null
+   }
+  },
+  {
+   "title": "GoPay",
+   "text": "Kirim Rp30.000 ke Dodi berhasil.",
+   "expected": {
+    "amount": 30000,
+    "direction": "expense",
+    "rawMerchant": "Dodi",
+    "balance": null
+   }
+  },
+  {
+   "title": "GoPay",
+   "text": "Isi saldo Rp100.000 berhasil.",
+   "expected": {
+    "amount": 100000,
+    "direction": "income",
+    "rawMerchant": "",
+    "balance": null
+   }
+  },
+  {
+   "title": "GoPay",
+   "text": "Pembayaran Rp23.000 ke GoFood dibatalkan.",
+   "expected": null
+  },
+  {
+   "title": "GoPay",
+   "text": "Bayar Rp18.000 di Mie Gacoan berhasil. Sisa saldo Rp412.000.",
+   "expected": {
+    "amount": 18000,
+    "direction": "expense",
+    "rawMerchant": "Mie Gacoan",
+    "balance": 412000
+   }
+  },
+  {
+   "title": "GoPay",
+   "text": "Pembayaran Rp45000 ke GoFood berhasil.",
+   "expected": {
+    "amount": 45000,
+    "direction": "expense",
+    "rawMerchant": "GoFood",
+    "balance": null
+   }
+  },
+  {
+   "title": "GoPay",
+   "text": "Dapatkan voucher Rp10.000 untuk GoRide hari ini!",
+   "expected": null
+  },
+  {
+   "title": "GoPay",
+   "text": "Refund Rp23.000 dari GoFood sudah masuk.",
+   "expected": {
+    "amount": 23000,
+    "direction": "income",
+    "rawMerchant": "GoFood",
+    "balance": null
+   }
+  }
+ ]
+}

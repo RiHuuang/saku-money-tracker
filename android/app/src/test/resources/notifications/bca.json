@@ -1,0 +1,81 @@
+{
+ "packageName": "com.bca",
+ "note": "Synthetic messages modelled on common phrasing; replace with redacted real samples.",
+ "cases": [
+  {
+   "title": "BCA mobile",
+   "text": "Transaksi QRIS sebesar Rp25.000 di KOPI KENANGAN berhasil.",
+   "expected": {
+    "amount": 25000,
+    "direction": "expense",
+    "rawMerchant": "KOPI KENANGAN",
+    "balance": null
+   }
+  },
+  {
+   "title": "BCA mobile",
+   "text": "Dana masuk Rp1.500.000 dari BUDI SANTOSO ke rekening 0123456789.",
+   "expected": {
+    "amount": 1500000,
+    "direction": "income",
+    "rawMerchant": "BUDI SANTOSO",
+    "balance": null
+   }
+  },
+  {
+   "title": "BCA mobile",
+   "text": "Transfer Rp200.000 ke SITI AMINAH berhasil.",
+   "expected": {
+    "amount": 200000,
+    "direction": "expense",
+    "rawMerchant": "SITI AMINAH",
+    "balance": null
+   }
+  },
+  {
+   "title": "BCA mobile",
+   "text": "Top Up GoPay Rp100.000 berhasil.",
+   "expected": {
+    "amount": 100000,
+    "direction": "expense",
+    "rawMerchant": "GoPay",
+    "balance": null
+   }
+  },
+  {
+   "title": "BCA mobile",
+   "text": "Transaksi QRIS Rp25.000 di KOPI KENANGAN gagal.",
+   "expected": null
+  },
+  {
+   "title": "BCA mobile",
+   "text": "Pembayaran Rp75.000 di INDOMARET berhasil. Saldo akhir Rp3.210.000.",
+   "expected": {
+    "amount": 75000,
+    "direction": "expense",
+    "rawMerchant": "INDOMARET",
+    "balance": 3210000
+   }
+  },
+  {
+   "title": "BCA mobile",
+   "text": "Debit IDR 1,250,000.00 untuk TOKOPEDIA.",
+   "expected": {
+    "amount": 1250000,
+    "direction": "expense",
+    "rawMerchant": "TOKOPEDIA",
+    "balance": null
+   }
+  },
+  {
+   "title": "BCA mobile",
+   "text": "Dapatkan cashback hingga Rp50.000 dengan QRIS BCA!",
+   "expected": null
+  },
+  {
+   "title": "BCA mobile",
+   "text": "Kode OTP Anda 482913. Jangan berikan ke siapa pun.",
+   "expected": null
+  }
+ ]
+}
