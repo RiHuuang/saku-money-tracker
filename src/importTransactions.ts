@@ -121,6 +121,10 @@ export function importRowAlreadySaved(row: ImportRow, draft: ImportDraft | null,
   return !!draft?.saved.some((item) => item.pairedRowId === row.id && data.transactions.some((transaction) => transaction.id === item.id));
 }
 
+export function importRowsWaiting(drafts: readonly ImportDraft[], data: Data): number {
+  return drafts.reduce((total, draft) => total + draft.rows.filter((row) => row.decision !== "skip" && !importRowAlreadySaved(row, draft, data)).length, 0);
+}
+
 export function importRowReady(row: ImportRow, account: string, data: Data, currentDay = today()): boolean {
   if (row.decision !== "ready" || !validDate(row.date) || row.date > currentDay || !validAmount(row.amount) || !row.name.trim() || row.direction === "unknown") return false;
   if (["pending", "failed", "reward", "unknown"].includes(row.activity)) return false;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -278,5 +278,15 @@ test("saved imports use the cleaned name, keep the printed text, and still catch
   assert.equal(importedTransactions({ ...base, cleanName: "Coffee" }, "BCA", "bca.png", ledger)[0].note, "Imported from screenshot, page 1");
   const again = { ...row, id: "clean-2" };
   assert.deepEqual([...importRowsNeedingDuplicateConfirmation([again], [saved], () => "BCA", () => false)], ["clean-2"]);
+});
+
+test("counts draft rows still waiting for a decision", () => {
+  const data = { ...ledger, transactions: importedTransactions({ ...base, id: "saved-row" }, "BCA", "a.png", ledger) };
+  const draft = (id: string, rows: ImportRow[]): ImportDraft => ({ id, owner: "u", month: "2026-10", sources: [], rows, saved: [], createdAt: 0 });
+  assert.equal(importRowsWaiting([
+    draft("a", [{ ...base, id: "saved-row" }, { ...base, id: "later", decision: "later" }, { ...base, id: "skip", decision: "skip" }]),
+    draft("b", [{ ...base, id: "ready" }]),
+  ], data), 2);
+  assert.equal(importRowsWaiting([], data), 0);
 });
 

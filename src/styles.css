@@ -398,14 +398,18 @@ input[type="checkbox"] {
 .side-nav button.active svg {
   stroke-width: 2.2;
 }
-.nav-new {
-  font-size: 8px;
-  letter-spacing: 0;
-  background: #f3f0e8;
-  color: #9b8750;
-  padding: 3px 5px;
-  border-radius: 3px;
+.nav-badge {
+  min-width: 18px;
+  padding: 2px 5px;
   margin-left: auto;
+  border-radius: 999px;
+  background: var(--teal);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -2618,9 +2622,6 @@ main {
     gap: 10px;
     padding-inline: 12px;
   }
-  .nav-new {
-    font-size: 7px;
-  }
   .heading-actions {
     gap: 8px;
   }
@@ -2721,9 +2722,6 @@ main {
   .workspace-label {
     font-size: 8px;
     margin-inline: 10px;
-  }
-  .nav-new {
-    display: none;
   }
   .brand {
     padding-inline: 7px;
@@ -3113,6 +3111,13 @@ main {
     font-size: 8px;
     color: #91a098;
     position: relative;
+  }
+  .bottom-nav .nav-badge {
+    position: absolute;
+    top: -4px;
+    left: calc(50% + 6px);
+    margin: 0;
+    font-size: 9px;
   }
   .bottom-nav button.active {
     color: var(--teal);
