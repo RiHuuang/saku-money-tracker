@@ -8,6 +8,9 @@ function content(value: unknown): string {
 }
 
 const same = (left: unknown, right: unknown) => content(left) === content(right);
+// Editors write `verified: false` where older rows omit it; both mean unverified.
+const comparable = (row: Transaction | undefined) => row?.verified === false ? { ...row, verified: undefined } : row;
+const sameRow = (left: Transaction | undefined, right: Transaction | undefined) => same(comparable(left), comparable(right));
 const withoutTransactions = (data: Data) => ({ ...data, transactions: [] });
 
 export function mergeTransactionSnapshots(base: Data | null, local: Data, remote: Data, tombstones: ReadonlySet<string> = new Set()): { data: Data | null; conflicts: string[] } {
@@ -21,11 +24,11 @@ export function mergeTransactionSnapshots(base: Data | null, local: Data, remote
   for (const id of ids) {
     const before = baseRows.get(id), onPhone = localRows.get(id), inCloud = remoteRows.get(id);
     if (tombstones.has(id) && onPhone) { conflicts.push(id); continue; }
-    const localChanged = tombstones.has(id) || !same(onPhone, before);
-    const remoteChanged = !same(inCloud, before);
+    const localChanged = tombstones.has(id) || !sameRow(onPhone, before);
+    const remoteChanged = !sameRow(inCloud, before);
     let chosen: Transaction | undefined;
     if (!localChanged) chosen = inCloud;
-    else if (!remoteChanged || same(onPhone, inCloud)) chosen = onPhone;
+    else if (!remoteChanged || sameRow(onPhone, inCloud)) chosen = onPhone;
     else { conflicts.push(id); continue; }
     if (chosen) merged.set(id, chosen);
   }

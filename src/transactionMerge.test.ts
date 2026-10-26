@@ -43,3 +43,12 @@ test("same-ID additions and incompatible workspace edits require review", () => 
 test("a persisted tombstone prevents a stale remote add from being silently restored", () => {
   assert.deepEqual(mergeTransactionSnapshots(withRows(), withRows(), withRows(row("deleted")), new Set(["deleted"])).conflicts, ["deleted"]);
 });
+
+test("an unverified flag written by the editor is not a change", () => {
+  const base = withRows(row("keep"));
+  const phone = withRows({ ...row("keep"), amount: 1200, verified: false });
+  const cloud = withRows({ ...row("keep"), amount: 1200 });
+  assert.deepEqual(mergeTransactionSnapshots(base, phone, cloud).conflicts, []);
+  assert.deepEqual(mergeTransactionSnapshots(base, withRows({ ...row("keep"), verified: false }), withRows(row("keep", 3000))).data?.transactions.map((item) => item.amount), [3000]);
+  assert.deepEqual(mergeTransactionSnapshots(base, withRows({ ...row("keep"), amount: 1200, verified: true }), cloud).conflicts, ["keep"]);
+});
