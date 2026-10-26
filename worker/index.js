@@ -458,7 +458,8 @@ async function route(request, env) {
   if (["GET", "HEAD"].includes(request.method) && path === "/") return env.ASSETS.fetch(request);
   const allowedOrigins = new Set((env.ALLOWED_ORIGINS || "https://localhost").split(",").map((item) => item.trim()));
   const cors = corsHeaders(origin, env);
-  if (origin && origin !== url.origin && !allowedOrigins.has(origin)) throw fault(403, "Origin is not allowed");
+  const landingReleaseRequest = request.method === "GET" && path === "/v1/releases/android/latest" && origin === "https://sakumoney.my.id";
+  if (origin && origin !== url.origin && !allowedOrigins.has(origin) && !landingReleaseRequest) throw fault(403, "Origin is not allowed");
   if (request.method === "GET" && path === "/v1/live") {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") throw fault(400, "WebSocket required");
     const room = url.searchParams.get("room"), ticket = url.searchParams.get("ticket");
@@ -468,7 +469,7 @@ async function route(request, env) {
   if (request.method === "OPTIONS" && /^\/v[12]\//.test(path)) return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-headers": "authorization,content-type,x-saku-version,x-saku-user-id,x-saku-app-build", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" } });
   if (request.method === "GET" && ["/", "/privacy", "/terms", "/account-deletion"].includes(path) && path !== "/") return legalPage(path, env);
   if (request.method === "GET" && path === "/health") return reply({ ok: true });
-  if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, "cache-control": "public, max-age=300" });
+  if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, ...(landingReleaseRequest ? { "access-control-allow-origin": origin, vary: "Origin" } : {}), "cache-control": "public, max-age=300" });
   if (["GET", "HEAD"].includes(request.method) && path === "/download/saku.apk") return androidReleaseResponse(request, env, await androidReleaseManifest(env), false);
   const androidDownload = path.match(/^\/download\/android\/(\d+)\.apk$/);
   if (["GET", "HEAD"].includes(request.method) && androidDownload) {
