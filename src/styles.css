@@ -25,6 +25,13 @@
 .catchup-steps span:first-child { color: var(--teal); }
 .catchup-steps { align-items: center; flex-wrap: wrap; gap: 8px; }
 .catchup-steps > svg { color: #9bb1aa; }
+.notification-access-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0; color: var(--ink); font-size: 13px; }
+.notification-apps { display: grid; gap: 8px; margin-bottom: 16px; }
+.notification-app { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.notification-app small { color: var(--muted); }
+.notification-app-account { min-width: 160px; }
+.notification-disclosure { display: grid; gap: 10px; margin-bottom: 20px; font-size: 13px; line-height: 1.55; }
+.notification-disclosure ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; }
 .catch-up-card { display: flex; align-items: flex-start; gap: 14px; padding: 18px 18px 18px 20px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 24px #173f2510; }
 .catch-up-card > svg { flex: none; margin-top: 2px; color: var(--teal); }
 .catch-up-card > div { flex: 1; min-width: 0; }

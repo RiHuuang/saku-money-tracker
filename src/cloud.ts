@@ -32,6 +32,7 @@ export type CloudState = {
     hasAvatar: boolean;
     avatarVersion?: string;
     avatarSource?: "google" | "custom";
+    agreementVersion?: string;
   };
 };
 type AuthResponse = {
@@ -44,7 +45,7 @@ type AuthResponse = {
 const plugin = registerPlugin<GoogleAuthPlugin>("GoogleAuth");
 const stateKey = "saku-cloud-state-v1";
 export const SAKU_ANDROID_BUILD = 10;
-export const AGREEMENT_VERSION = "2026-10-03";
+export const AGREEMENT_VERSION = "2026-10-26";
 const apiUrl = Capacitor.isNativePlatform() ? (import.meta.env.VITE_SAKU_API_URL || "").replace(/\/$/, "") : "";
 export const legalUrl = (page: "privacy" | "terms" | "account-deletion") => `${apiUrl}/${page}`;
 const native = () => Capacitor.isNativePlatform();
@@ -349,6 +350,15 @@ export async function updateProfile(name: string, image?: string) {
   const user = identified(result.user);
   const current = await publicState();
   if (current.user?.id !== local.user?.id) throw new Error("Google account changed during synchronization");
+  await savePublic({ ...current, user });
+  return { ...current, signedIn: true, configured: true, user } as CloudState;
+}
+export async function acceptAgreement() {
+  const local = await publicState();
+  const result = await (await requestsFor(local.user?.id)("/v1/me/agreement", { method: "POST", body: JSON.stringify({ agreementVersion: AGREEMENT_VERSION }) })).json();
+  const current = await publicState();
+  if (current.user?.id !== local.user?.id) throw new Error("Google account changed during synchronization");
+  const user = identified(result.user);
   await savePublic({ ...current, user });
   return { ...current, signedIn: true, configured: true, user } as CloudState;
 }

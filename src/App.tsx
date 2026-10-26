@@ -70,6 +70,7 @@ import {
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { listImportDrafts } from "./importDraft";
 import { notificationCapture, notificationCaptureSupported } from "./notificationCapture";
+import NotificationAccess from "./NotificationAccess";
 import { importRowsWaiting } from "./importTransactions";
 import { applyRecentsPrivacy, appLockStatus, appLockSupported, authenticate, defaultAppLock, loadAppLock, saveAppLock, shouldLock, type AppLockSettings, type LockAfter } from "./appLock";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
@@ -120,6 +121,7 @@ import {
   signInGoogle,
   signOutGoogle,
   updateProfile,
+  acceptAgreement,
   type CloudState,
 } from "./cloud";
 
@@ -502,6 +504,13 @@ export default function App() {
       catch (error) { setLoadError(error instanceof Error ? error.message : "Google sign-in failed."); }
       finally { setLoginBusy(false); }
     }} />;
+  if (cloud?.signedIn && typeof cloud.user?.agreementVersion === "string" && cloud.user.agreementVersion !== AGREEMENT_VERSION)
+    return <AgreementUpdate busy={loginBusy} error={loadError} onAccept={async () => {
+      setLoginBusy(true); setLoadError("");
+      try { setCloud(await acceptAgreement()); }
+      catch (error) { setLoadError(error instanceof Error ? error.message : "The agreement could not be saved. Try again."); }
+      finally { setLoginBusy(false); }
+    }} onSignOut={async () => { await signOutGoogle(); setCloud(await loadCloudState()); }} />;
   if (resolution)
     return <WorkspaceChoice local={resolution.local} remote={resolution.remote} onChoose={async (chosen, localWins) => {
       if (localWins) { await saveData(chosen); if (resolution.remoteState) setCloud(await resolveCloudWithLocal(resolution.remoteState)); else setCloud((value) => value ? { ...value, dirty: true } : value); setData(chosen); void queueSync(chosen); } else { await replaceData(chosen); if (resolution.remoteState) setCloud(await adoptCloudSnapshot(resolution.remoteState, true)); } setData(chosen); setResolution(null); if (!chosen.transactions.length && !chosen.pockets.length && !chosen.accounts.length) setEdit({ type: "start" });
@@ -2039,10 +2048,24 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
     <section className="login-panel">
       <span className="brand-mark"><Wallet /></span><h1>Saku</h1>
       <p>Know where your money lives, what it is for, and what is safe to spend.</p>
-      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. If you choose AI import, selected statement text and images are processed by Cloudflare AI. Original files and review drafts stay on this device. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
+      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. If you choose AI import, selected statement text and images are processed by Cloudflare AI. Original files and review drafts stay on this device. On Android you can also let Saku read notifications from bank and e-wallet apps you choose; they stay on the phone until you add them. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
       <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
       <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? "Connecting..." : "Continue with Google"}</button>
       {!configured && <p className="form-error">Google sign-in is not configured in this build.</p>}{error && <p className="form-error" role="alert">{error}</p>}
+    </section>
+  </main>;
+}
+function AgreementUpdate({ busy, error, onAccept, onSignOut }: { busy: boolean; error: string; onAccept: () => Promise<void>; onSignOut: () => Promise<void> }) {
+  const [accepted, setAccepted] = useState(false);
+  return <main className="login-screen">
+    <section className="login-panel">
+      <span className="brand-mark"><ShieldCheck /></span><h1>Updated agreement</h1>
+      <p>Saku's User Agreement and Privacy Notice now cover an optional Android feature: reading notifications from bank and e-wallet apps you choose. It stays off unless you turn it on, and notification text never leaves your phone.</p>
+      <p>Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p>
+      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
+      <button className="button primary login-button" disabled={!accepted || busy} onClick={() => void onAccept()}><Check size={18} />{busy ? "Saving..." : "Accept and continue"}</button>
+      <button className="button text-button" disabled={busy} onClick={() => void onSignOut()}><LogOut size={16} />Sign out instead</button>
+      {error && <p className="form-error" role="alert">{error}</p>}
     </section>
   </main>;
 }
@@ -2211,6 +2234,7 @@ function SettingsView({
         </div>
       </section>
       <AppUpdateSettings />
+      {notificationCaptureSupported() && <NotificationAccess data={data} notify={notify} />}
       {appLockSupported() && <AppLockSection settings={appLock} onChange={onAppLockChange} />}
       <section>
         <h2>Local profile</h2>
