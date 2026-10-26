@@ -50,9 +50,11 @@ import {
   receiptSuggestion,
   money,
   monthLabel,
+  lastPocketFor,
   shiftMonth,
   summary,
   today,
+  daysAgo,
   uid,
   validAmount,
   validateData,
@@ -1064,7 +1066,7 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {edit?.type === "account_transfer" && <TransactionEditor data={data} transaction={edit.value} initialTransfer month={month} busy={busy} onClose={() => setEdit(null)} onSave={async () => {}} onDelete={async () => {}} onRepay={async () => {}} onTransfer={async (rows, oldTransferId) => {
+      {edit?.type === "account_transfer" && <TransactionEditor data={data} transaction={edit.value} initialTransfer month={month} busy={busy} onClose={() => setEdit(null)} onSave={async () => false} onDelete={async () => {}} onRepay={async () => {}} onTransfer={async (rows, oldTransferId) => {
         const kept = data.transactions.filter((t) => !oldTransferId || t.transferId !== oldTransferId);
         if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? "Transfer updated" : "Transfer recorded")) setEdit(null);
       }} onDeleteTransfer={async (transferId) => { if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, "Transfer deleted")) setEdit(null); }} />}
@@ -1099,7 +1101,7 @@ export default function App() {
           onClose={() => {
             if (!busy) setEdit(null);
           }}
-          onSave={async (t, rule, favorite) => {
+          onSave={async (t, rule, favorite, keepOpen) => {
             const recurring = rule === null
               ? data.recurring.map((r) => r.id === edit.value?.recurringRuleId ? { ...r, active: false } : r)
               : rule
@@ -1117,8 +1119,11 @@ export default function App() {
                 },
                 edit.value ? "Transaction updated" : "Transaction added",
               )
-            )
-              setEdit(null);
+            ) {
+              if (!keepOpen) setEdit(null);
+              return true;
+            }
+            return false;
           }}
           onDelete={async (id) => {
             if (
@@ -1413,7 +1418,7 @@ function TransactionEditor({
   month: string;
   busy: boolean;
   onClose: () => void;
-  onSave: (t: Transaction, rule?: RecurringRule | null, favorite?: Favorite) => Promise<void>;
+  onSave: (t: Transaction, rule?: RecurringRule | null, favorite?: Favorite, keepOpen?: boolean) => Promise<boolean>;
   onDelete: (id: string) => Promise<void>;
   onRepay: (sourceId: string, amount: number, account: string, date: string) => Promise<void>;
   onTransfer: (rows: Transaction[], oldTransferId?: string) => Promise<void>;
@@ -1432,8 +1437,11 @@ function TransactionEditor({
       transaction?.date || today(),
     ),
     [pocket, setPocket] = useState(
-      transaction?.pocketId || favorite?.pocketId || initialPocketId || data.pockets[0]?.id || "",
+      transaction ? transaction.pocketId : favorite?.pocketId || initialPocketId || "",
     ),
+    // An existing row, a quick entry or a pocket page already chose the pocket; only a blank new entry learns it from the name.
+    [pocketChosen, setPocketChosen] = useState(Boolean(transaction || favorite || initialPocketId)),
+    [pickingDate, setPickingDate] = useState(() => ![daysAgo(0), daysAgo(1), daysAgo(2)].includes(transaction?.date || today())),
     [account, setAccount] = useState(transaction && transaction.kind !== "card_purchase" ? transaction.account : favorite && !favorite.cardId ? favorite.account : data.accounts[0]),
     [transferFrom, setTransferFrom] = useState(transferOutgoing?.account || data.accounts[0]),
     [transferTo, setTransferTo] = useState(transferIncoming?.account || data.accounts.find((item) => item !== data.accounts[0]) || data.accounts[0]),
@@ -1482,8 +1490,12 @@ function TransactionEditor({
     } catch (e) { setError(e instanceof Error ? e.message : "Could not scan receipt."); }
     finally { setScanning(false); }
   }
+  const amountField = useRef<HTMLDivElement>(null);
+  const keepOpen = useRef(false);
   async function submit(e: FormEvent) {
     e.preventDefault();
+    const addAnother = keepOpen.current;
+    keepOpen.current = false;
     if (!validAmount(Number(amount))) {
       setError("Enter a whole rupiah amount greater than zero.");
       return;
@@ -1540,8 +1552,18 @@ function TransactionEditor({
       id: uid(), name: saved.name, amount: saved.amount, type: saved.type, pocketId: saved.pocketId,
       account: saved.account, cardId: saved.kind === "card_purchase" ? saved.cardId : undefined,
     } satisfies Favorite : undefined;
-    await onSave(saved, rule, quick);
+    if (await onSave(saved, rule, quick, addAnother) && addAnother) {
+      setAmount(""); setName(""); setNote(""); setScanInfo(""); setError(""); setShared(false); setOwnAmount(""); setRecurring(false); setSaveFavorite(false);
+      if (!initialPocketId && !favorite) { setPocket(""); setPocketChosen(false); }
+      amountField.current?.querySelector("input")?.focus();
+    }
   }
+  function learnPocket() {
+    if (pocketChosen || type !== "expense" || special) return;
+    const learned = lastPocketFor(data, name);
+    setPocket(learned !== undefined && (!learned || data.pockets.some((p) => p.id === learned)) ? learned : "");
+  }
+  const dateChoice = pickingDate ? "pick" : date === daysAgo(0) ? "0" : date === daysAgo(1) ? "1" : date === daysAgo(2) ? "2" : "pick";
   const accountChoices = data.accounts.map((name) => ({ value: name, label: name, description: `Recorded balance ${money(accountBalance(data, name))}` }));
   const paymentChoices = [
     ...data.accounts.map((name) => ({ value: `bank:${name}`, label: name, description: `Account · ${money(accountBalance(data, name))}` })),
@@ -1580,7 +1602,7 @@ function TransactionEditor({
           {modeControl}
           <label className="field">
             Amount
-            <div className="amount-input">
+            <div className="amount-input" ref={amountField}>
               <span>Rp</span>
               <MoneyInput
                 autoFocus
@@ -1602,6 +1624,7 @@ function TransactionEditor({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onBlur={learnPocket}
               placeholder={
                 type === "income"
                   ? "e.g. Monthly salary"
@@ -1622,21 +1645,15 @@ function TransactionEditor({
             transaction?.kind !== "card_payment" &&
             <label className="field">
               Pocket
-              <ChoiceField hideLabel label="Pocket" value={pocket} onValueChange={setPocket} options={pocketChoices} />
+              <ChoiceField hideLabel label="Pocket" value={pocket} onValueChange={(value) => { setPocket(value); setPocketChosen(true); }} options={pocketChoices} />
               <small>{pocket ? "Counts against this pocket." : "You can categorize this later."}</small>
             </label>
           )}
           <div className="form-columns">
-            <label className="field">
-              Date
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                max={today()}
-                required
-              />
-            </label>
+            <div className="field date-field">
+              <SegmentedChoice compact label="Date" value={dateChoice} onValueChange={(value) => { setPickingDate(value === "pick"); if (value !== "pick") setDate(daysAgo(Number(value))); }} options={[{ value: "0", label: "Today" }, { value: "1", label: "Yesterday" }, { value: "2", label: "2 days ago" }, { value: "pick", label: "Pick" }]} />
+              {dateChoice === "pick" && <input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} max={today()} required />}
+            </div>
             {(special || type === "income") && <label className="field">
               Account
               <ChoiceField hideLabel label="Account" value={account} onValueChange={setAccount} options={accountChoices} />
@@ -1709,6 +1726,7 @@ function TransactionEditor({
               >
                 Cancel
               </button>
+              {!transaction && <button className="button secondary" type="button" onClick={(event) => { keepOpen.current = true; event.currentTarget.form?.requestSubmit(); keepOpen.current = false; }}>Save & add another</button>}
               <button className="button primary" type="submit">
                 {busy
                   ? "Saving..."
