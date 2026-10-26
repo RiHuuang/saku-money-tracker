@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="shortcut_quick_add">Tambah cepat</string>
+    <string name="shortcut_quick_add_long">Tambah transaksi Saku</string>
+    <string name="widget_favorites_name">Favorit cepat Saku</string>
+    <string name="widget_quick_entry_name">Tambah cepat Saku</string>
+    <string name="widget_snapshot_name">Ringkasan uang Saku</string>
+    <string name="widget_favorites_title">Favorit Saku</string>
+    <string name="widget_favorites_empty">Simpan favorit di Saku untuk menambahkannya di sini</string>
+    <string name="widget_open_sign_in">Buka Saku untuk masuk</string>
+    <string name="widget_undo">Urungkan</string>
+    <string name="widget_added">Menambahkan %1$s</string>
+    <string name="widget_add_success">%1$s ditambahkan</string>
+    <string name="widget_add_error">Tidak dapat menambah transaksi</string>
+    <string name="widget_removed">Transaksi dihapus</string>
+    <string name="widget_transaction">transaksi</string>
+    <string name="widget_snapshot_title">Ringkasan uang</string>
+    <string name="widget_cash">Tunai</string>
+    <string name="widget_spent_today">Terpakai hari ini</string>
+    <string name="widget_last_week">7 hari terakhir</string>
+    <string name="widget_pocket_left">Sisa kantong</string>
+    <string name="widget_quick_title">Tambah cepat</string>
+    <string name="widget_quick_expense">+ Pengeluaran</string>
+    <string name="widget_quick_income">Pemasukan</string>
+    <string name="widget_quick_transfer">Transfer</string>
+    <string name="widget_config_title">Widget Saku</string>
+    <string name="widget_hide_amounts">Sembunyikan jumlah uang</string>
+    <string name="widget_choose_favorites">Pilih hingga empat favorit</string>
+    <string name="widget_save">Simpan widget</string>
+</resources>

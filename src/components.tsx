@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties, type InputHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
+import { localeTag, t as translate } from "./i18n";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -40,7 +41,7 @@ const icons: Record<string, LucideIcon> = {
 export function MoneyInput({ value, onValueChange, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & { value: string | number; onValueChange: (value: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
   const digits = String(value ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-  const shown = digits ? Number(digits).toLocaleString("en-US") : "";
+  const shown = digits ? Number(digits).toLocaleString("id-ID") : "";
   return <input {...props} ref={ref} type="text" inputMode="numeric" value={shown} onChange={(event) => {
     const caret = event.currentTarget.selectionStart || 0;
     const digitCaret = event.currentTarget.value.slice(0, caret).replace(/\D/g, "").length;
@@ -68,7 +69,7 @@ export function ChoiceField({
   options,
   onValueChange,
   label,
-  placeholder = "Choose an option",
+  placeholder = translate("chooseOption"),
   disabled = false,
   searchable,
   hideLabel = false,
@@ -114,7 +115,7 @@ export function ChoiceField({
       <div className="choice-sheet-shell">
         <div className="choice-sheet-handle" aria-hidden="true" />
         <header className="choice-sheet-header">
-          <div><span>Choose one</span><h2 id={titleId}>{label}</h2></div>
+          <div><span>{translate("chooseOne")}</span><h2 id={titleId}>{label}</h2></div>
           <IconButton label="Close choices" onClick={close}><X size={19} /></IconButton>
         </header>
         {shouldSearch && <label className="choice-sheet-search"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${label.toLocaleLowerCase("en-US")}`} /></label>}
@@ -133,7 +134,7 @@ export function ChoiceField({
             key={option.value}
             onClick={() => { onValueChange(option.value); close(); }}
           ><span><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</span>{option.value === value && <Check size={19} aria-hidden="true" />}</button>)}
-          {!visibleOptions.length && <p className="choice-sheet-empty">No matching choices.</p>}
+          {!visibleOptions.length && <p className="choice-sheet-empty">{translate("noMatchingChoices")}</p>}
         </div>
       </div>
     </dialog>,
@@ -352,12 +353,12 @@ export function PocketCard({
         />
       </div>
       <div className="pocket-card-bottom">
-        <span>{money(p.spent)} spent</span>
+        <span>{money(p.spent)} {translate("spent")}</span>
         <span>{percent}%</span>
       </div>
     </button>
     {onEdit && <div className="pocket-card-actions"><button type="button" className="pocket-menu-trigger" aria-label={`Options for ${p.name}`} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={20} /></button>
-      {menuOpen && <div className="pocket-menu"><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }}>Edit pocket</button><button type="button" onClick={() => { setMenuOpen(false); (onDelete || onEdit)(); }}>Delete pocket…</button></div>}
+      {menuOpen && <div className="pocket-menu"><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }}>{translate("editPocket")}</button><button type="button" onClick={() => { setMenuOpen(false); (onDelete || onEdit)(); }}>{translate("deletePocketMenu")}</button></div>}
     </div>}
     </div>
   );
@@ -379,7 +380,7 @@ export function TransactionList({
     return (
       <Empty
         title="A clean slate"
-        detail="Your transactions will appear here."
+        detail={translate("transactionsAppearHere")}
       />
     );
   return (
@@ -388,7 +389,7 @@ export function TransactionList({
         const p = pockets.find((p) => p.id === t.pocketId);
         return (
           <div className="transaction-group-entry" key={t.id}>
-          {groupDates && (index === 0 || transactions[index - 1].date !== t.date) && <h3 className="transaction-date-heading">{new Date(`${t.date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</h3>}
+          {groupDates && (index === 0 || transactions[index - 1].date !== t.date) && <h3 className="transaction-date-heading">{new Date(`${t.date}T12:00:00`).toLocaleDateString(localeTag(), { weekday: "long", day: "numeric", month: "long" })}</h3>}
           <button
             className="transaction-row"
             onClick={() => onEdit(t)}
@@ -410,12 +411,12 @@ export function TransactionList({
                 )}
               </strong>
               <span>
-                {t.kind === "account_transfer" ? "Account transfer" : t.kind === "balance_adjustment" ? "Balance adjustment" : t.kind === "opening_balance" ? "Opening balance" : t.kind === "card_payment" ? "Card payment" : t.kind === "reimbursement" ? "Repaid by friend" : t.type === "income" ? "Income" : p?.name || "Unassigned"}{" "}
+                {t.kind === "account_transfer" ? translate("accountTransfer") : t.kind === "balance_adjustment" ? translate("balanceAdjustmentLabel") : t.kind === "opening_balance" ? translate("openingBalance") : t.kind === "card_payment" ? translate("cardPayment") : t.kind === "reimbursement" ? translate("repaidByFriend") : t.type === "income" ? translate("income") : p?.name || translate("unassigned")}{" "}
                 <span className="dot">·</span> {t.account}
               </span>
             </span>
             <span className="transaction-date">
-              {new Date(`${t.date}T12:00:00`).toLocaleDateString("en-GB", {
+              {new Date(`${t.date}T12:00:00`).toLocaleDateString(localeTag(), {
                 day: "numeric",
                 month: "short",
               })}
@@ -427,7 +428,7 @@ export function TransactionList({
               {money(isSpending(t) ? personalAmount(t) : t.amount)}
               {t.split && <small>of {money(t.amount)} paid</small>}
               <small>
-                {new Date(`${t.date}T12:00:00`).toLocaleDateString("en-GB", {
+                {new Date(`${t.date}T12:00:00`).toLocaleDateString(localeTag(), {
                   day: "numeric",
                   month: "short",
                 })}
@@ -561,7 +562,7 @@ export function SpendingRing({
           })}
         </svg>
         <div className="donut-center">
-          <span>Total spent</span>
+          <span>{translate("totalSpent")}</span>
           <strong>{compact(total)}</strong>
           <small>IDR this month</small>
         </div>
@@ -576,9 +577,9 @@ export function SpendingRing({
             </div>
           ))
         ) : (
-          total === 0 && <p className="muted">No spending yet.</p>
+          total === 0 && <p className="muted">{translate("noSpendingYet")}</p>
         )}
-        {unassigned > 0 && <div><span className="legend-dot unassigned-dot" /><span>Unassigned spending</span><strong>{Math.round((unassigned / total) * 100)}%</strong></div>}
+        {unassigned > 0 && <div><span className="legend-dot unassigned-dot" /><span>{translate("unassignedSpending")}</span><strong>{Math.round((unassigned / total) * 100)}%</strong></div>}
         {parts.length > 5 && (
           <small className="muted">+ {parts.length - 5} other pockets</small>
         )}

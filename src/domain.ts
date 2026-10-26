@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { localeTag } from "./i18n";
 
 export type Pocket = {
   id: string;
@@ -104,7 +105,7 @@ export const daysAgo = (days: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 export const today = () => daysAgo(0);
-export const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+export const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(localeTag(), { weekday: "short", day: "numeric", month: "short" });
 // Before merchant memory (P1-5), a name matches only exactly, ignoring case and outer spaces.
 const entryKey = (name: string) => name.trim().toLocaleLowerCase("id-ID");
 const everydayExpense = (t: Transaction) => t.type === "expense" && (!t.kind || t.kind === "card_purchase");
@@ -138,14 +139,15 @@ export const money = (n: number) =>
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(n);
+export const groupDigits = (n: number) => n.toLocaleString("id-ID");
 export const compact = (n: number) =>
   Math.abs(n) >= 1000000
-    ? `${(n / 1000000).toLocaleString("en", { maximumFractionDigits: 1 })}m`
+    ? `${(n / 1000000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`
     : Math.abs(n) >= 1000
-      ? `${(n / 1000).toLocaleString("en", { maximumFractionDigits: 0 })}k`
+      ? `${(n / 1000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} rb`
       : String(n);
 export const monthLabel = (month: string, short = false) =>
-  new Date(`${month}-01T12:00:00`).toLocaleDateString("en-GB", {
+  new Date(`${month}-01T12:00:00`).toLocaleDateString(localeTag(), {
     month: short ? "short" : "long",
     year: "numeric",
   });

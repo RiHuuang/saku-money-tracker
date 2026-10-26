@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { Preferences } from "@capacitor/preferences";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -18,6 +19,7 @@ import {
   ExternalLink,
   FileCheck2,
   LayoutDashboard,
+  Info,
   Leaf,
   LockKeyhole,
   LogOut,
@@ -27,7 +29,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  SlidersHorizontal,
   Target,
   Trash2,
   TrendingUp,
@@ -46,6 +47,7 @@ import {
   dayLabel,
   emptyData,
   exportCSV,
+  groupDigits,
   isIncome,
   isSpending,
   personalAmount,
@@ -99,6 +101,7 @@ const learnsMerchant = (t: Transaction) => t.type === "expense" && (!t.kind || t
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
+import { loadLanguage, saveLanguage, setActiveLanguage, t, type LanguagePreference } from "./i18n";
 import { backDestination, moreViews, type View } from "./navigation";
 import { AppUpdateSettings } from "./appUpdate";
 import { version as appVersion } from "../package.json";
@@ -137,6 +140,7 @@ type Edit =
   | null;
 const cloudImportEnabled = true;
 const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
+const setupCompletedKey = "saku-setup-completed-v1";
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "transactions", label: "Activity", icon: ArrowDownLeft },
@@ -145,6 +149,7 @@ const navigation = [
   { id: "insights", label: "Insights", icon: BarChart3 },
   { id: "check", label: cloudImportEnabled ? "Catch up" : "Check", icon: FileCheck2 },
 ] as const;
+const navigationKeys = { overview: "home", transactions: "activity", pockets: "pockets", plans: "plans", insights: "insights", check: "catchUp", more: "more" } as const;
 const mobileNavigation = [
   navigation[0], navigation[1], navigation[5], navigation[2],
   { id: "more", label: "More", icon: Menu },
@@ -176,6 +181,10 @@ export default function App() {
   const hiddenAt = useRef<number | null>(null);
   const authenticating = useRef(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
+  const [languagePreference, setLanguagePreference] = useState<LanguagePreference>("system");
+  const [setupCompletedAt, setSetupCompletedAt] = useState<string | null>(null);
+  const [showAvailabilityInfo, setShowAvailabilityInfo] = useState(false);
+  setActiveLanguage(languagePreference);
   const [previousView, setPreviousView] = useState<View>("overview");
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
   const [pocketAllHistory, setPocketAllHistory] = useState(false);
@@ -339,6 +348,8 @@ export default function App() {
   }, [cloud?.user?.id, data]);
   useEffect(() => {
     void loadTheme().then(setThemePreference).catch(() => {});
+    void loadLanguage().then(setLanguagePreference).catch(() => {});
+    void Preferences.get({ key: setupCompletedKey }).then(({ value }) => setSetupCompletedAt(value)).catch(() => {});
   }, []);
   async function unlock() {
     if (authenticating.current) return;
@@ -481,14 +492,14 @@ export default function App() {
         }
         activeSync.current = null;
       }
-      if (userInitiated) setToast("Cloud backup saved. Google Sheet is updating.");
+      if (userInitiated) setToast(t("cloudSavedUpdating"));
     } catch (error: unknown) {
       failed = true;
       pendingSync.current = null;
       activeSync.current = null;
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
       const status = typeof error === "object" && error && "status" in error ? (error as { status?: number }).status : undefined;
-      setToast(status === 409 ? "Google has newer data. Review before syncing again." : "Saved offline. Automatic sync will retry when Saku is active.");
+      setToast(status === 409 ? t("syncConflict") : t("savedOffline"));
     } finally {
       syncRunning.current = false;
       void reconcileRef.current?.(failed);
@@ -514,20 +525,20 @@ export default function App() {
     try {
       const next = await mirrorCloud();
       setCloud((current) => current?.user?.id === next.user?.id ? next : current);
-      if (userInitiated) setToast(next.sheetPending ? "Cloud backup saved. Google Sheet is still updating." : "Google Sheet updated");
+      if (userInitiated) setToast(next.sheetPending ? t("sheetSavedPending") : t("sheetUpdated"));
     } catch (error) {
-      if (userInitiated) setToast(error instanceof Error ? error.message : "Google Sheet update failed");
+      if (userInitiated) setToast(error instanceof Error ? error.message : t("sheetFailed"));
     } finally { mirrorRunning.current = false; }
   }
   async function recover(file: File | undefined) {
     if (!file) return;
     try {
-      if (file.size > 20000000) throw new Error("Backup is too large.");
+      if (file.size > 20000000) throw new Error(t("backupTooLarge"));
       const next = validateData(JSON.parse(await file.text()));
-      if (await commit(next, "Backup restored")) setLoadError("");
+      if (await commit(next, t("backupRestored"))) setLoadError("");
     } catch (e) {
       setLoadError(
-        e instanceof Error ? e.message : "Could not restore backup.",
+        e instanceof Error ? e.message : t("restoreFailed"),
       );
     }
   }
@@ -536,21 +547,21 @@ export default function App() {
       <div className="loading app-lock">
         <span className="brand-mark"><LockKeyhole /></span>
         <h1>Saku</h1>
-        {lockState === "locked" && <><p>Saku is locked.</p><button className="button primary" onClick={() => void unlock()}>Unlock</button></>}
+        {lockState === "locked" && <><p>{t("sakuLocked")}</p><button className="button primary" onClick={() => void unlock()}>{t("unlock")}</button></>}
       </div>
     );
   if (cloud && !cloud.signedIn)
     return <LoginScreen configured={cloud.configured} busy={loginBusy} error={loadError} onLogin={async () => {
       setLoginBusy(true); setLoadError("");
       try { const next = await signInGoogle(); setCloud(next); await openWorkspace(next); }
-      catch (error) { setLoadError(error instanceof Error ? error.message : "Google sign-in failed."); }
+      catch (error) { setLoadError(error instanceof Error ? error.message : t("signInFailed")); }
       finally { setLoginBusy(false); }
     }} />;
   if (cloud?.signedIn && typeof cloud.user?.agreementVersion === "string" && cloud.user.agreementVersion !== AGREEMENT_VERSION)
     return <AgreementUpdate busy={loginBusy} error={loadError} onAccept={async () => {
       setLoginBusy(true); setLoadError("");
       try { setCloud(await acceptAgreement()); }
-      catch (error) { setLoadError(error instanceof Error ? error.message : "The agreement could not be saved. Try again."); }
+      catch (error) { setLoadError(error instanceof Error ? error.message : t("agreementSaveFailed")); }
       finally { setLoginBusy(false); }
     }} onSignOut={async () => { await signOutGoogle(); setCloud(await loadCloudState()); }} />;
   if (resolution)
@@ -584,7 +595,7 @@ export default function App() {
             </label>
           </>
         ) : (
-          <p>Getting your pockets ready...</p>
+          <p>{t("gettingReady")}</p>
         )}
       </div>
     );
@@ -606,14 +617,14 @@ export default function App() {
   const showCatchUp = catchUpDays.length > 0 && data.transactions.some((t) => t.date <= shiftDate(today(), -2));
   function dismissCatchUp() { setCatchUpDismissed(today()); try { localStorage.setItem(catchUpDismissedKey, today()); } catch { /* Dismissal is a convenience only. */ } }
   const titles: Record<View, [string, string]> = {
-    overview: ["Your everyday money", "Home"],
-    transactions: ["Find and review entries", "Activity"],
-    pockets: ["Your monthly spending plan", "Pockets"],
-    plans: ["Cards and recurring payments", "Plans"],
-    more: ["Explore your workspace", "More"],
-    insights: ["Understand your spending", "Insights"],
-    check: cloudImportEnabled ? ["Catch up on your money", "Catch up"] : ["Review your records", "Check"],
-    settings: ["Manage your workspace", "Settings"],
+    overview: [t("homeIntro"), t("home")],
+    transactions: [t("activityIntro"), t("activity")],
+    pockets: [t("pocketsIntro"), t("pockets")],
+    plans: [t("plansIntro"), t("plans")],
+    more: [t("moreIntro"), t("more")],
+    insights: [t("insightsIntro"), t("insights")],
+    check: [t("catchUpIntro"), t("catchUp")],
+    settings: [t("settingsIntro"), t("settings")],
   };
   const go = (v: View) => {
     if (v === "more" && !moreViews.includes(view)) setPreviousView(view);
@@ -623,7 +634,7 @@ export default function App() {
   };
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main-content">Skip to content</a>
+      <a className="skip-link" href="#main-content">{t("skipToContent")}</a>
       <aside className="sidebar">
         <a
           className="brand"
@@ -640,7 +651,7 @@ export default function App() {
             saku<span className="brand-period">.</span>
           </span>
         </a>
-        <div className="workspace-label">PERSONAL WORKSPACE</div>
+        <div className="workspace-label">{t("personalWorkspace")}</div>
         <nav className="side-nav" aria-label="Main navigation">
           {navigation.map((n) => (
             <button
@@ -649,7 +660,7 @@ export default function App() {
               onClick={() => go(n.id)}
             >
               <n.icon size={20} />
-              {n.label}
+              {t(navigationKeys[n.id])}
               {n.id === "check" && importWaiting > 0 && <span className="nav-badge" aria-label={`${importWaiting} waiting`}>{importWaiting > 99 ? "99+" : importWaiting}</span>}
             </button>
           ))}
@@ -658,8 +669,8 @@ export default function App() {
           <div className="privacy-note">
             <ShieldCheck size={22} />
             <div>
-              <strong>Just yours.</strong>
-              <span>{cloud?.signedIn ? "Private Google backup." : "Stored on this device."}</span>
+              <strong>{t("justYours")}</strong>
+              <span>{cloud?.signedIn ? t("privateBackup") : t("storedOnDevice")}</span>
             </div>
             <span className="status-dot" />
           </div>
@@ -667,7 +678,7 @@ export default function App() {
             className={`settings-link ${view === "settings" ? "active" : ""}`}
             onClick={() => go("settings")}
           >
-            <Settings size={19} /> Settings
+            <Settings size={19} /> {t("settings")}
           </button>
           <button className="profile" onClick={() => go("settings")}>
             <span className="avatar">
@@ -678,7 +689,7 @@ export default function App() {
                 {data.name}'s workspace
               </strong>
               <small>
-                {cloud?.signedIn ? cloud.user?.email : "Local profile"}
+                {cloud?.signedIn ? cloud.user?.email : t("localProfile")}
               </small>
             </span>
             <ChevronRight size={16} />
@@ -690,7 +701,7 @@ export default function App() {
           <div className="breadcrumb">
             My workspace <ChevronRight size={13} />
             <span>
-              {navigation.find((n) => n.id === view)?.label || "Settings"}
+              {navigation.find((n) => n.id === view) ? t(navigationKeys[view as keyof typeof navigationKeys]) : t("settings")}
             </span>
           </div>
           <a
@@ -706,12 +717,12 @@ export default function App() {
           <div className="topbar-actions">
             <span className="local-label">
               {cloud?.signedIn ? <CheckCheck size={13} /> : <LockKeyhole size={13} />}
-              {cloud?.signedIn ? cloud.dirty ? "Not synced" : cloud.revision === 0 ? "Not backed up" : "Synced" : "On-device"}
+              {cloud?.signedIn ? cloud.dirty ? t("notSynced") : cloud.revision === 0 ? t("notBackedUp") : t("synced") : t("onDevice")}
             </span>
             <button
               className="top-avatar"
               onClick={() => go("settings")}
-              title="Your profile"
+              title={t("yourProfile")}
             >
               {avatarUrl ? <img src={avatarUrl} alt="" /> : (cloud?.user?.name || data.name).slice(0, 1).toUpperCase()}
             </button>
@@ -720,7 +731,7 @@ export default function App() {
         <main id="main-content" tabIndex={-1}>
           <section className="page-heading">
             <div>
-              {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={() => go("more")}><ChevronLeft size={17} /> More</button>}
+              {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={() => go("more")}><ChevronLeft size={17} /> {t("more")}</button>}
               {selectedPocket && view === "pockets" && <button className="back-to-more" onClick={() => setSelectedPocketId(null)}><ChevronLeft size={17} /> All pockets</button>}
               <p>{selectedPocket && view === "pockets" ? "Pocket activity" : titles[view][0]}</p>
               <h1>{selectedPocket && view === "pockets" ? selectedPocket.name : titles[view][1]}</h1>
@@ -761,7 +772,7 @@ export default function App() {
                   onClick={() => setEdit({ type: "transaction" })}
                 >
                   <Plus size={18} />
-                  <span>Add transaction</span>
+                  <span>{t("addTransaction")}</span>
                 </button>
               )}
               {view === "pockets" && !selectedPocket && (
@@ -770,48 +781,48 @@ export default function App() {
                   onClick={() => setEdit({ type: "pocket" })}
                 >
                   <Plus size={18} />
-                  New pocket
+                  {t("addPocket")}
                 </button>
               )}
-              {view === "pockets" && selectedPocket && <button className="button primary" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket.id })}><Plus size={18} /> Add transaction</button>}
+              {view === "pockets" && selectedPocket && <button className="button primary" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket.id })}><Plus size={18} /> {t("addTransaction")}</button>}
             </div>
           </section>
           {view === "more" && <section className="more-list" aria-label="More destinations">
-            <button onClick={() => go("insights")}><BarChart3 /><span><strong>Insights</strong><small>See trends and spending breakdowns</small></span><ChevronRight /></button>
-            <button onClick={() => go("plans")}><CreditCard /><span><strong>Plans</strong><small>Credit cards and recurring bills</small></span><ChevronRight /></button>
-            <button onClick={() => go("settings")}><Settings /><span><strong>Settings</strong><small>Accounts, appearance, backup and privacy</small></span><ChevronRight /></button>
+            <button onClick={() => go("insights")}><BarChart3 /><span><strong>{t("insights")}</strong><small>{t("cashFlowTrends")}</small></span><ChevronRight /></button>
+            <button onClick={() => go("plans")}><CreditCard /><span><strong>{t("plans")}</strong><small>{t("plansIntro")}</small></span><ChevronRight /></button>
+            <button onClick={() => go("settings")}><Settings /><span><strong>{t("settings")}</strong><small>{t("settingsIntro")}</small></span><ChevronRight /></button>
           </section>}
           {view === "overview" && (
             <>
-              {showCatchUp && <section className="catch-up-card" aria-label="Days to catch up"><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? "Last entry over 2 weeks ago" : `${catchUpAnchorChecked ? "Checked up to" : "Last entry:"} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {catchUpDays.length} {catchUpDays.length === 1 ? "day" : "days"} to catch up</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>Fill in by day</button><button className="button secondary" onClick={() => { setCheckTab(cloudImportEnabled ? "catchup" : "csv"); go("check"); }}>{cloudImportEnabled ? "Import screenshot" : "Check a statement"}</button></div></div><button className="icon-button catch-up-dismiss" aria-label="Hide until tomorrow" title="Hide until tomorrow" onClick={dismissCatchUp}><X size={18} /></button></section>}
+              {showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { setCheckTab(cloudImportEnabled ? "catchup" : "csv"); go("check"); }}>{cloudImportEnabled ? t("importScreenshot") : t("catchUpMonthly")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
-                <button className="balance-panel balance-action" onClick={() => go("insights")} aria-label={`View insights for ${monthLabel(month)}`}>
+                <div className="balance-panel balance-action">
                   <div className="balance-top">
                     <span>
                       <Wallet size={17} />
-                      Recorded cash
+                      {t("recordedCash")}
                     </span>
                     <span className="balance-badge">IDR</span>
                   </div>
                   <div className="balance-number"><FitMoney amount={stats.balance} /></div>
                   <p>
-                    Across {data.accounts.length} accounts <span>·</span>{" "}
-                    Through {monthLabel(month, true)}
+                    {t("acrossAccounts", { count: data.accounts.length })}
                   </p>
                   <div className="balance-footer">
                     <span>
                       <span className="tiny-square" />
-                      Budget availability
+                      {t("budgetAvailability")}
+                      <button type="button" className="availability-info-button" aria-label={t("availabilityInfo")} aria-expanded={showAvailabilityInfo} onClick={() => setShowAvailabilityInfo((value) => !value)}><Info size={15} /></button>
                     </span>
-                    <strong>{money(stats.available)} available</strong>
+                    <strong>{money(stats.available)} {t("available")}</strong>
                   </div>
-                  <p className="availability-explainer">Capped by recorded cash and positive pocket balances. Not a live bank balance.</p>
-                  <span className="balance-cta">View insights <ArrowRight size={16} /></span>
-                </button>
+                  {showAvailabilityInfo && <p className="availability-explainer">{t("availabilityExplainer")}</p>}
+                  <button type="button" className="balance-cta" onClick={() => go("insights")}>{t("viewInsights")} <ArrowRight size={16} /></button>
+                </div>
                 <div className="metric-panel">
                   <div className="metric-label">
                     <DirectionIcon income />
-                    Money in
+                    {t("moneyIn")}
                     <span className="metric-arrow">
                       <ArrowDownLeft size={16} />
                     </span>
@@ -822,7 +833,7 @@ export default function App() {
                       stats.transactions.filter(isIncome)
                         .length
                     }{" "}
-                    income transactions
+                    {t("incomeTransactions")}
                   </p>
                   <div className="mini-bars income-mini">
                     {Array.from({ length: 5 }, (_, week) => {
@@ -836,7 +847,7 @@ export default function App() {
                 <div className="metric-panel">
                   <div className="metric-label">
                     <DirectionIcon income={false} />
-                    Money out
+                    {t("moneyOut")}
                     <span className="metric-arrow">
                       <ArrowUpRight size={16} />
                     </span>
@@ -845,8 +856,8 @@ export default function App() {
                   <p>
                     <span className="expense-dot" />
                     {stats.budget
-                      ? `${Math.round((stats.expenses / stats.budget) * 100)}% of monthly budget`
-                      : "No budget set yet"}
+                      ? `${Math.round((stats.expenses / stats.budget) * 100)}% ${t("ofBudget")}`
+                      : t("noBudget")}
                   </p>
                   <div className="budget-meter">
                     <i
@@ -855,25 +866,25 @@ export default function App() {
                       }}
                     />
                   </div>
-                  <small>{money(stats.budget)} planned</small>
+                  <small>{money(stats.budget)} {t("planned")}</small>
                 </div>
               </section>
-              <section className="account-balance-strip" aria-label="Account balances">{stats.accounts.map((item) => <div className="account-balance-item" key={item.account}><span className="account-balance-icon"><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></div>)}</section>
-              <section className="daily-strip" aria-label="Quick entries and weekly check-in">
-                <div className="daily-check"><span>Current week · last 7 days</span><strong>{money(weekSpend)} spent</strong><small>{weekTop?.amount ? `${weekTop.name} was the largest pocket.` : "No spending recorded yet."}</small><small>{money(currentAvailable)} available in your current plan</small></div>
-                <div className="quick-entries"><div className="section-heading"><h2>Quick add</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> New</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={`Remove ${f.name} shortcut`} aria-label={`Remove ${f.name} shortcut`} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, "Quick entry removed")}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">Save a frequent expense when you add it.</span>}</div></div>
+              <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <div className="account-balance-item" key={item.account}><span className="account-balance-icon"><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></div>)}</section>
+              <section className="daily-strip" aria-label={t("quickEntriesLabel")}>
+                <div className="daily-check"><span>{t("currentWeek")}</span><strong>{money(weekSpend)} {t("spent")}</strong><small>{weekTop?.amount ? t("largestPocket", { name: weekTop.name }) : t("noSpending")}</small><small>{money(currentAvailable)} {t("currentPlanAvailable")}</small></div>
+                <div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={`Remove ${f.name} shortcut`} aria-label={`Remove ${f.name} shortcut`} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, t("quickEntryRemoved"))}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
               </section>
               <section className="pockets-section">
                 <div className="section-heading">
                   <div>
                     <h2>
-                      Little pockets, big plans{" "}
+                      {t("pocketsHeading")}{" "}
                       <span>{stats.pockets.length}</span>
                     </h2>
-                    <p>Your month, thoughtfully divided.</p>
+                    <p>{t("pocketsSubheading")}</p>
                   </div>
                   <button className="text-button" onClick={() => { setSelectedPocketId(null); go("pockets"); }}>
-                    All pockets <ArrowRight size={16} />
+                    {t("allPockets")} <ArrowRight size={16} />
                   </button>
                 </div>
                 {stats.pockets.length ? (
@@ -890,41 +901,41 @@ export default function App() {
                   </div>
                 ) : (
                   <Empty
-                    title="Give your money a purpose"
-                    detail="Set a monthly amount for food, fun, and everything in between."
-                    action="Create a pocket"
+                    title={t("purposeTitle")}
+                    detail={t("purposeDetail")}
+                    action={t("createPocket")}
                     onClick={() => setEdit({ type: "pocket" })}
                   />
                 )}
               </section>
-              <button className="insights-link" onClick={() => go("insights")}><BarChart3 size={19} /><span><strong>Explore your spending</strong><small>Cash flow and category trends</small></span><ArrowRight size={18} /></button>
+              <button className="insights-link" onClick={() => go("insights")}><BarChart3 size={19} /><span><strong>{t("exploreSpending")}</strong><small>{t("cashFlowTrends")}</small></span><ArrowRight size={18} /></button>
               <section className="charts-grid home-charts">
                 <div className="chart-panel">
                   <div className="section-heading">
-                    <h2>Money in, money out</h2>
+                    <h2>{t("inOut")}</h2>
                     <div className="chart-legend">
                       <span>
                         <i className="income-dot" />
-                        Income
+                        {t("income")}
                       </span>
                       <span>
                         <i className="out-dot" />
-                        Expenses
+                        {t("expenses")}
                       </span>
                     </div>
                   </div>
                   <FlowChart transactions={stats.transactions} month={month} />
                   <div className="chart-footnote">
-                    Weekly cash flow <span>·</span> {monthLabel(month)}
+                    {t("weeklyCashFlow")} <span>·</span> {monthLabel(month)}
                   </div>
                 </div>
                 <div className="chart-panel spending-panel">
                   <div className="section-heading">
-                    <h2>Where it went</h2>
+                    <h2>{t("whereWent")}</h2>
                     <button
                       className="icon-button"
-                      title="See spending insights"
-                      aria-label="See spending insights"
+                      title={t("seeInsights")}
+                      aria-label={t("seeInsights")}
                       onClick={() => go("insights")}
                     >
                       <ArrowUpRight size={19} />
@@ -939,14 +950,14 @@ export default function App() {
               <section className="recent-section">
                 <div className="section-heading">
                   <div>
-                    <h2>The latest little things</h2>
-                    <p>Recent transactions this month.</p>
+                    <h2>{t("latestThings")}</h2>
+                    <p>{t("recentThisMonth")}</p>
                   </div>
                   <button
                     className="text-button"
                     onClick={() => go("transactions")}
                   >
-                    View all <ArrowRight size={16} />
+                    {t("viewAll")} <ArrowRight size={16} />
                   </button>
                 </div>
                 <TransactionList
@@ -957,7 +968,7 @@ export default function App() {
                 />
               </section>
               <div className="bottom-note">
-                <Leaf size={15} />A little awareness goes a long way.
+                <Leaf size={15} />{t("awareness")}
               </div>
             </>
           )}
@@ -994,9 +1005,9 @@ export default function App() {
               </div>
               {stats.remaining > Math.max(0, stats.balance) && (
                 <div className="inline-warning">
-                  Your remaining pocket budgets exceed your recorded balance by{" "}
-                  {money(stats.remaining - Math.max(0, stats.balance))}. Add any
-                  missing income or adjust your plans.
+                  {setupCompletedAt && Date.now() - Date.parse(setupCompletedAt) < 7 * 24 * 60 * 60 * 1000
+                    ? t("planAboveCashFirstWeek", { amount: money(stats.remaining - Math.max(0, stats.balance)) })
+                    : t("planAboveCash", { amount: money(stats.remaining - Math.max(0, stats.balance)) })}
                 </div>
               )}
               {overspent.length > 0 && (
@@ -1043,12 +1054,12 @@ export default function App() {
                   <h2>
                     {topPocket?.spent
                       ? topPocket.name
-                      : "Your story starts here"}
+                      : t("storyStarts")}
                   </h2>
                   <p>
                     {topPocket?.spent
-                      ? `${money(topPocket.spent)} spent, ${Math.round((topPocket.spent / Math.max(1, stats.expenses)) * 100)}% of your total expenses.`
-                      : "Log an expense to see where your money goes."}
+                      ? t("topPocketShare", { amount: money(topPocket.spent), percent: Math.round((topPocket.spent / Math.max(1, stats.expenses)) * 100) })
+                      : t("logExpenseHint")}
                   </p>
                 </div>
                 <TrendingUp size={46} />
@@ -1161,7 +1172,7 @@ export default function App() {
           )}
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>
-              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>Catch up</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>Notifications</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>Statement check</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>CSV on device</button></div>}
+              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>}
               {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">Loading captured notifications...</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
               {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
@@ -1181,6 +1192,8 @@ export default function App() {
               syncNow={() => cloud?.dirty || (cloud?.sheetPending && cloud.revision === 0) ? queueSync(data, true) : attemptMirror(true)}
               themePreference={themePreference}
               onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast("Appearance could not be saved.")); }}
+              languagePreference={languagePreference}
+              onLanguageChange={(preference) => { setLanguagePreference(preference); void saveLanguage(preference).catch(() => setToast(t("languageSaveError"))); }}
               onAdjustBalance={(account) => setEdit({ type: "balance_adjustment", account })}
               appLock={appLock}
               onAppLockChange={changeAppLock}
@@ -1188,7 +1201,7 @@ export default function App() {
           )}
         </main>
       </div>
-      {(view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket)) && <button className="mobile-add-action" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket?.id })}><Plus size={20} /> Add transaction</button>}
+      {(view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket)) && <button className="mobile-add-action" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket?.id })}><Plus size={20} /> {t("addTransaction")}</button>}
       <nav className="bottom-nav" aria-label="Mobile navigation">
         {mobileNavigation.map((n) => (
           <button
@@ -1200,7 +1213,7 @@ export default function App() {
             <n.icon size={21} />
             {n.id === "check" && importWaiting > 0 && <span className="nav-badge" aria-label={`${importWaiting} waiting`}>{importWaiting > 99 ? "99+" : importWaiting}</span>}
             <span>
-              {n.label}
+              {t(navigationKeys[n.id])}
             </span>
           </button>
         ))}
@@ -1345,6 +1358,9 @@ export default function App() {
           onClose={() => setEdit(null)}
           onStart={async (next) => {
             if (await commit(next, "Your own little fresh start.")) {
+              const completedAt = new Date().toISOString();
+              setSetupCompletedAt(completedAt);
+              void Preferences.set({ key: setupCompletedKey, value: completedAt }).catch(() => {});
               setEdit(null);
               setMonth(today().slice(0, 7));
               go("pockets");
@@ -1433,13 +1449,8 @@ function Transactions({
         </div></details>
       </div>
       <div className="transaction-filters">
-        <div className="transaction-filter-heading">
-          <span className="transaction-filter-icon" aria-hidden="true"><SlidersHorizontal size={17} /></span>
-          <span><strong>Filters</strong><small>Narrow this month</small></span>
-        </div>
-        <ChoiceField className="transaction-filter-field" label="Pocket" value={pocket} onValueChange={setPocket} options={[{ value: "all", label: "All pockets" }, ...data.pockets.map((p) => ({ value: p.id, label: p.name }))]} />
-        <ChoiceField className="transaction-filter-field" label="Account" value={account} onValueChange={setAccount} options={[{ value: "all", label: "All accounts" }, ...data.accounts.map((name) => ({ value: name, label: name, description: money(accountBalance(data, name)) })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: "Credit card" }))]} />
-        <span className="transaction-count">{rows.length} transactions</span>
+        <ChoiceField hideLabel className="transaction-filter-field" label={t("pocket")} value={pocket} onValueChange={setPocket} options={[{ value: "all", label: t("allPockets") }, ...data.pockets.map((p) => ({ value: p.id, label: p.name }))]} />
+        <ChoiceField hideLabel className="transaction-filter-field" label={t("account")} value={account} onValueChange={setAccount} options={[{ value: "all", label: t("allAccounts") }, ...data.accounts.map((name) => ({ value: name, label: name, description: money(accountBalance(data, name)) })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: t("creditCard") }))]} />
       </div>
       <div className="ledger">
         <div className="ledger-header">
@@ -1613,8 +1624,8 @@ function TransactionEditor({
   );
   async function scanReceipt(file?: File) {
     if (!file) return;
-    if (!nativeAIAvailable) { setError("Receipt scanning needs the Android app."); return; }
-    if (!file.type.startsWith("image/") || file.size > 12_000_000) { setError("Choose an image smaller than 12 MB."); return; }
+    if (!nativeAIAvailable) { setError(t("receiptAndroidOnly")); return; }
+    if (!file.type.startsWith("image/") || file.size > 12_000_000) { setError(t("receiptImageLimit")); return; }
     setScanning(true); setError(""); setScanInfo("");
     try {
       const image = await createImageBitmap(file);
@@ -1622,7 +1633,7 @@ function TransactionEditor({
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(image.width * scale); canvas.height = Math.round(image.height * scale);
       const context = canvas.getContext("2d");
-      if (!context) throw new Error("Could not read this photo.");
+      if (!context) throw new Error(t("receiptReadError"));
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
       image.close();
       const base64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
@@ -1630,8 +1641,8 @@ function TransactionEditor({
       const suggestion = receiptSuggestion((await localStatementAI.recognizeImage({ image: base64 })).text);
       if (suggestion.amount) setAmount(String(suggestion.amount));
       if (suggestion.merchant && !name) setName(suggestion.merchant);
-      setScanInfo(suggestion.amount ? "Amount suggested from receipt. Check it before saving." : "No clear total found. Enter the amount manually.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not scan receipt."); }
+      setScanInfo(suggestion.amount ? t("receiptAmountSuggested") : t("receiptNoTotal"));
+    } catch (e) { setError(e instanceof Error ? e.message : t("receiptScanError")); }
     finally { setScanning(false); }
   }
   const amountField = useRef<HTMLDivElement>(null);
@@ -1641,12 +1652,12 @@ function TransactionEditor({
     const addAnother = keepOpen.current;
     keepOpen.current = false;
     if (!validAmount(Number(amount))) {
-      setError("Enter a whole rupiah amount greater than zero.");
+      setError(t("wholeRupiahError"));
       return;
     }
     if (mode === "transfer") {
       if (data.accounts.length < 2 || transferFrom === transferTo || Number(amount) > transferBalance) {
-        setError("Choose two different accounts and an amount available in the source account.");
+        setError(t("transferAccountsError"));
         return;
       }
       const transferId = transaction?.transferId || uid();
@@ -1659,17 +1670,17 @@ function TransactionEditor({
     const p = data.pockets.find((p) => p.id === pocket);
     if (type === "expense" && p && date.slice(0, 7) < p.createdMonth) {
       setError(
-        `This pocket starts in ${monthLabel(p.createdMonth)}. Choose a later date.`,
+        t("pocketStartsLater", { month: monthLabel(p.createdMonth) }),
       );
       return;
     }
     if (shared && (!Number.isInteger(Number(people)) || Number(people) < 2 || Number(people) > 30 || !validAmount(Number(ownAmount || Math.ceil(Number(amount) / Number(people)))) || Number(ownAmount || Math.ceil(Number(amount) / Number(people))) > Number(amount))) {
-      setError("Check the number of people and your share."); return;
+      setError(t("shareError")); return;
     }
     const card = data.creditCards.find((c) => c.id === cardId);
-    if (cardId && !card) { setError("Choose a valid credit card."); return; }
+    if (cardId && !card) { setError(t("cardError")); return; }
     if (cardId && (!Number.isInteger(Number(installments)) || Number(installments) < 1 || Number(installments) > 60 || !/^\d{4}-\d{2}$/.test(firstDueMonth) || firstDueMonth < date.slice(0, 7))) {
-      setError("Choose 1 to 60 payments and the first due month."); return;
+      setError(t("installmentsError")); return;
     }
     const ruleId = recurring ? transaction?.recurringRuleId || uid() : undefined;
     const saved: Transaction = {
@@ -1708,36 +1719,36 @@ function TransactionEditor({
     setPocket(learned !== undefined && (!learned || data.pockets.some((p) => p.id === learned)) ? learned : "");
   }
   const dateChoice = pickingDate ? "pick" : date === daysAgo(0) ? "0" : date === daysAgo(1) ? "1" : date === daysAgo(2) ? "2" : "pick";
-  const accountChoices = data.accounts.map((name) => ({ value: name, label: name, description: `Recorded balance ${money(accountBalance(data, name))}` }));
+  const accountChoices = data.accounts.map((name) => ({ value: name, label: name, description: t("recordedBalanceAmount", { amount: money(accountBalance(data, name)) }) }));
   const paymentChoices = [
-    ...data.accounts.map((name) => ({ value: `bank:${name}`, label: name, description: `Account · ${money(accountBalance(data, name))}` })),
-    ...data.creditCards.map((item) => ({ value: `card:${item.id}`, label: item.name, description: `Credit available ${money(Math.max(0, item.limit - cardBalance(data, item.id)))}` })),
+    ...data.accounts.map((name) => ({ value: `bank:${name}`, label: name, description: t("accountBalanceAmount", { amount: money(accountBalance(data, name)) }) })),
+    ...data.creditCards.map((item) => ({ value: `card:${item.id}`, label: item.name, description: t("creditAvailableAmount", { amount: money(Math.max(0, item.limit - cardBalance(data, item.id))) }) })),
   ];
   const pocketStats = summary(data, date.slice(0, 7)).pockets;
-  const pocketChoices = [{ value: "", label: "Unassigned", description: "Categorize this later" }, ...pocketStats.map((item) => ({ value: item.id, label: item.name, description: `${money(Math.max(0, item.limit - item.spent))} remaining` }))];
+  const pocketChoices = [{ value: "", label: t("unassigned"), description: t("categorizeLater") }, ...pocketStats.map((item) => ({ value: item.id, label: item.name, description: t("remainingAmount", { amount: money(Math.max(0, item.limit - item.spent)) }) }))];
   const modeControl = <div className="segmented form-segment transaction-modes">
-    <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "expense" ? "selected" : ""} onClick={() => setMode("expense")}><ArrowUpRight size={16} />Expense</button>
-    <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "income" ? "selected" : ""} onClick={() => setMode("income")}><ArrowDownLeft size={16} />Income</button>
-    <button type="button" disabled={special || !!transaction?.split || (!!transaction && transaction.kind !== "account_transfer")} className={mode === "transfer" ? "selected" : ""} onClick={() => setMode("transfer")}><ArrowRight size={16} />Transfer</button>
+    <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "expense" ? "selected" : ""} onClick={() => setMode("expense")}><ArrowUpRight size={16} />{t("expense")}</button>
+    <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "income" ? "selected" : ""} onClick={() => setMode("income")}><ArrowDownLeft size={16} />{t("income")}</button>
+    <button type="button" disabled={special || !!transaction?.split || (!!transaction && transaction.kind !== "account_transfer")} className={mode === "transfer" ? "selected" : ""} onClick={() => setMode("transfer")}><ArrowRight size={16} />{t("transfer")}</button>
   </div>;
-  if (mode === "transfer") return <Modal title={transaction ? "Edit transfer" : "Add transaction"} subtitle="Move money between your accounts without changing income or spending." onClose={onClose}>
+  if (mode === "transfer") return <Modal title={transaction ? t("editTransfer") : t("addTransaction")} subtitle={t("transferSubtitle")} onClose={onClose}>
     <form onSubmit={(e) => void submit(e)}><fieldset disabled={busy}>{modeControl}
-      {data.accounts.length < 2 && <p className="form-error" role="alert">Add another bank, cash account, or e-wallet before making a transfer.</p>}
-      <label className="field">Amount<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={setAmount} required /></div></label>
-      <div className="form-columns"><label className="field">From<ChoiceField hideLabel label="Transfer from" value={transferFrom} onValueChange={setTransferFrom} options={accountChoices} /></label><label className="field">To<ChoiceField hideLabel label="Transfer to" value={transferTo} onValueChange={setTransferTo} options={accountChoices} /></label></div>
-      <label className="field">Date<input type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} required /></label>
-      <label className="field">Note <span className="optional">optional</span><textarea rows={2} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></label>
+      {data.accounts.length < 2 && <p className="form-error" role="alert">{t("anotherAccountTransfer")}</p>}
+      <label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={setAmount} required /></div></label>
+      <div className="form-columns"><label className="field">{t("from")}<ChoiceField hideLabel label={t("from")} value={transferFrom} onValueChange={setTransferFrom} options={accountChoices} /></label><label className="field">{t("to")}<ChoiceField hideLabel label={t("to")} value={transferTo} onValueChange={setTransferTo} options={accountChoices} /></label></div>
+      <label className="field">{t("date")}<input type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} required /></label>
+      <label className="field">{t("note")} <span className="optional">{t("optional")}</span><textarea rows={2} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="form-footer">{transaction?.transferId && <button type="button" className="button danger" onClick={() => void onDeleteTransfer(transaction.transferId!)}>Delete</button>}<button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={data.accounts.length < 2}>{busy ? "Saving..." : "Save transfer"}<Check size={16} /></button></div>
+      <div className="form-footer">{transaction?.transferId && <button type="button" className="button danger" onClick={() => void onDeleteTransfer(transaction.transferId!)}>{t("delete")}</button>}<button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button><button className="button primary" disabled={data.accounts.length < 2}>{busy ? t("saving") : t("saveTransfer")}<Check size={16} /></button></div>
     </fieldset></form>
   </Modal>;
   return (
     <Modal
-      title={transaction ? "Edit transaction" : "Add transaction"}
+      title={transaction ? t("editTransaction") : t("addTransaction")}
       subtitle={
         transaction
-          ? "Keep the details just right."
-          : "Every transaction tells part of your story."
+          ? t("editSubtitle")
+          : t("addSubtitle")
       }
       onClose={onClose}
     >
@@ -1745,7 +1756,7 @@ function TransactionEditor({
         <fieldset disabled={busy}>
           {modeControl}
           <label className="field">
-            Amount
+            {t("amount")}
             <div className="amount-input" ref={amountField}>
               <span>Rp</span>
               <MoneyInput
@@ -1757,30 +1768,30 @@ function TransactionEditor({
                 onValueChange={setAmount}
                 placeholder="0"
                 required
-                aria-label="Amount in rupiah"
+                aria-label={t("amountInRupiah")}
               />
             </div>
           </label>
-          {!transaction && nativeAIAvailable && <label className="button secondary receipt-capture"><Camera size={16} /> {scanning ? "Reading receipt..." : "Scan receipt"}<input type="file" accept="image/*" capture="environment" disabled={scanning || busy} hidden onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></label>}
+          {!transaction && nativeAIAvailable && <label className="button secondary receipt-capture"><Camera size={16} /> {scanning ? t("readingReceipt") : t("scanReceipt")}<input type="file" accept="image/*" capture="environment" disabled={scanning || busy} hidden onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></label>}
           {scanInfo && <p className="editor-help" role="status">{scanInfo}</p>}
           <label className="field">
-            {type === "income" ? "Where did it come from?" : "What was it for?"}
+            {type === "income" ? t("incomeName") : t("purchaseName")}
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={learnPocket}
               placeholder={
                 type === "income"
-                  ? "e.g. Monthly salary"
-                  : "e.g. Coffee with a friend"
+                  ? t("incomeExample")
+                  : t("purchaseExample")
               }
               maxLength={100}
               pattern=".*\S.*"
               required
             />
           </label>
-          {type === "expense" && !special && <label className="field">Paid with
-            <ChoiceField hideLabel label="Paid with" value={cardId ? `card:${cardId}` : `bank:${account}`} options={paymentChoices} onValueChange={(value) => {
+          {type === "expense" && !special && <label className="field">{t("paidWith")}
+            <ChoiceField hideLabel label={t("paidWith")} value={cardId ? `card:${cardId}` : `bank:${account}`} options={paymentChoices} onValueChange={(value) => {
               if (value.startsWith("card:")) setCardId(value.slice(5));
               else { setCardId(""); setAccount(value.slice(5)); }
             }} />
@@ -1788,42 +1799,42 @@ function TransactionEditor({
           {type === "expense" && (
             transaction?.kind !== "card_payment" &&
             <label className="field">
-              Pocket
-              <ChoiceField hideLabel label="Pocket" value={pocket} onValueChange={(value) => { setPocket(value); setPocketChosen(true); }} options={pocketChoices} />
-              <small>{pocket ? "Counts against this pocket." : "You can categorize this later."}</small>
+              {t("pocket")}
+              <ChoiceField hideLabel label={t("pocket")} value={pocket} onValueChange={(value) => { setPocket(value); setPocketChosen(true); }} options={pocketChoices} />
+              <small>{pocket ? t("countsPocket") : t("categorizeHelp")}</small>
             </label>
           )}
           <div className="form-columns">
             <div className="field date-field">
-              <SegmentedChoice compact label="Date" value={dateChoice} onValueChange={(value) => { setPickingDate(value === "pick"); if (value !== "pick") setDate(daysAgo(Number(value))); }} options={[{ value: "0", label: "Today" }, { value: "1", label: "Yesterday" }, { value: "2", label: "2 days ago" }, { value: "pick", label: "Pick" }]} />
-              {dateChoice === "pick" && <input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} max={today()} required />}
+              <SegmentedChoice compact label={t("date")} value={dateChoice} onValueChange={(value) => { setPickingDate(value === "pick"); if (value !== "pick") setDate(daysAgo(Number(value))); }} options={[{ value: "0", label: t("today") }, { value: "1", label: t("yesterday") }, { value: "2", label: t("twoDaysAgo") }, { value: "pick", label: t("pick") }]} />
+              {dateChoice === "pick" && <input type="date" aria-label={t("date")} value={date} onChange={(e) => setDate(e.target.value)} max={today()} required />}
             </div>
             {(special || type === "income") && <label className="field">
-              Account
-              <ChoiceField hideLabel label="Account" value={account} onValueChange={setAccount} options={accountChoices} />
+              {t("account")}
+              <ChoiceField hideLabel label={t("account")} value={account} onValueChange={setAccount} options={accountChoices} />
             </label>}
           </div>
           {cardId && type === "expense" && !special && <div className="form-columns">
-            <label className="field">Payment plan
-              <SegmentedChoice label="Payment plan" value={installments === "1" ? "one" : "installments"} onValueChange={(value) => setInstallments(value === "one" ? "1" : "3")} options={[{ value: "one", label: "One payment" }, { value: "installments", label: "Installments" }]} />
+            <label className="field">{t("paymentPlan")}
+              <SegmentedChoice label={t("paymentPlan")} value={installments === "1" ? "one" : "installments"} onValueChange={(value) => setInstallments(value === "one" ? "1" : "3")} options={[{ value: "one", label: t("onePayment") }, { value: "installments", label: t("installments") }]} />
             </label>
-            {installments !== "1" && <label className="field">Number of payments<input type="number" min={2} max={60} value={installments} onChange={(e) => setInstallments(e.target.value)} /></label>}
-            <label className="field">First due month<input type="month" value={firstDueMonth} onChange={(e) => setFirstDueMonth(e.target.value)} /></label>
+            {installments !== "1" && <label className="field">{t("numberPayments")}<input type="number" min={2} max={60} value={installments} onChange={(e) => setInstallments(e.target.value)} /></label>}
+            <label className="field">{t("firstDueMonth")}<input type="month" value={firstDueMonth} onChange={(e) => setFirstDueMonth(e.target.value)} /></label>
           </div>}
-          <details className="editor-more" open={moreOpen || Boolean(error)} onToggle={(event) => setMoreOpen(event.currentTarget.open)}><summary>More details <span>Sharing, repeat, quick entry and note</span></summary>
-          {type === "expense" && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} /> Shared with others</label>}
-          {shared && type === "expense" && !special && <div className="form-columns"><label className="field">People including you<input type="number" min={2} max={30} value={people} onChange={(e) => setPeople(e.target.value)} /></label><label className="field">Your share (Rp)<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={setOwnAmount} /></label><p className="editor-help">The full payment stays on your bank or card statement. Only your share uses your pocket budget.</p></div>}
-          {!special && <label className="checkbox-label editor-option"><input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} /> Repeat monthly after I confirm it</label>}
-          {!transaction && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={saveFavorite} onChange={(e) => setSaveFavorite(e.target.checked)} /> Save as a quick entry</label>}
-          {transaction?.split && <div className="repayment-review"><strong>Shared payment</strong><p>Others owe {money(transaction.amount - transaction.split.ownAmount)}. Repaid {money(data.transactions.filter((t) => t.forTransactionId === transaction.id).reduce((n, t) => n + t.amount, 0))}.</p><div className="plans-fields"><label className="field">Repayment (Rp)<MoneyInput min={1} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">Received in<ChoiceField hideLabel label="Repayment account" value={repayAccount} onValueChange={setRepayAccount} options={accountChoices} /></label><label className="field">Received on<input type="date" min={transaction.date} max={today()} value={repayDate} onChange={(e) => setRepayDate(e.target.value)} /></label></div><button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount))} onClick={() => void onRepay(transaction.id, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>Record repayment</button></div>}
+          <details className="editor-more" open={moreOpen || Boolean(error)} onToggle={(event) => setMoreOpen(event.currentTarget.open)}><summary>{t("moreDetails")} <span>{t("moreDetailsSubtitle")}</span></summary>
+          {type === "expense" && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} /> {t("shared")}</label>}
+          {shared && type === "expense" && !special && <div className="form-columns"><label className="field">{t("peopleIncludingYou")}<input type="number" min={2} max={30} value={people} onChange={(e) => setPeople(e.target.value)} /></label><label className="field">{t("yourShareRupiah")}<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={setOwnAmount} /></label><p className="editor-help">{t("sharedPaymentHelp")}</p></div>}
+          {!special && <label className="checkbox-label editor-option"><input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} /> {t("repeatMonthly")}</label>}
+          {!transaction && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={saveFavorite} onChange={(e) => setSaveFavorite(e.target.checked)} /> {t("saveQuick")}</label>}
+          {transaction?.split && <div className="repayment-review"><strong>{t("sharedPayment")}</strong><p>{t("othersOweRepaid", { amount: money(transaction.amount - transaction.split.ownAmount), repaid: money(data.transactions.filter((item) => item.forTransactionId === transaction.id).reduce((n, item) => n + item.amount, 0)) })}</p><div className="plans-fields"><label className="field">{t("repaymentRupiah")}<MoneyInput min={1} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">{t("receivedIn")}<ChoiceField hideLabel label={t("repaymentAccount")} value={repayAccount} onValueChange={setRepayAccount} options={accountChoices} /></label><label className="field">{t("receivedOn")}<input type="date" min={transaction.date} max={today()} value={repayDate} onChange={(e) => setRepayDate(e.target.value)} /></label></div><button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount))} onClick={() => void onRepay(transaction.id, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>{t("recordRepayment")}</button></div>}
           <label className="field">
-            Note <span className="optional">optional</span>
+            {t("note")} <span className="optional">{t("optional")}</span>
             <textarea
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={500}
-              placeholder="Anything to remember?"
+              placeholder={t("notePrompt")}
             />
           </label>
           </details>
@@ -1835,29 +1846,28 @@ function TransactionEditor({
           {deleting ? (
             <div className="delete-confirm">
               <p>
-                Delete this transaction? Its amount will be removed from your
-                totals.
+                {t("deleteTransactionQuestion")}
               </p>
               <button
                 type="button"
                 className="button danger"
                 onClick={() => void onDelete(transaction!.id)}
               >
-                Delete transaction
+                {t("deleteTransaction")}
               </button>
               <button
                 type="button"
                 className="button secondary"
                 onClick={() => setDeleting(false)}
               >
-                Keep it
+                {t("keepIt")}
               </button>
             </div>
           ) : (
             <div className="form-footer">
               {transaction && (
                 <IconButton
-                  label="Delete transaction"
+                  label={t("deleteTransaction")}
                   onClick={() => setDeleting(true)}
                 >
                   <Trash2 size={18} />
@@ -1868,15 +1878,15 @@ function TransactionEditor({
                 className="button secondary"
                 onClick={onClose}
               >
-                Cancel
+                {t("cancel")}
               </button>
-              {!transaction && <button className="button secondary" type="button" onClick={(event) => { keepOpen.current = true; event.currentTarget.form?.requestSubmit(); keepOpen.current = false; }}>Save & add another</button>}
+              {!transaction && <button className="button secondary" type="button" onClick={(event) => { keepOpen.current = true; event.currentTarget.form?.requestSubmit(); keepOpen.current = false; }}>{t("saveAnother")}</button>}
               <button className="button primary" type="submit">
                 {busy
-                  ? "Saving..."
+                  ? t("saving")
                   : transaction
-                    ? "Save changes"
-                    : "Add transaction"}
+                    ? t("saveChanges")
+                    : t("addTransaction")}
                 <Check size={16} />
               </button>
             </div>
@@ -1977,7 +1987,7 @@ function PocketEditor({
                 step="1"
                 value={budget}
                 onValueChange={setBudget}
-                placeholder="100,000"
+                placeholder={groupDigits(100000)}
                 required
                 aria-label="Pocket budget in rupiah"
               />
@@ -2089,11 +2099,11 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
   return <main className="login-screen">
     <section className="login-panel">
       <span className="brand-mark"><Wallet /></span><h1>Saku</h1>
-      <p>Know where your money lives, what it is for, and what is safe to spend.</p>
-      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. If you choose AI import, selected statement text and images are processed by Cloudflare AI. Original files and review drafts stay on this device. On Android you can also let Saku read notifications from bank and e-wallet apps you choose; they stay on the phone until you add them. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
-      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
-      <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? "Connecting..." : "Continue with Google"}</button>
-      {!configured && <p className="form-error">Google sign-in is not configured in this build.</p>}{error && <p className="form-error" role="alert">{error}</p>}
+      <p>{t("loginTagline")}</p>
+      <details className="agreement"><summary>{t("agreementSummaryTitle")}</summary><p>{t("agreementSummary")} {t("readThe")} <a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a> {t("and")} <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a>.</p></details>
+      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
+      <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? t("connecting") : t("continueGoogle")}</button>
+      {!configured && <p className="form-error">{t("signInNotConfigured")}</p>}{error && <p className="form-error" role="alert">{error}</p>}
     </section>
   </main>;
 }
@@ -2101,21 +2111,21 @@ function AgreementUpdate({ busy, error, onAccept, onSignOut }: { busy: boolean; 
   const [accepted, setAccepted] = useState(false);
   return <main className="login-screen">
     <section className="login-panel">
-      <span className="brand-mark"><ShieldCheck /></span><h1>Updated agreement</h1>
-      <p>Saku's User Agreement and Privacy Notice now cover an optional Android feature: reading notifications from bank and e-wallet apps you choose. It stays off unless you turn it on, and notification text never leaves your phone.</p>
-      <p>Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p>
-      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
-      <button className="button primary login-button" disabled={!accepted || busy} onClick={() => void onAccept()}><Check size={18} />{busy ? "Saving..." : "Accept and continue"}</button>
-      <button className="button text-button" disabled={busy} onClick={() => void onSignOut()}><LogOut size={16} />Sign out instead</button>
+      <span className="brand-mark"><ShieldCheck /></span><h1>{t("agreementUpdated")}</h1>
+      <p>{t("agreementUpdateBody")}</p>
+      <p>{t("readThe")} <a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a> {t("and")} <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a>.</p>
+      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
+      <button className="button primary login-button" disabled={!accepted || busy} onClick={() => void onAccept()}><Check size={18} />{busy ? t("saving") : t("acceptContinue")}</button>
+      <button className="button text-button" disabled={busy} onClick={() => void onSignOut()}><LogOut size={16} />{t("signOutInstead")}</button>
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>
   </main>;
 }
 function WorkspaceChoice({ local, remote, onChoose, onBackup }: { local: Data; remote: Data; onChoose: (data: Data, localWins: boolean) => Promise<void>; onBackup: () => void }) {
-  return <main className="login-screen"><section className="login-panel workspace-choice"><ShieldCheck size={30} /><h1>Choose this device's workspace</h1><p>This device has local Saku data. Choose whether to bring it into this Google account or use the cloud backup. Nothing is uploaded until you choose.</p>
-    <button className="workspace-option" onClick={() => void onChoose(local, true)}><strong>Keep this phone</strong><span>{local.transactions.length} transactions · {local.pockets.length} pockets</span></button>
-    <button className="workspace-option" onClick={() => void onChoose(remote, false)}><strong>{remote.transactions.length || remote.pockets.length ? "Restore cloud copy" : "Start without local data"}</strong><span>{remote.transactions.length} transactions · {remote.pockets.length} pockets</span></button>
-    <button className="button secondary" onClick={onBackup}><Download size={17} />Export phone backup first</button>
+  return <main className="login-screen"><section className="login-panel workspace-choice"><ShieldCheck size={30} /><h1>{t("workspaceTitle")}</h1><p>{t("workspaceBody")}</p>
+    <button className="workspace-option" onClick={() => void onChoose(local, true)}><strong>{t("keepPhone")}</strong><span>{t("transactionsPockets", { transactions: local.transactions.length, pockets: local.pockets.length })}</span></button>
+    <button className="workspace-option" onClick={() => void onChoose(remote, false)}><strong>{remote.transactions.length || remote.pockets.length ? t("restoreCloud") : t("startFresh")}</strong><span>{t("transactionsPockets", { transactions: remote.transactions.length, pockets: remote.pockets.length })}</span></button>
+    <button className="button secondary" onClick={onBackup}><Download size={17} />{t("exportFirst")}</button>
   </section></main>;
 }
 
@@ -2132,7 +2142,7 @@ function StartProfile({
 }) {
   const [name, setName] = useState(suggestedName?.trim().slice(0, 40) || "");
   const [accounts, setAccounts] = useState([{ name: "BCA", balance: "" }, { name: "Jago", balance: "" }]);
-  const [pockets, setPockets] = useState([{ name: "Food & coffee", budget: "", icon: "utensils" }, { name: "Bills", budget: "", icon: "home" }, { name: "Fun", budget: "", icon: "game" }]);
+  const [pockets, setPockets] = useState([{ name: t("defaultFood"), budget: "", icon: "utensils" }, { name: t("defaultBills"), budget: "", icon: "home" }, { name: t("defaultFun"), budget: "", icon: "game" }]);
   const [hasCard, setHasCard] = useState(false), [cardName, setCardName] = useState(""), [cardLimit, setCardLimit] = useState(""), [cardDebt, setCardDebt] = useState("0"), [dueDay, setDueDay] = useState("15");
   const [hasInstallment, setHasInstallment] = useState(false), [installmentName, setInstallmentName] = useState(""), [monthlyAmount, setMonthlyAmount] = useState(""), [nextDueMonth, setNextDueMonth] = useState(shiftMonth(today().slice(0, 7), 1)), [paymentsLeft, setPaymentsLeft] = useState("1");
   const [step, setStep] = useState(0), [stepError, setStepError] = useState("");
@@ -2140,7 +2150,7 @@ function StartProfile({
     if (step === 0) {
       const chosen = accounts.map((item) => item.name.trim()).filter(Boolean);
       if (!name.trim() || !chosen.length || new Set(chosen.map((item) => item.toLowerCase())).size !== chosen.length) {
-        setStepError("Enter your name and at least one account. Account names must be unique."); return;
+        setStepError(t("setupError")); return;
       }
     }
     setStepError(""); setStep((value) => value + 1);
@@ -2150,7 +2160,7 @@ function StartProfile({
     const chosenAccounts = accounts.map((item) => ({ ...item, name: item.name.trim() })).filter((item) => item.name);
     if (!chosenAccounts.length || new Set(chosenAccounts.map((item) => item.name.toLowerCase())).size !== chosenAccounts.length) return;
     const next = emptyData(); next.name = name.trim(); next.accounts = chosenAccounts.map((item) => item.name); next.pockets = pockets.filter((item) => item.name.trim()).map((item, index) => ({ id: uid(), name: item.name.trim(), budget: Number(item.budget || 0), budgets: {}, createdMonth: today().slice(0, 7), icon: item.icon, color: COLORS[index % COLORS.length] }));
-    next.transactions = chosenAccounts.filter((item) => Number(item.balance) > 0).map((item) => ({ id: uid(), name: "Opening balance", amount: Number(item.balance), type: "income" as const, kind: "opening_balance" as const, date: today(), pocketId: "", account: item.name, note: "Opening balance when starting Saku" }));
+    next.transactions = chosenAccounts.filter((item) => Number(item.balance) > 0).map((item) => ({ id: uid(), name: t("openingBalance"), amount: Number(item.balance), type: "income" as const, kind: "opening_balance" as const, date: today(), pocketId: "", account: item.name, note: "Opening balance when starting Saku" }));
     if (hasCard && cardName.trim() && validAmount(Number(cardLimit))) {
       const cardId = uid(); next.creditCards = [{ id: cardId, name: cardName.trim(), limit: Number(cardLimit), openingDebt: Number(cardDebt || 0), dueDay: Number(dueDay) }];
       if (hasInstallment && installmentName.trim() && validAmount(Number(monthlyAmount)) && Number(paymentsLeft) >= 1) next.existingInstallments = [{ id: uid(), cardId, name: installmentName.trim(), monthlyAmount: Number(monthlyAmount), nextDueMonth, paymentsLeft: Number(paymentsLeft) }];
@@ -2158,32 +2168,32 @@ function StartProfile({
     void onStart(next);
   }
   return (
-    <Modal title="Set up your Saku" subtitle="Keep only the accounts and pockets you actually use." onClose={onClose}>
+    <Modal title={t("setupTitle")} subtitle={t("setupSubtitle")} onClose={onClose}>
       <form onSubmit={submit}>
         <fieldset disabled={busy}>
-          <div className="setup-progress" aria-label={`Setup step ${step + 1} of 3`}><span className={step === 0 ? "active" : ""}>1 Accounts</span><span className={step === 1 ? "active" : ""}>2 Pockets</span><span className={step === 2 ? "active" : ""}>3 Cards</span></div>
-          {step === 0 && <><label className="field">Your name<input autoFocus required value={name} maxLength={40} pattern=".*\S.*" onChange={(e) => setName(e.target.value)} placeholder={suggestedName?.trim() || "What should we call you?"} /></label>
+          <div className="setup-progress" aria-label={`Setup step ${step + 1} of 3`}><span className={step === 0 ? "active" : ""}>1 {t("accounts")}</span><span className={step === 1 ? "active" : ""}>2 {t("pockets")}</span><span className={step === 2 ? "active" : ""}>3 {t("cards")}</span></div>
+          {step === 0 && <><label className="field">{t("yourName")}<input autoFocus required value={name} maxLength={40} pattern=".*\S.*" onChange={(e) => setName(e.target.value)} placeholder={suggestedName?.trim() || t("namePrompt")} /></label>
           <div className="setup-account-heading">
-            <div><h3>Where your money lives</h3><p>Enter the balance shown in each bank or e-wallet today. Leave it at Rp0 if the account is empty.</p></div>
+            <div><h3>{t("moneyLives")}</h3><p>{t("balanceHelp")}</p></div>
           </div>
           <div className="setup-account-list">{accounts.map((item, index) => {
             const balanceHelpId = `opening-balance-help-${index}`;
             return <section className="setup-account-card" key={index} aria-label={item.name ? `${item.name} account` : `Account ${index + 1}`}>
               <span className="setup-account-icon" aria-hidden="true"><Wallet size={18} /></span>
-              <label className="field setup-account-name">Account name<input aria-label={`Account ${index + 1} name`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /></label>
-              <label className="field setup-opening-balance">Opening balance<div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Account"} opening balance`} aria-describedby={balanceHelpId} placeholder={index === 0 ? "2,450,000" : index === 1 ? "875,000" : "0"} value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div><small id={balanceHelpId}>{item.balance ? "This becomes your starting recorded balance." : "Example only. It is saved only after you enter an amount."}</small></label>
+              <label className="field setup-account-name">{t("accountName")}<input aria-label={`${t("account")} ${index + 1}`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /></label>
+              <label className="field setup-opening-balance">{t("openingBalance")}<div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || t("account")} ${t("openingBalance")}`} aria-describedby={balanceHelpId} placeholder={index === 0 ? groupDigits(2450000) : index === 1 ? groupDigits(875000) : "0"} value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div><small id={balanceHelpId}>{item.balance ? t("startingBalance") : t("exampleOnly")}</small></label>
             </section>;
           })}</div>
-          <button type="button" className="button secondary" onClick={() => setAccounts([...accounts, { name: "", balance: "" }])}><Plus size={16} />Add bank, cash, or e-wallet</button></>}
+          <button type="button" className="button secondary" onClick={() => setAccounts([...accounts, { name: "", balance: "" }])}><Plus size={16} />{t("addAccount")}</button></>}
           {step === 1 && <>
-          <h3>Your monthly pockets</h3>{pockets.map((item, index) => <div className="setup-row" key={index}><input aria-label={`Pocket ${index + 1} name`} value={item.name} maxLength={40} onChange={(e) => setPockets(pockets.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /><div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || "Pocket"} monthly budget`} placeholder="Monthly budget" value={item.budget} onValueChange={(budget) => setPockets(pockets.map((x, i) => i === index ? { ...x, budget } : x))} /></div></div>)}
-          <button type="button" className="button secondary" onClick={() => setPockets([...pockets, { name: "", budget: "", icon: "home" }])}><Plus size={16} />Add pocket</button></>}
+          <h3>{t("monthlyPockets")}</h3>{pockets.map((item, index) => <div className="setup-row" key={index}><input aria-label={`${t("pocket")} ${index + 1}`} value={item.name} maxLength={40} onChange={(e) => setPockets(pockets.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /><div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || t("pocket")} ${t("monthlyBudget")}`} placeholder={t("monthlyBudget")} value={item.budget} onValueChange={(budget) => setPockets(pockets.map((x, i) => i === index ? { ...x, budget } : x))} /></div></div>)}
+          <button type="button" className="button secondary" onClick={() => setPockets([...pockets, { name: "", budget: "", icon: "home" }])}><Plus size={16} />{t("addPocket")}</button></>}
           {step === 2 && <>
-          <label className="checkbox-label editor-option"><input type="checkbox" checked={hasCard} onChange={(e) => setHasCard(e.target.checked)} />I use a credit card</label>
-          {hasCard && <div className="setup-section"><label className="field">Card name<input required value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="e.g. BCA Visa" /></label><label className="field">Credit limit<div className="amount-input"><span>Rp</span><MoneyInput required value={cardLimit} onValueChange={setCardLimit} /></div></label><label className="field">Currently owed<div className="amount-input"><span>Rp</span><MoneyInput value={cardDebt} onValueChange={setCardDebt} /></div></label><label className="field">Payment day<input type="number" min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></label><label className="checkbox-label"><input type="checkbox" checked={hasInstallment} onChange={(e) => setHasInstallment(e.target.checked)} />I have an ongoing installment</label>{hasInstallment && <><label className="field">What is it?<input required value={installmentName} onChange={(e) => setInstallmentName(e.target.value)} /></label><label className="field">Payment each month<div className="amount-input"><span>Rp</span><MoneyInput required value={monthlyAmount} onValueChange={setMonthlyAmount} /></div></label><div className="form-columns"><label className="field">Next due month<input type="month" value={nextDueMonth} onChange={(e) => setNextDueMonth(e.target.value)} /></label><label className="field">Payments left<input type="number" min={1} max={60} value={paymentsLeft} onChange={(e) => setPaymentsLeft(e.target.value)} /></label></div></>}</div>}</>}
+          <label className="checkbox-label editor-option"><input type="checkbox" checked={hasCard} onChange={(e) => setHasCard(e.target.checked)} />{t("useCard")}</label>
+          {hasCard && <div className="setup-section"><label className="field">{t("cardName")}<input required value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="mis. BCA Visa" /></label><label className="field">{t("creditLimit")}<div className="amount-input"><span>Rp</span><MoneyInput required value={cardLimit} onValueChange={setCardLimit} /></div></label><label className="field">{t("currentlyOwed")}<div className="amount-input"><span>Rp</span><MoneyInput value={cardDebt} onValueChange={setCardDebt} /></div></label><label className="field">{t("paymentDay")}<input type="number" min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></label><label className="checkbox-label"><input type="checkbox" checked={hasInstallment} onChange={(e) => setHasInstallment(e.target.checked)} />{t("ongoingInstallment")}</label>{hasInstallment && <><label className="field">{t("whatIsIt")}<input required value={installmentName} onChange={(e) => setInstallmentName(e.target.value)} /></label><label className="field">{t("monthlyPayment")}<div className="amount-input"><span>Rp</span><MoneyInput required value={monthlyAmount} onValueChange={setMonthlyAmount} /></div></label><div className="form-columns"><label className="field">{t("nextDueMonth")}<input type="month" value={nextDueMonth} onChange={(e) => setNextDueMonth(e.target.value)} /></label><label className="field">{t("paymentsLeft")}<input type="number" min={1} max={60} value={paymentsLeft} onChange={(e) => setPaymentsLeft(e.target.value)} /></label></div></>}</div>}</>}
           {stepError && <p className="form-error" role="alert">{stepError}</p>}
-          <p className="privacy-copy"><LockKeyhole size={17} />Nothing here is sample data. You can change every item later.</p>
-          <div className="form-footer">{step > 0 && <button type="button" className="button secondary" onClick={() => { setStep(step - 1); setStepError(""); }}>Back</button>}{step < 2 ? <button type="button" className="button primary" onClick={advance}>Continue <ArrowRight size={17} /></button> : <button className="button primary" type="submit">{busy ? "Creating..." : "Start my tracker"}<ArrowRight size={17} /></button>}</div>
+          <p className="privacy-copy"><LockKeyhole size={17} />{t("setupPrivacy")}</p>
+          <div className="form-footer">{step > 0 && <button type="button" className="button secondary" onClick={() => { setStep(step - 1); setStepError(""); }}>{t("back")}</button>}{step < 2 ? <button type="button" className="button primary" onClick={advance}>{t("continue")} <ArrowRight size={17} /></button> : <button className="button primary" type="submit">{busy ? t("creating") : t("startTracker")}<ArrowRight size={17} /></button>}</div>
         </fieldset>
       </form>
     </Modal>
@@ -2203,6 +2213,8 @@ function SettingsView({
   syncNow,
   themePreference,
   onThemeChange,
+  languagePreference,
+  onLanguageChange,
   onAdjustBalance,
   appLock,
   onAppLockChange,
@@ -2219,6 +2231,8 @@ function SettingsView({
   syncNow: () => Promise<void>;
   themePreference: ThemePreference;
   onThemeChange: (preference: ThemePreference) => void;
+  languagePreference: LanguagePreference;
+  onLanguageChange: (preference: LanguagePreference) => void;
   onAdjustBalance: (account: string) => void;
   appLock: AppLockSettings;
   onAppLockChange: (next: AppLockSettings, confirm: boolean) => Promise<boolean>;
@@ -2252,7 +2266,7 @@ function SettingsView({
   async function readBackup(file?: File) {
     if (!file) return;
     try {
-      if (file.size > 20000000) throw new Error("Backup is too large.");
+      if (file.size > 20000000) throw new Error(t("backupTooLarge"));
       setRestore(validateData(JSON.parse(await file.text())));
     } catch (e) {
       notify(e instanceof Error ? e.message : "Invalid backup.");
@@ -2275,11 +2289,18 @@ function SettingsView({
           {(["system", "light", "dark"] as const).map((option) => <button key={option} type="button" aria-pressed={themePreference === option} className={themePreference === option ? "selected" : ""} onClick={() => onThemeChange(option)}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</button>)}
         </div>
       </section>
+      <section className="appearance-section">
+        <h2>{t("language")}</h2>
+        <p>{t("languageHelp")}</p>
+        <div className="appearance-options" role="group" aria-label={t("language")}>
+          {(["system", "id", "en"] as const).map((option) => <button key={option} type="button" aria-pressed={languagePreference === option} className={languagePreference === option ? "selected" : ""} onClick={() => onLanguageChange(option)}>{option === "system" ? t("followDevice") : option === "id" ? t("indonesian") : t("english")}</button>)}
+        </div>
+      </section>
       <AppUpdateSettings />
       {notificationCaptureSupported() && <NotificationAccess data={data} notify={notify} />}
       {appLockSupported() && <AppLockSection settings={appLock} onChange={onAppLockChange} />}
       <section>
-        <h2>Local profile</h2>
+        <h2>{t("localProfile")}</h2>
         <p>Your workspace on this device.</p>
         <form
           className="settings-form"
@@ -2480,7 +2501,7 @@ function SettingsView({
               className="button primary"
               disabled={busy}
               onClick={() =>
-                void commit(restore, "Backup restored").then((ok) => {
+                void commit(restore, t("backupRestored")).then((ok) => {
                   if (ok) {
                     setName(restore.name);
                     setRestore(null);

@@ -88,12 +88,12 @@ object SakuWidgets {
             }
         }
         views.setViewVisibility(R.id.widget_empty, if (rows.isEmpty()) View.VISIBLE else View.GONE)
-        views.setTextViewText(R.id.widget_empty, if (available) "Save favorites in Saku to add them here" else "Open Saku to sign in")
+        views.setTextViewText(R.id.widget_empty, context.getString(if (available) R.string.widget_favorites_empty else R.string.widget_open_sign_in))
         views.setOnClickPendingIntent(R.id.widget_empty, openApp(context, widgetId + 9000))
         val lastId = prefs.getString("lastId:$widgetId", null)
         views.setViewVisibility(R.id.widget_status_row, if (lastId == null) View.GONE else View.VISIBLE)
         if (lastId != null) {
-            views.setTextViewText(R.id.widget_status, "Added ${prefs.getString("lastName:$widgetId", "transaction")}")
+            views.setTextViewText(R.id.widget_status, context.getString(R.string.widget_added, prefs.getString("lastName:$widgetId", context.getString(R.string.widget_transaction))))
             val undo = Intent(context, FavoritesWidgetProvider::class.java)
                 .setAction(ACTION_UNDO).setData(Uri.parse("saku://widget/undo/$widgetId/$lastId"))
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId).putExtra("transactionId", lastId)
@@ -176,13 +176,13 @@ class FavoritesWidgetProvider : AppWidgetProvider() {
                 WidgetLedger.addFavorite(context, favoriteId).onSuccess { result ->
                     if (result.created) {
                         prefs.edit().putString("lastId:$widgetId", result.transactionId).putString("lastName:$widgetId", name).apply()
-                        Toast.makeText(context, "$name added", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.widget_add_success, name), Toast.LENGTH_SHORT).show()
                     }
-                }.onFailure { Toast.makeText(context, it.message ?: "Could not add transaction", Toast.LENGTH_LONG).show() }
+                }.onFailure { Toast.makeText(context, it.message ?: context.getString(R.string.widget_add_error), Toast.LENGTH_LONG).show() }
             }
             SakuWidgets.ACTION_UNDO -> {
                 val id = intent.getStringExtra("transactionId") ?: return
-                if (prefs.getString("lastId:$widgetId", null) == id && WidgetLedger.undo(context, id)) Toast.makeText(context, "Transaction removed", Toast.LENGTH_SHORT).show()
+                if (prefs.getString("lastId:$widgetId", null) == id && WidgetLedger.undo(context, id)) Toast.makeText(context, context.getString(R.string.widget_removed), Toast.LENGTH_SHORT).show()
                 prefs.edit().remove("lastId:$widgetId").remove("lastName:$widgetId").apply()
             }
         }
