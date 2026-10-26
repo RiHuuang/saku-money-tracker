@@ -40,7 +40,8 @@ const releaseKey = "saku-update-release-v1";
 const dismissedKey = "saku-update-dismissed-v1";
 
 export function AppUpdateProvider({ children }: { children: ReactNode }) {
-  const native = Capacitor.isNativePlatform();
+  // Play builds don't register the updater, so they never ask Saku for releases.
+  const native = Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("AppUpdate");
   const [installed, setInstalled] = useState<NativeStatus>();
   const [release, setRelease] = useState<AndroidRelease>();
   const [checking, setChecking] = useState(false);

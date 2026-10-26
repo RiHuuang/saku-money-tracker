@@ -12,9 +12,9 @@ npm run android:sync
 npm run android:open
 ```
 
-Android requires JDK 21 and Android SDK 36. Build a debug APK in Android Studio, or run `gradlew.bat assembleDebug` from `android` with `JAVA_HOME` and `ANDROID_HOME` set to your installed toolchains. Google Play releases use an AAB and environment-provided signing credentials; see [`RELEASE.md`](RELEASE.md).
+Android requires JDK 21 and Android SDK 36. Build a debug APK in Android Studio, or run `gradlew.bat assembleDirectDebug` from `android` with `JAVA_HOME` and `ANDROID_HOME` set to your installed toolchains. Google Play releases use an AAB and environment-provided signing credentials; see [`RELEASE.md`](RELEASE.md).
 
-The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On a connected Android 12+ arm64 phone, install it with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`, or open the APK on the phone and permit installation from that source. Saku appears in the app drawer and can be placed on the home screen like any other app. It does not need the computer or dev server after installation. Catch up imports require sign-in and an internet connection for Cloudflare AI processing. Use `npx wrangler dev` with a locally initialized D1 database to test browser login; the standalone Vite server does not provide the API.
+The debug APK is `android/app/build/outputs/apk/direct/debug/app-direct-debug.apk` (the `play` flavor is the same app without the self-updater). On a connected Android 12+ arm64 phone, install it with `adb install -r android/app/build/outputs/apk/direct/debug/app-direct-debug.apk`, or open the APK on the phone and permit installation from that source. Saku appears in the app drawer and can be placed on the home screen like any other app. It does not need the computer or dev server after installation. Catch up imports require sign-in and an internet connection for Cloudflare AI processing. Use `npx wrangler dev` with a locally initialized D1 database to test browser login; the standalone Vite server does not provide the API.
 
 ## Included
 
