@@ -29,6 +29,7 @@ try {
     await import("../worker/agreement-route.test.mjs");
     await import("../worker/merchant-clean.test.mjs");
     await import("../worker/legal.test.mjs");
+    await import("../worker/security-headers.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });
