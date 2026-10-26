@@ -295,6 +295,16 @@ export function summary(data: Data, month: string) {
     accounts: data.accounts.map((account) => ({ account, balance: accountBalance(data, account) })),
   };
 }
+export function averageDailySpending(data: Data, month: string, todayISO = today()) {
+  const end = [todayISO, `${month}-${new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate()}`].sort()[0];
+  if (!end.startsWith(month)) return 0;
+  const first = data.transactions
+    .filter((item) => item.date <= end && item.kind !== "opening_balance" && item.kind !== "account_transfer")
+    .reduce((earliest, item) => item.date < earliest ? item.date : earliest, end);
+  const start = [first, `${month}-01`].sort()[1];
+  const days = Math.max(1, (Date.parse(`${end}T12:00:00Z`) - Date.parse(`${start}T12:00:00Z`)) / 86400000 + 1);
+  return Math.round(summary(data, month).expenses / days);
+}
 export function emptyData(): Data {
   return {
     version: 3,

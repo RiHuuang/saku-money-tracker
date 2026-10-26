@@ -3,6 +3,7 @@ import { mock, test } from "node:test";
 import {
   bankRows,
   accountBalance,
+  averageDailySpending,
   balanceAdjustment,
   cardBalance,
   cardDue,
@@ -32,6 +33,18 @@ test("compact rupiah uses Indonesian separators and units", () => {
   assert.equal(compact(1500000), "1,5 jt");
   assert.equal(compact(250000), "250 rb");
   assert.equal(compact(-1500000), "-1,5 jt");
+});
+
+test("average daily spending starts at the first real entry and spans past months", () => {
+  const data = emptyData();
+  const entry = (id: string, date: string, amount: number, kind?: "opening_balance" | "account_transfer") =>
+    ({ id, date, amount, kind, name: id, type: kind === "opening_balance" ? "income" as const : "expense" as const, pocketId: "", account: "BCA", note: "" });
+  data.transactions = [entry("opening", "2026-10-01", 500000, "opening_balance"), entry("transfer", "2026-10-02", 70000, "account_transfer"), entry("spend", "2026-10-25", 35000)];
+  assert.equal(averageDailySpending(data, "2026-10", "2026-10-25"), 35000);
+  data.transactions.push(entry("september", "2026-09-10", 30000));
+  assert.equal(averageDailySpending(data, "2026-10", "2026-10-25"), 1400);
+  data.transactions = [entry("first", "2026-08-01", 1000), entry("september", "2026-09-10", 30000)];
+  assert.equal(averageDailySpending(data, "2026-09", "2026-10-25"), 1000);
 });
 
 test("balance adjustments reconcile an account without changing income or spending", () => {
