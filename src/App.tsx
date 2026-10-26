@@ -67,6 +67,7 @@ import {
   type RecurringRule,
   type Transaction,
 } from "./domain";
+import { learnMerchant, suggestMerchant } from "./merchants";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
 import {
   DirectionIcon,
@@ -88,6 +89,7 @@ const CsvStatements = lazy(() => import("./CsvStatements"));
 const CatchUp = lazy(() => import("./CatchUp"));
 const Plans = lazy(() => import("./Plans"));
 const CatchUpDays = lazy(() => import("./CatchUpDays"));
+const learnsMerchant = (t: Transaction) => t.type === "expense" && (!t.kind || t.kind === "card_purchase");
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
@@ -1130,6 +1132,7 @@ export default function App() {
                     : [...data.transactions, t],
                   recurring,
                   favorites: favorite ? [...data.favorites, favorite] : data.favorites,
+                  merchantRules: learnsMerchant(t) ? learnMerchant(data, t.name, t) : data.merchantRules,
                 },
                 edit.value ? "Transaction updated" : "Transaction added",
               )
@@ -1576,7 +1579,7 @@ function TransactionEditor({
   }
   function learnPocket() {
     if (pocketChosen || type !== "expense" || special) return;
-    const learned = lastPocketFor(data, name);
+    const learned = suggestMerchant(data, name)?.pocketId ?? lastPocketFor(data, name);
     setPocket(learned !== undefined && (!learned || data.pockets.some((p) => p.id === learned)) ? learned : "");
   }
   const dateChoice = pickingDate ? "pick" : date === daysAgo(0) ? "0" : date === daysAgo(1) ? "1" : date === daysAgo(2) ? "2" : "pick";

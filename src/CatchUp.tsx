@@ -4,6 +4,7 @@ import { extractImportPage } from "./cloud";
 import { money, reconcile, today, uid, validAmount, validDate, type BankRow, type Data, type Transaction } from "./domain";
 import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, type ImportDraft, type ImportRow } from "./importDraft";
 import { runImportSources } from "./importFlow";
+import { learnMerchant, suggestMerchant } from "./merchants";
 import { openImportPages } from "./importPages";
 import { ChoiceField, Modal } from "./components";
 import { applySharedSourceDate, confirmedImportAccount, detectImportAccount, importRowName, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
@@ -145,7 +146,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           if (draftRef.current?.id !== draftId || draftRef.current.owner !== owner) break;
           const reviewMonth = draftRef.current.month;
           const rows: ImportRow[] = answer.rows.map((result) => {
-            const row = { ...result, id: uid(), sourceId: current.id, page: page.number, pocketId: "" } as Omit<ImportRow, "decision">;
+            const remembered = suggestMerchant(data, result.name) || (result.cleanName ? suggestMerchant(data, result.cleanName) : null);
+            const row = { ...result, ...(remembered ? { cleanName: remembered.name } : {}), id: uid(), sourceId: current.id, page: page.number, pocketId: remembered?.pocketId || "" } as Omit<ImportRow, "decision">;
             return { ...row, decision: suggestImportDecision(row, reviewMonth) };
           });
           const latest = draftRef.current;
@@ -227,7 +229,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       additions.push(...importedTransactions(row, accountForRow(row), draftRef.current.sources.find((source) => source.id === row.sourceId)?.name || "source", data, other?.id));
       if (other) { paired.add(other.id); pairedByTransfer.set(row.id, other.id); }
     }
-    if (!(await commit({ ...data, transactions: [...data.transactions, ...additions] }, "Reviewed import batch saved"))) return;
+    const merchantRules = ready.reduce((rules, row) => row.direction === "expense" && ["purchase", "pay_later"].includes(row.activity) ? learnMerchant({ ...data, merchantRules: rules }, row.name, { name: importRowName(row), pocketId: row.pocketId }) : rules, data.merchantRules);
+    if (!(await commit({ ...data, transactions: [...data.transactions, ...additions], merchantRules }, "Reviewed import batch saved"))) return;
     if (draftRef.current?.id !== draftId) return;
     const saved = additions.map((transaction) => ({ id: transaction.id, fingerprint: JSON.stringify(transaction), pairedRowId: transaction.transferId ? pairedByTransfer.get(transaction.transferId) : undefined }));
     try { await save({ ...draftRef.current, rows: draftRef.current.rows.map((row) => paired.has(row.id) ? { ...row, decision: "skip" } : row), saved: [...draftRef.current.saved, ...saved] }); }

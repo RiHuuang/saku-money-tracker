@@ -74,7 +74,9 @@ export type Data = {
   pocketTransfers: PocketTransfer[];
   existingInstallments: ExistingInstallment[];
   checkedDays: string[];
+  merchantRules: MerchantRule[];
 };
+export type MerchantRule = { key: string; name: string; pocketId: string; updatedAt: string };
 export const COLORS = [
   "#15786e",
   "#8270ce",
@@ -305,6 +307,7 @@ export function emptyData(): Data {
     pocketTransfers: [],
     existingInstallments: [],
     checkedDays: [],
+    merchantRules: [],
   };
 }
 export function demoData(month = today().slice(0, 7)): Data {
@@ -376,6 +379,7 @@ export function demoData(month = today().slice(0, 7)): Data {
     pocketTransfers: [],
     existingInstallments: [],
     checkedDays: [],
+    merchantRules: [],
   };
 }
 
@@ -387,7 +391,7 @@ export function validateData(input: unknown): Data {
   const v3 = (v2?.version === 2
     ? { ...v2, version: 3, pocketTransfers: [], existingInstallments: [] }
     : v2) as Data;
-  const d = (v3 && typeof v3 === "object" ? { ...v3, checkedDays: v3.checkedDays ?? [] } : v3) as Data;
+  const d = (v3 && typeof v3 === "object" ? { ...v3, checkedDays: v3.checkedDays ?? [], merchantRules: v3.merchantRules ?? [] } : v3) as Data;
   if (
     !d ||
     d.version !== 3 ||
@@ -412,6 +416,10 @@ export function validateData(input: unknown): Data {
     d.checkedDays.length > 3660 ||
     d.checkedDays.some((day) => typeof day !== "string" || !validDate(day)) ||
     new Set(d.checkedDays).size !== d.checkedDays.length ||
+    !Array.isArray(d.merchantRules) ||
+    d.merchantRules.length > 500 ||
+    d.merchantRules.some((rule) => !rule || typeof rule.key !== "string" || !rule.key || rule.key.length > 100 || typeof rule.name !== "string" || !rule.name.trim() || rule.name.length > 100 || typeof rule.pocketId !== "string" || typeof rule.updatedAt !== "string" || rule.updatedAt.length > 40) ||
+    new Set(d.merchantRules.map((rule) => rule.key)).size !== d.merchantRules.length ||
     d.pockets.length > 1000 ||
     d.transactions.length > 100000 ||
     d.creditCards.length > 30 ||
@@ -564,6 +572,8 @@ export function validateData(input: unknown): Data {
       throw new Error("The backup contains an invalid existing installment.");
     installmentIds.add(item.id);
   }
+  // A rule may outlive its pocket; it then suggests Unassigned rather than blocking the ledger.
+  d.merchantRules = d.merchantRules.map((rule) => !rule.pocketId || ids.has(rule.pocketId) ? rule : { ...rule, pocketId: "" });
   return d;
 }
 
