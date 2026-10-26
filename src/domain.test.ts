@@ -10,6 +10,7 @@ import {
   daysAgo,
   frequentExpenses,
   lastPocketFor,
+  compact,
   budgetFor,
   demoData,
   dueRules,
@@ -26,6 +27,12 @@ import {
   validateData,
   type Statement,
 } from "./domain";
+
+test("compact rupiah uses Indonesian separators and units", () => {
+  assert.equal(compact(1500000), "1,5 jt");
+  assert.equal(compact(250000), "250 rb");
+  assert.equal(compact(-1500000), "-1,5 jt");
+});
 
 test("balance adjustments reconcile an account without changing income or spending", () => {
   const data = emptyData();
