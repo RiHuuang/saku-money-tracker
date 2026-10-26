@@ -8,6 +8,7 @@ import {
   cardDue,
   catchUpGap,
   daysAgo,
+  frequentExpenses,
   lastPocketFor,
   budgetFor,
   demoData,
@@ -393,4 +394,21 @@ test("lastPocketFor uses the most recent expense with the same name", () => {
   assert.equal(lastPocketFor(data, "Kopi"), "");
   assert.equal(lastPocketFor(data, "Bakso"), undefined);
   assert.equal(lastPocketFor(data, "  "), undefined);
+});
+
+test("frequentExpenses suggests the most used recent expenses that aren't quick entries", () => {
+  const data = emptyData();
+  data.accounts = ["Cash"];
+  data.favorites = [{ id: "f1", name: "Parkir", amount: 5000, type: "expense", pocketId: "", account: "Cash" }];
+  const row = (id: string, name: string, date: string, amount: number, extra: object = {}) => ({ id, name, amount, type: "expense", date, pocketId: "", account: "Cash", note: "", ...extra }) as typeof data.transactions[number];
+  data.transactions = [
+    row("k1", "Kopi", "2026-10-01", 25000), row("k2", "kopi ", "2026-10-20", 28000), row("k3", "Kopi", "2026-10-10", 26000),
+    row("g1", "Grab", "2026-10-21", 15000), row("g2", "Grab", "2026-10-22", 18000),
+    row("p1", "parkir", "2026-10-22", 5000), row("old", "Old", "2026-08-01", 1000), row("old2", "Old", "2026-08-02", 1000), row("old3", "Old", "2026-08-03", 1000),
+    row("r1", "Rent", "2026-10-05", 900000, { recurringRuleId: "r" }), row("r2", "Rent", "2026-09-05", 900000, { recurringRuleId: "r" }),
+    row("s1", "Salary", "2026-10-01", 9000000, { type: "income" }), row("x1", "Bakso", "2026-10-23", 20000),
+  ];
+  const suggested = frequentExpenses(data, "2026-10-25");
+  assert.deepEqual(suggested.map((f) => [f.name, f.amount]), [["kopi ", 28000], ["Grab", 18000], ["Bakso", 20000]]);
+  assert.equal(frequentExpenses(data, "2026-10-25", 1).length, 1);
 });

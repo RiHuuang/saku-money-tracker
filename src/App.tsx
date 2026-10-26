@@ -43,6 +43,7 @@ import {
   budgetFor,
   cardBalance,
   catchUpGap,
+  dayLabel,
   emptyData,
   exportCSV,
   isIncome,
@@ -86,6 +87,7 @@ const Statements = lazy(() => import("./Statements"));
 const CsvStatements = lazy(() => import("./CsvStatements"));
 const CatchUp = lazy(() => import("./CatchUp"));
 const Plans = lazy(() => import("./Plans"));
+const CatchUpDays = lazy(() => import("./CatchUpDays"));
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
@@ -125,7 +127,6 @@ type Edit =
   | null;
 const cloudImportEnabled = true;
 const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
-const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "transactions", label: "Activity", icon: ArrowDownLeft },
@@ -154,6 +155,7 @@ export default function App() {
     [loginBusy, setLoginBusy] = useState(false),
     [resolution, setResolution] = useState<{ local: Data; remote: Data; remoteState?: CloudState } | null>(null),
     [avatarUrl, setAvatarUrl] = useState(""),
+    [catchUpSheet, setCatchUpSheet] = useState<{ days: string[]; index: number } | null>(null),
     [catchUpDismissed, setCatchUpDismissed] = useState(() => { try { return localStorage.getItem(catchUpDismissedKey) || ""; } catch { return ""; } });
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [previousView, setPreviousView] = useState<View>("overview");
@@ -476,6 +478,7 @@ export default function App() {
   const weekTop = data.pockets.map((p) => ({ name: p.name, amount: weekTransactions.filter((t) => t.pocketId === p.id).reduce((n, t) => n + personalAmount(t), 0) })).sort((a, b) => b.amount - a.amount)[0];
   const currentAvailable = summary(data, today().slice(0, 7)).available;
   const catchUpDays = catchUpDismissed === today() ? [] : catchUpGap(data, today());
+  const catchUpAnchorChecked = catchUpDays.length > 0 && data.checkedDays.includes(shiftDate(catchUpDays[0], -1)) && !data.transactions.some((t) => t.date === shiftDate(catchUpDays[0], -1) && t.kind !== "opening_balance");
   const showCatchUp = catchUpDays.length > 0 && data.transactions.some((t) => t.date <= shiftDate(today(), -2));
   function dismissCatchUp() { setCatchUpDismissed(today()); try { localStorage.setItem(catchUpDismissedKey, today()); } catch { /* Dismissal is a convenience only. */ } }
   const titles: Record<View, [string, string]> = {
@@ -656,7 +659,7 @@ export default function App() {
           </section>}
           {view === "overview" && (
             <>
-              {showCatchUp && <section className="catch-up-card" aria-label="Days to catch up"><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? "Last entry over 2 weeks ago" : `Last entry: ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {catchUpDays.length} {catchUpDays.length === 1 ? "day" : "days"} to catch up</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setEdit({ type: "transaction", date: catchUpDays[0] })}>Fill in by day</button><button className="button secondary" onClick={() => { setCheckTab(cloudImportEnabled ? "catchup" : "csv"); go("check"); }}>{cloudImportEnabled ? "Import screenshot" : "Check a statement"}</button></div></div><button className="icon-button catch-up-dismiss" aria-label="Hide until tomorrow" title="Hide until tomorrow" onClick={dismissCatchUp}><X size={18} /></button></section>}
+              {showCatchUp && <section className="catch-up-card" aria-label="Days to catch up"><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? "Last entry over 2 weeks ago" : `${catchUpAnchorChecked ? "Checked up to" : "Last entry:"} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {catchUpDays.length} {catchUpDays.length === 1 ? "day" : "days"} to catch up</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>Fill in by day</button><button className="button secondary" onClick={() => { setCheckTab(cloudImportEnabled ? "catchup" : "csv"); go("check"); }}>{cloudImportEnabled ? "Import screenshot" : "Check a statement"}</button></div></div><button className="icon-button catch-up-dismiss" aria-label="Hide until tomorrow" title="Hide until tomorrow" onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
                 <button className="balance-panel balance-action" onClick={() => go("insights")} aria-label={`View insights for ${monthLabel(month)}`}>
                   <div className="balance-top">
@@ -1097,6 +1100,7 @@ export default function App() {
         }}
       />}
       {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, "Pocket budget moved")) setEdit(null); }} />}
+      {catchUpSheet && !edit && <Suspense fallback={null}><CatchUpDays data={data} days={catchUpSheet.days} index={catchUpSheet.index} busy={busy} onIndex={(index) => setCatchUpSheet({ ...catchUpSheet, index })} onAdd={(date, favorite) => setEdit({ type: "transaction", date, favorite })} onEdit={(value) => openTransaction(value)} onNothingSpent={(day) => commit({ ...data, checkedDays: [...new Set([...data.checkedDays, day])].sort() }, "Marked as nothing spent")} onClose={() => setCatchUpSheet(null)} /></Suspense>}
       {edit?.type === "transaction" && (
         <TransactionEditor
           key={edit.value?.id || edit.favorite?.id || edit.cardId || edit.pocketId || edit.date || "new"}

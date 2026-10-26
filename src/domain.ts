@@ -102,14 +102,33 @@ export const daysAgo = (days: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 export const today = () => daysAgo(0);
+export const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 // Before merchant memory (P1-5), a name matches only exactly, ignoring case and outer spaces.
+const entryKey = (name: string) => name.trim().toLocaleLowerCase("id-ID");
+const everydayExpense = (t: Transaction) => t.type === "expense" && (!t.kind || t.kind === "card_purchase");
 export function lastPocketFor(data: Data, name: string) {
-  const key = name.trim().toLocaleLowerCase("id-ID");
+  const key = entryKey(name);
   if (!key) return undefined;
   let match: Transaction | undefined;
   for (const t of data.transactions)
-    if (t.type === "expense" && (!t.kind || t.kind === "card_purchase") && t.name.trim().toLocaleLowerCase("id-ID") === key && (!match || t.date >= match.date)) match = t;
+    if (everydayExpense(t) && entryKey(t.name) === key && (!match || t.date >= match.date)) match = t;
   return match?.pocketId;
+}
+// Templates for the catch-up sheet: the most frequent recent expenses that aren't already quick entries.
+export function frequentExpenses(data: Data, todayISO: string, limit = 5): Favorite[] {
+  const since = shiftDate(todayISO, -60), taken = new Set(data.favorites.map((f) => entryKey(f.name)));
+  const groups = new Map<string, { count: number; latest: Transaction }>();
+  for (const t of data.transactions) {
+    const key = entryKey(t.name);
+    if (!everydayExpense(t) || t.recurringRuleId || t.split || t.date <= since || t.date > todayISO || taken.has(key) || (t.cardId && !data.creditCards.some((c) => c.id === t.cardId))) continue;
+    const group = groups.get(key);
+    if (!group) groups.set(key, { count: 1, latest: t });
+    else { group.count++; if (t.date >= group.latest.date) group.latest = t; }
+  }
+  return [...groups.entries()].sort(([, a], [, b]) => b.count - a.count || b.latest.date.localeCompare(a.latest.date)).slice(0, limit).map(([key, { latest }]) => ({
+    id: `recent:${key}`, name: latest.name, amount: latest.amount, type: "expense", pocketId: latest.pocketId, account: latest.account,
+    ...(latest.kind === "card_purchase" ? { cardId: latest.cardId } : {}),
+  }));
 }
 export const money = (n: number) =>
   new Intl.NumberFormat("id-ID", {

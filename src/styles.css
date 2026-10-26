@@ -31,6 +31,12 @@
 .catch-up-card strong { display: block; font-size: 14px; line-height: 1.4; }
 .catch-up-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .catch-up-dismiss { flex: none; margin: -6px -6px 0 0; }
+.catch-up-day { display: grid; gap: 16px; margin: 4px 0 22px; }
+.catch-up-day-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.catch-up-day-list button { display: flex; width: 100%; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.catch-up-day-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catch-up-day-list strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.catch-up-day-empty { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 13px; }
 .catchup-panel { padding: 26px; margin: 18px 0; background: var(--surface); border-radius: 22px; box-shadow: 0 10px 35px #153b2b0b; }
 .catchup-panel-head, .catchup-source, .catchup-actions, .catchup-save, .catchup-finish { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .catchup-panel-head h3 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
