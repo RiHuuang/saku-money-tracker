@@ -31,6 +31,8 @@ try {
     await import("../worker/merchant-clean.test.mjs");
     await import("../worker/legal.test.mjs");
     await import("../worker/security-headers.test.mjs");
+    await import("../worker/refresh-reuse.test.mjs");
+    await import("../worker/sessions-route.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });

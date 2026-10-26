@@ -129,6 +129,9 @@ import {
   pushCloud,
   signInGoogle,
   signOutGoogle,
+  listDevices,
+  signOutDevice,
+  type SignedInDevice,
   updateProfile,
   acceptAgreement,
   type CloudState,
@@ -2503,6 +2506,15 @@ function SettingsView({
             </div>
             <small className="cloud-note">Changes sync automatically, including widget entries while Saku is closed. {cloud.lastSyncedAt ? `Last synced ${new Date(cloud.lastSyncedAt).toLocaleString()}` : "Not backed up yet."}</small>
             {cloud.sheetPending && <p className="inline-warning">Your cloud snapshot is saved, but Google Sheets mirroring is still pending.</p>}
+            <SignedInDevices notify={notify} onSignedOutHere={async (id) => {
+              // Revoking this session first would strand any changes still waiting to sync.
+              if (cloud.dirty) await syncNow();
+              const latest = await loadCloudState();
+              if (!latest.signedIn || latest.user?.id !== cloud.user?.id || latest.dirty) throw new Error("Sync your changes before signing out this device.");
+              await signOutDevice(id);
+              await signOutGoogle();
+              setCloud(await loadCloudState());
+            }} />
           </div>
         )}
       </section>
@@ -2677,4 +2689,25 @@ function ReminderSection({ settings, onChange, notify }: { settings: ReminderSet
     <label className="checkbox-label"><input type="checkbox" checked={settings.enabled} disabled={busy} onChange={(event) => void toggle(event.target.checked)} /> Remind me each day</label>
     {settings.enabled && <label className="field reminder-time">Time<input type="time" value={settings.time} disabled={busy} onChange={(event) => { if (/^\d{2}:\d{2}$/.test(event.target.value)) void onChange({ ...settings, time: event.target.value }); }} /></label>}
   </section>;
+}
+
+function SignedInDevices({ notify, onSignedOutHere }: { notify: (message: string) => void; onSignedOutHere: (id: string) => Promise<void> }) {
+  const [devices, setDevices] = useState<SignedInDevice[] | null>(null), [busy, setBusy] = useState("");
+  const load = () => listDevices().then(setDevices).catch(() => setDevices([]));
+  useEffect(() => { void load(); }, []);
+  async function signOut(device: SignedInDevice) {
+    setBusy(device.id);
+    try {
+      if (device.current) { await onSignedOutHere(device.id); return; }
+      await signOutDevice(device.id);
+      notify(`${device.label} signed out`);
+      await load();
+    } catch (error) { notify(error instanceof Error ? error.message : "That device could not be signed out. Try again."); }
+    finally { setBusy(""); }
+  }
+  if (!devices?.length) return null;
+  return <div className="signed-in-devices">
+    <strong>Signed-in devices</strong>
+    <ul>{devices.map((device) => <li key={device.id}><span><b>{device.label}{device.current ? " · this device" : ""}</b><small>Last active {new Date(device.lastActiveAt).toLocaleString()}</small></span><button className="button text-button" disabled={!!busy} onClick={() => void signOut(device)}><LogOut size={15} />{busy === device.id ? "Signing out..." : "Sign out"}</button></li>)}</ul>
+  </div>;
 }

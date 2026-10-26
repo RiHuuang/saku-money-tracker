@@ -398,6 +398,15 @@ export async function acceptAgreement() {
 export async function cleanMerchantNames(userId: string, names: string[]): Promise<{ name: string; cleanName: string }[]> {
   return (await (await requestsFor(userId)("/v1/merchants/clean", { method: "POST", body: JSON.stringify({ names }) })).json()).results;
 }
+export type SignedInDevice = { id: string; label: string; createdAt: number | null; lastActiveAt: number; current: boolean };
+export async function listDevices(): Promise<SignedInDevice[]> {
+  const user = (await publicState()).user;
+  return (await (await requestsFor(user?.id)("/v1/sessions")).json()).sessions;
+}
+export async function signOutDevice(id: string) {
+  const user = (await publicState()).user;
+  await requestsFor(user?.id)(`/v1/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
 export async function loadAvatarUrl(version?: string) {
   try {
     const user = (await publicState()).user;
