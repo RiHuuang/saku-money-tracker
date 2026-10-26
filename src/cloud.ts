@@ -298,7 +298,8 @@ export async function liveTicket(): Promise<{ room: string; ticket: string }> {
 }
 
 export function liveUrl(room: string, ticket: string): string {
-  const url = new URL(`${apiUrl}/v1/live`);
+  // On the web apiUrl is empty, so resolve against the page.
+  const url = new URL(`${apiUrl}/v1/live`, location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.search = new URLSearchParams({ room, ticket }).toString();
   return url.toString();

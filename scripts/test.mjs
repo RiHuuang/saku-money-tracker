@@ -17,6 +17,7 @@ try {
     await import("../worker/import-ai-route.test.mjs");
     await import("./cloud-refresh.test.mjs");
     await import("./cloud-merge.test.mjs");
+    await import("./live-url.test.mjs");
     await import("../worker/avatar.test.mjs");
     await import("../worker/google-token.test.mjs");
     await import("../worker/crypto.test.mjs");
