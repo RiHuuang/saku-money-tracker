@@ -41,7 +41,8 @@ fetch('https://app.sakumoney.my.id/v1/releases/android/latest', { cache: 'no-sto
   .catch(() => {});
 
 document.querySelectorAll('.dark-image').forEach(image => {
-  image.alt = image.previousElementSibling.alt;
+  // Each theme image sits in its own <picture>, so its light twin is in the previous one.
+  image.alt = image.parentElement.previousElementSibling.querySelector('img').alt;
   image.removeAttribute('aria-hidden');
 });
 
