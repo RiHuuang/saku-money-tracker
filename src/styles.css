@@ -1309,6 +1309,7 @@ main {
   color: #b9d0c5;
   margin-left: 12px;
 }
+.toast-action { font-weight: 700; text-decoration: underline; }
 .empty {
   text-align: center;
   padding: 42px 20px;
@@ -3146,6 +3147,7 @@ main {
     line-height: 1.6;
     max-width: calc(100% - 28px);
   }
+  .toast.above-mobile-add { bottom: calc(136px + env(safe-area-inset-bottom, 0px)); }
   .toast > svg {
     display: none;
   }

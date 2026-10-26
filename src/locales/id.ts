@@ -27,4 +27,5 @@ export const id = {
   storyStarts: "Ceritamu dimulai di sini", logExpenseHint: "Catat pengeluaran untuk melihat ke mana uangmu pergi.", topPocketShare: "{amount} terpakai, {percent}% dari total pengeluaranmu.",
   compareRows: "Cocokkan baris ini dengan {source}: tanggal, jumlah, dan arah uangnya.",
   csvOnDevice: "CSV di perangkat", notificationsTab: "Notifikasi",
+  transactionAdded: "Transaksi ditambahkan", transactionUpdated: "Transaksi diperbarui", transactionRemoved: "Transaksi dihapus", undo: "Urungkan",
 } satisfies Record<keyof typeof en, string>;

@@ -104,7 +104,7 @@ const learnsMerchant = (t: Transaction) => t.type === "expense" && (!t.kind || t
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
-import { loadLanguage, saveLanguage, setActiveLanguage, t, type LanguagePreference } from "./i18n";
+import { loadLanguage, saveLanguage, setActiveLanguage, t, t as translate, type LanguagePreference } from "./i18n";
 import { backDestination, moreViews, type View } from "./navigation";
 import { AppUpdateSettings } from "./appUpdate";
 import { version as appVersion } from "../package.json";
@@ -167,7 +167,7 @@ export default function App() {
     [month, setMonth] = useState(today().slice(0, 7)),
     [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
     [edit, setEdit] = useState<Edit>(null),
-    [toast, setToast] = useState(""),
+    [toast, setToast] = useState<string | { message: string; action: { label: string; run: () => void } }>(""),
     [busy, setBusy] = useState(false),
     [cloud, setCloud] = useState<CloudState | null>(null),
     [loginBusy, setLoginBusy] = useState(false),
@@ -524,7 +524,8 @@ export default function App() {
       activeSync.current = null;
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
       const status = typeof error === "object" && error && "status" in error ? (error as { status?: number }).status : undefined;
-      setToast(status === 409 ? t("syncConflict") : t("savedOffline"));
+      const message = status === 409 ? t("syncConflict") : t("savedOffline");
+      setToast((current) => typeof current === "string" ? message : { ...current, message: `${current.message} · ${message}` });
     } finally {
       syncRunning.current = false;
       void reconcileRef.current?.(failed);
@@ -1282,9 +1283,13 @@ export default function App() {
                   favorites: favorite ? [...data.favorites, favorite] : data.favorites,
                   merchantRules: learnsMerchant(t) ? learnMerchant(data, t.name, t) : data.merchantRules,
                 },
-                edit.value ? "Transaction updated" : "Transaction added",
+                edit.value ? translate("transactionUpdated") : translate("transactionAdded"),
               )
             ) {
+              if (!edit.value) setToast({ message: translate("transactionAdded"), action: { label: translate("undo"), run: () => {
+                const current = latest.current.data;
+                if (current?.transactions.some((item) => item.id === t.id)) void commit({ ...current, transactions: current.transactions.filter((item) => item.id !== t.id) }, translate("transactionRemoved"));
+              } } });
               if (!keepOpen) setEdit(null);
               return true;
             }
@@ -1379,9 +1384,10 @@ export default function App() {
         />
       )}
       {toast && (
-        <div className="toast" role="status">
+        <div className={`toast${view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket) ? " above-mobile-add" : ""}`} role="status">
           <Check size={17} />
-          {toast}
+          {typeof toast === "string" ? toast : toast.message}
+          {typeof toast !== "string" && <button type="button" className="toast-action" onClick={toast.action.run}>{toast.action.label}</button>}
           <button aria-label="Dismiss message" onClick={() => setToast("")}>
             <X size={16} />
           </button>

@@ -25,4 +25,5 @@ export const en = {
   storyStarts: "Your story starts here", logExpenseHint: "Log an expense to see where your money goes.", topPocketShare: "{amount} spent, {percent}% of your total expenses.",
   compareRows: "Compare these rows with {source} for dates, amounts and money direction.",
   csvOnDevice: "CSV on device", notificationsTab: "Notifications",
+  transactionAdded: "Transaction added", transactionUpdated: "Transaction updated", transactionRemoved: "Transaction removed", undo: "Undo",
 } as const;
