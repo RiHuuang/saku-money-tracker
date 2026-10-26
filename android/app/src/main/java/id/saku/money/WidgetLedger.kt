@@ -18,6 +18,7 @@ data class WidgetData(
     val accounts: List<String>,
     val pockets: List<WidgetChoice>,
     val cards: List<WidgetChoice>,
+    val sqliteRevision: Long? = null,
 )
 
 object WidgetLedger {
@@ -37,7 +38,8 @@ object WidgetLedger {
         val cloud = prefs.getString(CLOUD_KEY, null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return null
         val userId = cloud.optJSONObject("user")?.optString("id").orEmpty()
         if (userId.isBlank()) return null
-        val ledger = prefs.getString("saku-ledger-v3-$userId", null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return null
+        val stored = LedgerDatabase.load(context, userId)
+        val ledger = stored?.ledger ?: prefs.getString("saku-ledger-v3-$userId", null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return null
         if (ledger.optInt("version") != 3) return null
         return WidgetData(
             userId,
@@ -45,6 +47,7 @@ object WidgetLedger {
             strings(ledger.optJSONArray("accounts")),
             choices(ledger.optJSONArray("pockets")),
             choices(ledger.optJSONArray("creditCards")),
+            stored?.revision,
         )
     }
 
@@ -221,7 +224,13 @@ object WidgetLedger {
         val prefs = capacitor(context)
         val cloud = prefs.getString(CLOUD_KEY, null)?.let(::JSONObject) ?: error("Open Saku to sign in")
         cloud.put("dirty", true).put("changeVersion", cloud.optLong("changeVersion", 0) + 1)
-        check(prefs.edit().putString("saku-ledger-v3-${data.userId}", data.ledger.toString()).putString(CLOUD_KEY, cloud.toString()).commit())
+        if (data.sqliteRevision != null) {
+            // Dirty is durable before the SQLite write; a crash cannot strand a saved row unsynced.
+            check(prefs.edit().putString(CLOUD_KEY, cloud.toString()).commit())
+            LedgerDatabase.save(context, data.userId, data.ledger, data.sqliteRevision)
+        } else {
+            check(prefs.edit().putString("saku-ledger-v3-${data.userId}", data.ledger.toString()).putString(CLOUD_KEY, cloud.toString()).commit())
+        }
         val widgetPrefs = widgetPreferences(context)
         widgetPrefs.edit().putLong(REVISION_KEY, widgetPrefs.getLong(REVISION_KEY, 0L) + 1).apply()
         WidgetCloudSync.schedule(context)

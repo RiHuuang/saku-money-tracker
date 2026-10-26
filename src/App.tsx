@@ -217,14 +217,15 @@ export default function App() {
       if (!useful(local)) throw new Error("Could not reach Saku Cloud. Connect to the internet and retry before setting up a workspace. Your cloud data has not changed.");
       // A saved local ledger remains available offline.
     }
-    const newerCleanCloud = scoped && !state.dirty && remoteState && remoteState.revision > state.revision && useful(remote);
-    if (useful(local) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
+    const localNeedsReview = scoped && (remoteState?.dirty ?? state.dirty);
+    const newerCleanCloud = scoped && remoteState && !remoteState.dirty && remoteState.revision > state.revision && useful(remote);
+    if ((useful(local) || localNeedsReview) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
       setResolution({ local: local!, remote: remote || emptyData(), remoteState });
       return;
     }
-    const chosen = newerCleanCloud ? remote! : useful(local) ? local! : useful(remote) ? remote! : emptyData();
+    const chosen = newerCleanCloud ? remote! : useful(local) || localNeedsReview ? local! : useful(remote) ? remote! : emptyData();
     await replaceData(chosen);
-    if (remoteState && !remoteState.dirty && remote && JSON.stringify(chosen) === JSON.stringify(remote)) setCloud(await adoptCloudSnapshot(remoteState));
+    if (remoteState && !remoteState.dirty && remote && JSON.stringify(chosen) === JSON.stringify(remote)) setCloud(await adoptCloudSnapshot(remoteState, false, chosen));
     setData(chosen);
     if (!useful(chosen)) setEdit({ type: "start" });
   }
@@ -269,7 +270,7 @@ export default function App() {
             if (result.data) setResolution({ local: before!, remote: result.data, remoteState: result.state });
           } else if (result.data) {
             await replaceData(result.data);
-            const adopted = await adoptCloudSnapshot(result.state);
+            const adopted = await adoptCloudSnapshot(result.state, false, result.data);
             setData(result.data);
             setCloud(adopted);
           }
@@ -513,7 +514,7 @@ export default function App() {
     }} onSignOut={async () => { await signOutGoogle(); setCloud(await loadCloudState()); }} />;
   if (resolution)
     return <WorkspaceChoice local={resolution.local} remote={resolution.remote} onChoose={async (chosen, localWins) => {
-      if (localWins) { await saveData(chosen); if (resolution.remoteState) setCloud(await resolveCloudWithLocal(resolution.remoteState)); else setCloud((value) => value ? { ...value, dirty: true } : value); setData(chosen); void queueSync(chosen); } else { await replaceData(chosen); if (resolution.remoteState) setCloud(await adoptCloudSnapshot(resolution.remoteState, true)); } setData(chosen); setResolution(null); if (!chosen.transactions.length && !chosen.pockets.length && !chosen.accounts.length) setEdit({ type: "start" });
+      if (localWins) { await saveData(chosen); if (resolution.remoteState) setCloud(await resolveCloudWithLocal(resolution.remoteState)); else setCloud((value) => value ? { ...value, dirty: true } : value); setData(chosen); void queueSync(chosen); } else { await replaceData(chosen); if (resolution.remoteState) setCloud(await adoptCloudSnapshot(resolution.remoteState, true, chosen)); } setData(chosen); setResolution(null); if (!chosen.transactions.length && !chosen.pockets.length && !chosen.accounts.length) setEdit({ type: "start" });
     }} onBackup={() => void download(`saku-local-backup-${today()}.json`, JSON.stringify(resolution.local, null, 2), "application/json")} />;
   if (!data)
     return (
@@ -2459,7 +2460,7 @@ function SettingsView({
               const result = await pullCloud();
               if (!result.data) { notify("There is no cloud backup yet."); setPullConfirm(false); return; }
               await replaceData(result.data);
-              setCloud(await adoptCloudSnapshot(result.state, true));
+              setCloud(await adoptCloudSnapshot(result.state, true, result.data));
               setData(result.data);
               setName(result.data.name);
               setPullConfirm(false);
