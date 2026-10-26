@@ -51,6 +51,31 @@ class NotificationCapturePlugin : Plugin() {
         call.resolve()
     }
 
+    @PluginMethod
+    fun inbox(call: PluginCall) {
+        val items = JSArray()
+        for (item in NotificationInbox.store(context).items()) items.put(JSObject().apply {
+            put("id", item.id); put("packageName", item.packageName); put("account", item.account); put("amount", item.amount)
+            put("direction", item.direction); put("rawMerchant", item.rawMerchant); put("balance", item.balance); put("occurredAt", item.occurredAt)
+        })
+        call.resolve(JSObject().apply { put("items", items) })
+    }
+
+    @PluginMethod
+    fun removeInbox(call: PluginCall) {
+        val ids = call.getArray("ids")?.toList<String>()?.toSet() ?: emptySet()
+        val store = NotificationInbox.store(context)
+        store.remove(ids)
+        NotificationInbox.summarize(context, store.items().size)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun clearInbox(call: PluginCall) {
+        NotificationInbox.clear(context)
+        call.resolve()
+    }
+
     private fun installed(packageName: String) = try {
         context.packageManager.getPackageInfo(packageName, 0); true
     } catch (_: PackageManager.NameNotFoundException) { false }

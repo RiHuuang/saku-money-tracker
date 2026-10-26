@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { validateData, type Data } from "./domain";
 import { refreshHomeWidgets } from "./homeWidget";
+import { clearNotificationInbox } from "./notificationCapture";
 import { sheetChanges, sheetGridRows } from "./sheetMirror";
 import { downloadSnapshot, uploadSnapshot, type SnapshotRequest } from "./snapshotTransfer";
 
@@ -316,6 +317,7 @@ export async function signOutGoogle() {
   try { await request("/v1/auth/logout", { method: "POST", body: "{}" }, false); } catch { /* Local sign-out still wins. */ }
   if (native()) await plugin.clearSession();
   await Preferences.remove({ key: stateKey });
+  await clearNotificationInbox();
   await refreshHomeWidgets();
 }
 export async function deleteCloudAccount() {

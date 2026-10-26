@@ -12,6 +12,7 @@ class SakuNotificationListener : NotificationListenerService() {
             val text = extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT)
             CapturedNotification(sbn.packageName, account, extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(), text?.toString().orEmpty(), sbn.postTime)
         } ?: return
-        runCatching { NotificationCapture.sink(this, captured) }
+        // Only parsed, redacted fields are kept; the full text is dropped here.
+        runCatching { NotificationInbox.receive(this, captured) }
     }
 }

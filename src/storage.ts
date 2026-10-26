@@ -6,6 +6,7 @@ import { type Data, emptyData, validateData } from "./domain";
 import { markCloudDirty } from "./cloud";
 import { refreshHomeWidgets, scheduleCloudSync } from "./homeWidget";
 import { deleteOwnerImportDrafts, importConsentKey } from "./importDraft";
+import { clearNotificationInbox } from "./notificationCapture";
 const key = "saku-ledger-v1";
 const userKey = (userId?: string) => userId ? `saku-ledger-v3-${userId}` : "saku-ledger-browser-v3";
 let activeUserId = "";
@@ -33,6 +34,7 @@ export async function hasUserData(userId: string) {
 }
 export async function removeUserData(userId: string) {
   await deleteOwnerImportDrafts(userId);
+  await clearNotificationInbox();
   localStorage.removeItem(importConsentKey(userId));
   await Preferences.remove({ key: userKey(userId) });
   if (activeUserId === userId) activeUserId = "";

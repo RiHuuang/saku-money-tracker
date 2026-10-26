@@ -28,9 +28,6 @@ object NotificationCapture {
     fun <T> readIfAdmitted(packageName: String, allowlist: Allowlist, read: (account: String) -> T): T? =
         if (allowlist.admits(packageName)) read(allowlist.accounts.getValue(packageName)) else null
 
-    // Later stages (parsing, the encrypted inbox) attach here; nothing is stored by the listener itself.
-    @Volatile var sink: (Context, CapturedNotification) -> Unit = { _, _ -> }
-
     fun load(context: Context): Allowlist {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val accounts = prefs.all.mapNotNull { (key, value) -> if (key.startsWith(APP_PREFIX) && value is String) key.removePrefix(APP_PREFIX) to value else null }.toMap()
