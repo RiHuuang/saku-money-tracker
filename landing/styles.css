@@ -69,3 +69,15 @@
 .browser-section .eyebrow,.browser-heading h2 em,.browser-heading p:not(.eyebrow),.browser-heading .text-link,.closing .eyebrow,.closing h2 em,.closing .text-link,.closing-inner>p:last-of-type{color:var(--brand-panel-muted)}
 .browser-window{border-color:var(--line)}
 .button-inverse{background:var(--surface);color:var(--ink);box-shadow:0 6px 0 var(--line)}
+.release-trust{max-width:46rem;margin:15px 0 0;font-size:.84rem;line-height:1.5;color:inherit}
+.release-trust[hidden]{display:none}
+.release-trust p{margin:.25rem 0}
+.release-trust code{font-size:.78rem;overflow-wrap:anywhere}
+.release-trust button{border:1px solid currentColor;border-radius:999px;padding:3px 10px;background:transparent;color:inherit;cursor:pointer}
+.release-trust ul{margin:.4rem 0 0;padding-left:1.2rem}
+.closing .release-trust{color:var(--brand-panel-muted)}
+.install-guide{max-width:760px;padding-block:64px 96px}
+.install-guide h1{font-size:clamp(2rem,5vw,3.5rem);line-height:1.1;margin:20px 0}
+.install-guide ol{padding-left:1.5rem;line-height:1.7}
+.install-guide li{margin-block:18px}
+.install-guide .guide-note{padding:18px 20px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
