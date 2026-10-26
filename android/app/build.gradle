@@ -95,6 +95,8 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.biometric:biometric:1.1.0"
+    implementation 'net.zetetic:sqlcipher-android:4.17.0@aar'
+    implementation 'androidx.sqlite:sqlite:2.4.0'
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     testImplementation 'org.json:json:20250517'

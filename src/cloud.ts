@@ -5,6 +5,7 @@ import { refreshHomeWidgets } from "./homeWidget";
 import { clearNotificationInbox } from "./notificationCapture";
 import { sheetChanges, sheetGridRows } from "./sheetMirror";
 import { downloadSnapshot, uploadSnapshot, type SnapshotRequest } from "./snapshotTransfer";
+import { acknowledgeNativeLedger } from "./nativeLedger";
 
 type NativeSession = { signedIn: boolean; accessToken?: string; refreshToken?: string };
 type Authorization = { code: string };
@@ -211,9 +212,10 @@ export async function connectGoogleDrive(): Promise<CloudState> {
 export async function pushCloud(data: Data): Promise<CloudState> {
   const local = await publicState();
   const result = await uploadSnapshot(JSON.stringify(validateData(data)), local.revision, requestsFor(local.user?.id));
+  const acknowledged = !native() || await acknowledgeNativeLedger(local.user!.id, data);
   const current = await publicState();
   if (current.user?.id !== local.user?.id) throw new Error("Google account changed during synchronization");
-  const next = { ...current, signedIn: true, configured: true, dirty: current.changeVersion !== local.changeVersion, revision: result.revision, lastSyncedAt: new Date().toISOString(), spreadsheetUrl: result.spreadsheetUrl, sheetPending: Boolean(result.sheetPending) };
+  const next = { ...current, signedIn: true, configured: true, dirty: !acknowledged || current.changeVersion !== local.changeVersion, revision: result.revision, lastSyncedAt: new Date().toISOString(), spreadsheetUrl: result.spreadsheetUrl, sheetPending: Boolean(result.sheetPending) };
   await savePublic(next);
   return next;
 }
@@ -234,9 +236,10 @@ export async function pullCloud(): Promise<{ data: Data | null; state: CloudStat
   return { data, state: next };
 }
 
-export async function adoptCloudSnapshot(state: CloudState, explicit = false): Promise<CloudState> {
+export async function adoptCloudSnapshot(state: CloudState, explicit = false, snapshot?: Data): Promise<CloudState> {
   const current = await publicState();
   if (current.user?.id !== state.user?.id || (!explicit && (current.dirty || current.changeVersion !== state.changeVersion))) throw new Error("Local data changed during cloud download");
+  if (native() && (!snapshot || !await acknowledgeNativeLedger(current.user!.id, snapshot))) throw new Error("Local data changed during cloud download");
   const next = { ...current, dirty: false, revision: state.revision, lastSyncedAt: state.lastSyncedAt, spreadsheetUrl: state.spreadsheetUrl, sheetPending: state.sheetPending };
   await savePublic(next);
   return { ...next, signedIn: true, configured: true };
