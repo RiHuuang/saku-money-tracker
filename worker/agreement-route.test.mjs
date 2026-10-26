@@ -29,9 +29,10 @@ try {
   const stored = JSON.parse(sqlite.prepare("SELECT data FROM users WHERE uid=?").get(uid).data);
   assert.equal(stored.agreementVersion, "2026-10-26");
   assert.equal(typeof stored.agreementAcceptedAt, "number");
-  const privacy = await (await worker.fetch(new Request("https://saku.example/privacy"), env)).text();
-  assert.match(privacy, /notifications from the bank and e-wallet apps you select/);
+  const privacy = await (await worker.fetch(new Request("https://saku.example/privacy?lang=en"), env)).text();
+  assert.match(privacy, /notifications from the bank and e-wallet apps you choose/);
   assert.match(privacy, /Effective 26 October 2026/);
-  assert.match(await (await worker.fetch(new Request("https://saku.example/terms"), env)).text(), /Reading bank and e-wallet notifications on Android is optional/);
+  assert.match(await (await worker.fetch(new Request("https://saku.example/terms?lang=en"), env)).text(), /reading bank and e-wallet notifications on Android are optional/);
+  assert.match(await (await worker.fetch(new Request("https://saku.example/privacy"), env)).text(), /<html lang="id">/, "the notice defaults to Bahasa Indonesia");
   console.log("Agreement route: current version reported, only the current version accepted, notices describe notification access");
 } finally { delete crypto.subtle.timingSafeEqual; sqlite.close(); }
