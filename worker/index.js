@@ -213,10 +213,14 @@ async function ensureSessionColumns(env) {
   if (sessionColumnsReady.has(env.DB)) return;
   const row = await env.DB.prepare("SELECT group_concat(name) AS names FROM pragma_table_info('sessions')").first();
   const columns = new Set(String(row?.names || "").split(","));
-  if (!columns.has("previous_refresh_hash")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN previous_refresh_hash TEXT").run();
-  if (!columns.has("rotated_at")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN rotated_at INTEGER").run();
-  if (!columns.has("label")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN label TEXT").run();
-  if (!columns.has("created_at")) await env.DB.prepare("ALTER TABLE sessions ADD COLUMN created_at INTEGER").run();
+  for (const [name, type] of [["previous_refresh_hash", "TEXT"], ["rotated_at", "INTEGER"], ["label", "TEXT"], ["created_at", "INTEGER"]]) {
+    if (columns.has(name)) continue;
+    try { await env.DB.prepare(`ALTER TABLE sessions ADD COLUMN ${name} ${type}`).run(); }
+    catch (error) {
+      // Another isolate may have added the column after our schema read.
+      if (!/duplicate column name/i.test(String(error))) throw error;
+    }
+  }
   sessionColumnsReady.add(env.DB);
 }
 
