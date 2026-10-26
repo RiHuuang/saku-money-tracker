@@ -73,6 +73,7 @@ export type Data = {
   favorites: Favorite[];
   pocketTransfers: PocketTransfer[];
   existingInstallments: ExistingInstallment[];
+  checkedDays: string[];
 };
 export const COLORS = [
   "#15786e",
@@ -116,6 +117,21 @@ export const monthLabel = (month: string, short = false) =>
     month: short ? "short" : "long",
     year: "numeric",
   });
+export function shiftDate(date: string, delta: number) {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+// Recurring bills post on their due date, so they don't show the user was recording that day.
+const realEntry = (t: Transaction) => t.kind !== "opening_balance" && !t.recurringRuleId;
+export function catchUpGap(data: Data, todayISO: string, checkedDays = data.checkedDays) {
+  const known = data.transactions.filter((t) => t.date <= todayISO);
+  const last = [...known.filter(realEntry).map((t) => t.date), ...checkedDays.filter((d) => d <= todayISO)].sort().at(-1) || known.map((t) => t.date).sort().at(-1);
+  if (!last) return [];
+  const days: string[] = [];
+  for (let day = todayISO; day > last && days.length < 14; day = shiftDate(day, -1)) days.unshift(day);
+  return days;
+}
 export function shiftMonth(month: string, delta: number) {
   const d = new Date(`${month}-01T12:00:00`);
   d.setMonth(d.getMonth() + delta);
@@ -258,6 +274,7 @@ export function emptyData(): Data {
     favorites: [],
     pocketTransfers: [],
     existingInstallments: [],
+    checkedDays: [],
   };
 }
 export function demoData(month = today().slice(0, 7)): Data {
@@ -328,6 +345,7 @@ export function demoData(month = today().slice(0, 7)): Data {
     favorites: [],
     pocketTransfers: [],
     existingInstallments: [],
+    checkedDays: [],
   };
 }
 
@@ -336,9 +354,10 @@ export function validateData(input: unknown): Data {
   const v2 = legacy?.version === 1
     ? { ...legacy, version: 2, creditCards: [], recurring: [], favorites: [] }
     : legacy;
-  const d = (v2?.version === 2
+  const v3 = (v2?.version === 2
     ? { ...v2, version: 3, pocketTransfers: [], existingInstallments: [] }
     : v2) as Data;
+  const d = (v3 && typeof v3 === "object" ? { ...v3, checkedDays: v3.checkedDays ?? [] } : v3) as Data;
   if (
     !d ||
     d.version !== 3 ||
@@ -359,6 +378,10 @@ export function validateData(input: unknown): Data {
     !Array.isArray(d.favorites) ||
     !Array.isArray(d.pocketTransfers) ||
     !Array.isArray(d.existingInstallments) ||
+    !Array.isArray(d.checkedDays) ||
+    d.checkedDays.length > 3660 ||
+    d.checkedDays.some((day) => typeof day !== "string" || !validDate(day)) ||
+    new Set(d.checkedDays).size !== d.checkedDays.length ||
     d.pockets.length > 1000 ||
     d.transactions.length > 100000 ||
     d.creditCards.length > 30 ||

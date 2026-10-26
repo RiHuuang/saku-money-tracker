@@ -42,6 +42,7 @@ import {
   balanceAdjustment,
   budgetFor,
   cardBalance,
+  catchUpGap,
   emptyData,
   exportCSV,
   isIncome,
@@ -50,6 +51,7 @@ import {
   receiptSuggestion,
   money,
   monthLabel,
+  shiftDate,
   shiftMonth,
   summary,
   today,
@@ -111,7 +113,7 @@ import {
 } from "./cloud";
 
 type Edit =
-  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string }
+  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string; date?: string }
   | { type: "balance_adjustment"; account: string; value?: Transaction }
   | { type: "pocket"; value?: Pocket }
   | { type: "pocket_delete"; value: Pocket }
@@ -120,6 +122,8 @@ type Edit =
   | { type: "start" }
   | null;
 const cloudImportEnabled = true;
+const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
+const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "transactions", label: "Activity", icon: ArrowDownLeft },
@@ -147,7 +151,8 @@ export default function App() {
     [cloud, setCloud] = useState<CloudState | null>(null),
     [loginBusy, setLoginBusy] = useState(false),
     [resolution, setResolution] = useState<{ local: Data; remote: Data; remoteState?: CloudState } | null>(null),
-    [avatarUrl, setAvatarUrl] = useState("");
+    [avatarUrl, setAvatarUrl] = useState(""),
+    [catchUpDismissed, setCatchUpDismissed] = useState(() => { try { return localStorage.getItem(catchUpDismissedKey) || ""; } catch { return ""; } });
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [previousView, setPreviousView] = useState<View>("overview");
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
@@ -468,6 +473,9 @@ export default function App() {
   const weekSpend = weekTransactions.reduce((n, t) => n + personalAmount(t), 0);
   const weekTop = data.pockets.map((p) => ({ name: p.name, amount: weekTransactions.filter((t) => t.pocketId === p.id).reduce((n, t) => n + personalAmount(t), 0) })).sort((a, b) => b.amount - a.amount)[0];
   const currentAvailable = summary(data, today().slice(0, 7)).available;
+  const catchUpDays = catchUpDismissed === today() ? [] : catchUpGap(data, today());
+  const showCatchUp = catchUpDays.length > 0 && data.transactions.some((t) => t.date <= shiftDate(today(), -2));
+  function dismissCatchUp() { setCatchUpDismissed(today()); try { localStorage.setItem(catchUpDismissedKey, today()); } catch { /* Dismissal is a convenience only. */ } }
   const titles: Record<View, [string, string]> = {
     overview: ["Your everyday money", "Home"],
     transactions: ["Find and review entries", "Activity"],
@@ -646,6 +654,7 @@ export default function App() {
           </section>}
           {view === "overview" && (
             <>
+              {showCatchUp && <section className="catch-up-card" aria-label="Days to catch up"><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? "Last entry over 2 weeks ago" : `Last entry: ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {catchUpDays.length} {catchUpDays.length === 1 ? "day" : "days"} to catch up</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setEdit({ type: "transaction", date: catchUpDays[0] })}>Fill in by day</button><button className="button secondary" onClick={() => { setCheckTab(cloudImportEnabled ? "catchup" : "csv"); go("check"); }}>{cloudImportEnabled ? "Import screenshot" : "Check a statement"}</button></div></div><button className="icon-button catch-up-dismiss" aria-label="Hide until tomorrow" title="Hide until tomorrow" onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
                 <button className="balance-panel balance-action" onClick={() => go("insights")} aria-label={`View insights for ${monthLabel(month)}`}>
                   <div className="balance-top">
@@ -1088,11 +1097,12 @@ export default function App() {
       {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, "Pocket budget moved")) setEdit(null); }} />}
       {edit?.type === "transaction" && (
         <TransactionEditor
-          key={edit.value?.id || edit.favorite?.id || edit.cardId || edit.pocketId || "new"}
+          key={edit.value?.id || edit.favorite?.id || edit.cardId || edit.pocketId || edit.date || "new"}
           data={data}
           transaction={edit.value}
           initialCardId={edit.cardId}
           initialPocketId={edit.pocketId}
+          initialDate={edit.date}
           favorite={edit.favorite}
           month={month}
           busy={busy}
@@ -1394,6 +1404,7 @@ function TransactionEditor({
   initialTransfer,
   initialCardId,
   initialPocketId,
+  initialDate,
   favorite,
   month,
   busy,
@@ -1409,6 +1420,7 @@ function TransactionEditor({
   initialTransfer?: boolean;
   initialCardId?: string;
   initialPocketId?: string;
+  initialDate?: string;
   favorite?: Favorite;
   month: string;
   busy: boolean;
@@ -1429,7 +1441,7 @@ function TransactionEditor({
     ),
     [name, setName] = useState(transaction?.name || favorite?.name || ""),
     [date, setDate] = useState(
-      transaction?.date || today(),
+      transaction?.date || initialDate || today(),
     ),
     [pocket, setPocket] = useState(
       transaction?.pocketId || favorite?.pocketId || initialPocketId || data.pockets[0]?.id || "",

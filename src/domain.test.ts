@@ -6,6 +6,7 @@ import {
   balanceAdjustment,
   cardBalance,
   cardDue,
+  catchUpGap,
   budgetFor,
   demoData,
   dueRules,
@@ -340,4 +341,30 @@ test("recurring bills show only unrecorded, unskipped occurrences", () => {
   d.transactions.push({ id: "paid", name: "Wi-Fi", amount: 100000, type: "expense", pocketId: "bills", account: "BCA", date: "2026-09-30", note: "", recurringRuleId: "wifi", occurrenceMonth: "2026-09" });
   assert.deepEqual(dueRules(d, "2026-10-31"), []);
   assert.doesNotThrow(() => validateData(d));
+});
+
+test("catchUpGap counts days since the last real entry or checked day, capped at 14", () => {
+  const data = emptyData();
+  data.accounts = ["Cash"];
+  assert.deepEqual(catchUpGap(data, "2026-10-25"), []);
+  const row = (id: string, date: string, extra: object = {}) => ({ id, name: id, amount: 1000, type: "expense", date, pocketId: "", account: "Cash", note: "", ...extra }) as typeof data.transactions[number];
+  data.transactions = [row("open", "2026-10-20", { type: "income", kind: "opening_balance" })];
+  assert.deepEqual(catchUpGap(data, "2026-10-23"), ["2026-10-21", "2026-10-22", "2026-10-23"]);
+  data.transactions.push(row("coffee", "2026-10-22"), row("rent", "2026-10-24", { recurringRuleId: "r1" }), row("later", "2026-11-02"));
+  assert.deepEqual(catchUpGap(data, "2026-10-25"), ["2026-10-23", "2026-10-24", "2026-10-25"]);
+  assert.deepEqual(catchUpGap(data, "2026-10-25", ["2026-10-23", "2026-10-24"]), ["2026-10-25"]);
+  assert.deepEqual(catchUpGap(data, "2026-10-25", ["2026-10-25"]), []);
+  data.transactions.push(row("today", "2026-10-25"));
+  assert.deepEqual(catchUpGap(data, "2026-10-25"), []);
+  const gap = catchUpGap(data, "2026-12-01");
+  assert.equal(gap.length, 14);
+  assert.deepEqual([gap[0], gap.at(-1)], ["2026-11-18", "2026-12-01"]);
+});
+
+test("snapshots without checkedDays load, and invalid checked days are rejected", () => {
+  const { checkedDays: _, ...old } = emptyData();
+  assert.deepEqual(validateData(JSON.parse(JSON.stringify(old))).checkedDays, []);
+  assert.deepEqual(validateData({ ...emptyData(), checkedDays: ["2026-10-23"] }).checkedDays, ["2026-10-23"]);
+  assert.throws(() => validateData({ ...emptyData(), checkedDays: ["23 Oct"] }));
+  assert.throws(() => validateData({ ...emptyData(), checkedDays: ["2026-10-23", "2026-10-23"] }));
 });

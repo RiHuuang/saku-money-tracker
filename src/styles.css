@@ -25,6 +25,12 @@
 .catchup-steps span:first-child { color: var(--teal); }
 .catchup-steps { align-items: center; flex-wrap: wrap; gap: 8px; }
 .catchup-steps > svg { color: #9bb1aa; }
+.catch-up-card { display: flex; align-items: flex-start; gap: 14px; padding: 18px 18px 18px 20px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 24px #173f2510; }
+.catch-up-card > svg { flex: none; margin-top: 2px; color: var(--teal); }
+.catch-up-card > div { flex: 1; min-width: 0; }
+.catch-up-card strong { display: block; font-size: 14px; line-height: 1.4; }
+.catch-up-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.catch-up-dismiss { flex: none; margin: -6px -6px 0 0; }
 .catchup-panel { padding: 26px; margin: 18px 0; background: var(--surface); border-radius: 22px; box-shadow: 0 10px 35px #153b2b0b; }
 .catchup-panel-head, .catchup-source, .catchup-actions, .catchup-save, .catchup-finish { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .catchup-panel-head h3 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
