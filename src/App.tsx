@@ -460,13 +460,13 @@ export default function App() {
         setCloud(await pushCloud(snapshot));
         activeSync.current = null;
       }
-      if (userInitiated) setToast("Cloud backup saved. Google Sheet is updating.");
+      if (userInitiated) setToast(t("cloudSavedUpdating"));
     } catch (error: unknown) {
       pendingSync.current = null;
       activeSync.current = null;
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
       const status = typeof error === "object" && error && "status" in error ? (error as { status?: number }).status : undefined;
-      setToast(status === 409 ? "Google has newer data. Review before syncing again." : "Saved offline. Automatic sync will retry when Saku is active.");
+      setToast(status === 409 ? t("syncConflict") : t("savedOffline"));
     } finally {
       syncRunning.current = false;
       void reconcileRef.current?.();
@@ -478,20 +478,20 @@ export default function App() {
     try {
       const next = await mirrorCloud();
       setCloud((current) => current?.user?.id === next.user?.id ? next : current);
-      if (userInitiated) setToast(next.sheetPending ? "Cloud backup saved. Google Sheet is still updating." : "Google Sheet updated");
+      if (userInitiated) setToast(next.sheetPending ? t("sheetSavedPending") : t("sheetUpdated"));
     } catch (error) {
-      if (userInitiated) setToast(error instanceof Error ? error.message : "Google Sheet update failed");
+      if (userInitiated) setToast(error instanceof Error ? error.message : t("sheetFailed"));
     } finally { mirrorRunning.current = false; }
   }
   async function recover(file: File | undefined) {
     if (!file) return;
     try {
-      if (file.size > 20000000) throw new Error("Backup is too large.");
+      if (file.size > 20000000) throw new Error(t("backupTooLarge"));
       const next = validateData(JSON.parse(await file.text()));
-      if (await commit(next, "Backup restored")) setLoadError("");
+      if (await commit(next, t("backupRestored"))) setLoadError("");
     } catch (e) {
       setLoadError(
-        e instanceof Error ? e.message : "Could not restore backup.",
+        e instanceof Error ? e.message : t("restoreFailed"),
       );
     }
   }
@@ -500,21 +500,21 @@ export default function App() {
       <div className="loading app-lock">
         <span className="brand-mark"><LockKeyhole /></span>
         <h1>Saku</h1>
-        {lockState === "locked" && <><p>Saku is locked.</p><button className="button primary" onClick={() => void unlock()}>Unlock</button></>}
+        {lockState === "locked" && <><p>{t("sakuLocked")}</p><button className="button primary" onClick={() => void unlock()}>{t("unlock")}</button></>}
       </div>
     );
   if (cloud && !cloud.signedIn)
     return <LoginScreen configured={cloud.configured} busy={loginBusy} error={loadError} onLogin={async () => {
       setLoginBusy(true); setLoadError("");
       try { const next = await signInGoogle(); setCloud(next); await openWorkspace(next); }
-      catch (error) { setLoadError(error instanceof Error ? error.message : "Google sign-in failed."); }
+      catch (error) { setLoadError(error instanceof Error ? error.message : t("signInFailed")); }
       finally { setLoginBusy(false); }
     }} />;
   if (cloud?.signedIn && typeof cloud.user?.agreementVersion === "string" && cloud.user.agreementVersion !== AGREEMENT_VERSION)
     return <AgreementUpdate busy={loginBusy} error={loadError} onAccept={async () => {
       setLoginBusy(true); setLoadError("");
       try { setCloud(await acceptAgreement()); }
-      catch (error) { setLoadError(error instanceof Error ? error.message : "The agreement could not be saved. Try again."); }
+      catch (error) { setLoadError(error instanceof Error ? error.message : t("agreementSaveFailed")); }
       finally { setLoginBusy(false); }
     }} onSignOut={async () => { await signOutGoogle(); setCloud(await loadCloudState()); }} />;
   if (resolution)
@@ -548,7 +548,7 @@ export default function App() {
             </label>
           </>
         ) : (
-          <p>Getting your pockets ready...</p>
+          <p>{t("gettingReady")}</p>
         )}
       </div>
     );
@@ -587,7 +587,7 @@ export default function App() {
   };
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main-content">Skip to content</a>
+      <a className="skip-link" href="#main-content">{t("skipToContent")}</a>
       <aside className="sidebar">
         <a
           className="brand"
@@ -604,7 +604,7 @@ export default function App() {
             saku<span className="brand-period">.</span>
           </span>
         </a>
-        <div className="workspace-label">PERSONAL WORKSPACE</div>
+        <div className="workspace-label">{t("personalWorkspace")}</div>
         <nav className="side-nav" aria-label="Main navigation">
           {navigation.map((n) => (
             <button
@@ -622,8 +622,8 @@ export default function App() {
           <div className="privacy-note">
             <ShieldCheck size={22} />
             <div>
-              <strong>Just yours.</strong>
-              <span>{cloud?.signedIn ? "Private Google backup." : "Stored on this device."}</span>
+              <strong>{t("justYours")}</strong>
+              <span>{cloud?.signedIn ? t("privateBackup") : t("storedOnDevice")}</span>
             </div>
             <span className="status-dot" />
           </div>
@@ -642,7 +642,7 @@ export default function App() {
                 {data.name}'s workspace
               </strong>
               <small>
-                {cloud?.signedIn ? cloud.user?.email : "Local profile"}
+                {cloud?.signedIn ? cloud.user?.email : t("localProfile")}
               </small>
             </span>
             <ChevronRight size={16} />
@@ -670,12 +670,12 @@ export default function App() {
           <div className="topbar-actions">
             <span className="local-label">
               {cloud?.signedIn ? <CheckCheck size={13} /> : <LockKeyhole size={13} />}
-              {cloud?.signedIn ? cloud.dirty ? "Not synced" : cloud.revision === 0 ? "Not backed up" : "Synced" : "On-device"}
+              {cloud?.signedIn ? cloud.dirty ? t("notSynced") : cloud.revision === 0 ? t("notBackedUp") : t("synced") : t("onDevice")}
             </span>
             <button
               className="top-avatar"
               onClick={() => go("settings")}
-              title="Your profile"
+              title={t("yourProfile")}
             >
               {avatarUrl ? <img src={avatarUrl} alt="" /> : (cloud?.user?.name || data.name).slice(0, 1).toUpperCase()}
             </button>
@@ -823,9 +823,9 @@ export default function App() {
                 </div>
               </section>
               <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <div className="account-balance-item" key={item.account}><span className="account-balance-icon"><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></div>)}</section>
-              <section className="daily-strip" aria-label="Quick entries and weekly check-in">
+              <section className="daily-strip" aria-label={t("quickEntriesLabel")}>
                 <div className="daily-check"><span>{t("currentWeek")}</span><strong>{money(weekSpend)} {t("spent")}</strong><small>{weekTop?.amount ? t("largestPocket", { name: weekTop.name }) : t("noSpending")}</small><small>{money(currentAvailable)} {t("currentPlanAvailable")}</small></div>
-                <div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={`Remove ${f.name} shortcut`} aria-label={`Remove ${f.name} shortcut`} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, "Quick entry removed")}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
+                <div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={`Remove ${f.name} shortcut`} aria-label={`Remove ${f.name} shortcut`} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, t("quickEntryRemoved"))}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
               </section>
               <section className="pockets-section">
                 <div className="section-heading">
@@ -887,8 +887,8 @@ export default function App() {
                     <h2>{t("whereWent")}</h2>
                     <button
                       className="icon-button"
-                      title="See spending insights"
-                      aria-label="See spending insights"
+                      title={t("seeInsights")}
+                      aria-label={t("seeInsights")}
                       onClick={() => go("insights")}
                     >
                       <ArrowUpRight size={19} />
@@ -1007,12 +1007,12 @@ export default function App() {
                   <h2>
                     {topPocket?.spent
                       ? topPocket.name
-                      : "Your story starts here"}
+                      : t("storyStarts")}
                   </h2>
                   <p>
                     {topPocket?.spent
-                      ? `${money(topPocket.spent)} spent, ${Math.round((topPocket.spent / Math.max(1, stats.expenses)) * 100)}% of your total expenses.`
-                      : "Log an expense to see where your money goes."}
+                      ? t("topPocketShare", { amount: money(topPocket.spent), percent: Math.round((topPocket.spent / Math.max(1, stats.expenses)) * 100) })
+                      : t("logExpenseHint")}
                   </p>
                 </div>
                 <TrendingUp size={46} />
@@ -1125,7 +1125,7 @@ export default function App() {
           )}
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>
-              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>Notifications</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>CSV on device</button></div>}
+              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>}
               {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">Loading captured notifications...</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
               {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
@@ -2054,11 +2054,11 @@ function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean
   return <main className="login-screen">
     <section className="login-panel">
       <span className="brand-mark"><Wallet /></span><h1>Saku</h1>
-      <p>Know where your money lives, what it is for, and what is safe to spend.</p>
-      <details className="agreement"><summary>User agreement and privacy</summary><p>Saku stores your synchronized ledger in a private database and in a spreadsheet owned by your Google account. A protected device copy supports offline use. If you choose AI import, selected statement text and images are processed by Cloudflare AI. Original files and review drafts stay on this device. On Android you can also let Saku read notifications from bank and e-wallet apps you choose; they stay on the phone until you add them. Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p></details>
-      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
-      <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? "Connecting..." : "Continue with Google"}</button>
-      {!configured && <p className="form-error">Google sign-in is not configured in this build.</p>}{error && <p className="form-error" role="alert">{error}</p>}
+      <p>{t("loginTagline")}</p>
+      <details className="agreement"><summary>{t("agreementSummaryTitle")}</summary><p>{t("agreementSummary")} {t("readThe")} <a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a> {t("and")} <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a>.</p></details>
+      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
+      <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? t("connecting") : t("continueGoogle")}</button>
+      {!configured && <p className="form-error">{t("signInNotConfigured")}</p>}{error && <p className="form-error" role="alert">{error}</p>}
     </section>
   </main>;
 }
@@ -2066,21 +2066,21 @@ function AgreementUpdate({ busy, error, onAccept, onSignOut }: { busy: boolean; 
   const [accepted, setAccepted] = useState(false);
   return <main className="login-screen">
     <section className="login-panel">
-      <span className="brand-mark"><ShieldCheck /></span><h1>Updated agreement</h1>
-      <p>Saku's User Agreement and Privacy Notice now cover an optional Android feature: reading notifications from bank and e-wallet apps you choose. It stays off unless you turn it on, and notification text never leaves your phone.</p>
-      <p>Read the <a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a> and <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a>.</p>
-      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />I accept the Saku User Agreement and Privacy Notice, version {AGREEMENT_VERSION}.</label>
-      <button className="button primary login-button" disabled={!accepted || busy} onClick={() => void onAccept()}><Check size={18} />{busy ? "Saving..." : "Accept and continue"}</button>
-      <button className="button text-button" disabled={busy} onClick={() => void onSignOut()}><LogOut size={16} />Sign out instead</button>
+      <span className="brand-mark"><ShieldCheck /></span><h1>{t("agreementUpdated")}</h1>
+      <p>{t("agreementUpdateBody")}</p>
+      <p>{t("readThe")} <a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a> {t("and")} <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a>.</p>
+      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
+      <button className="button primary login-button" disabled={!accepted || busy} onClick={() => void onAccept()}><Check size={18} />{busy ? t("saving") : t("acceptContinue")}</button>
+      <button className="button text-button" disabled={busy} onClick={() => void onSignOut()}><LogOut size={16} />{t("signOutInstead")}</button>
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>
   </main>;
 }
 function WorkspaceChoice({ local, remote, onChoose, onBackup }: { local: Data; remote: Data; onChoose: (data: Data, localWins: boolean) => Promise<void>; onBackup: () => void }) {
-  return <main className="login-screen"><section className="login-panel workspace-choice"><ShieldCheck size={30} /><h1>Choose this device's workspace</h1><p>This device has local Saku data. Choose whether to bring it into this Google account or use the cloud backup. Nothing is uploaded until you choose.</p>
-    <button className="workspace-option" onClick={() => void onChoose(local, true)}><strong>Keep this phone</strong><span>{local.transactions.length} transactions · {local.pockets.length} pockets</span></button>
-    <button className="workspace-option" onClick={() => void onChoose(remote, false)}><strong>{remote.transactions.length || remote.pockets.length ? "Restore cloud copy" : "Start without local data"}</strong><span>{remote.transactions.length} transactions · {remote.pockets.length} pockets</span></button>
-    <button className="button secondary" onClick={onBackup}><Download size={17} />Export phone backup first</button>
+  return <main className="login-screen"><section className="login-panel workspace-choice"><ShieldCheck size={30} /><h1>{t("workspaceTitle")}</h1><p>{t("workspaceBody")}</p>
+    <button className="workspace-option" onClick={() => void onChoose(local, true)}><strong>{t("keepPhone")}</strong><span>{t("transactionsPockets", { transactions: local.transactions.length, pockets: local.pockets.length })}</span></button>
+    <button className="workspace-option" onClick={() => void onChoose(remote, false)}><strong>{remote.transactions.length || remote.pockets.length ? t("restoreCloud") : t("startFresh")}</strong><span>{t("transactionsPockets", { transactions: remote.transactions.length, pockets: remote.pockets.length })}</span></button>
+    <button className="button secondary" onClick={onBackup}><Download size={17} />{t("exportFirst")}</button>
   </section></main>;
 }
 
@@ -2097,7 +2097,7 @@ function StartProfile({
 }) {
   const [name, setName] = useState(suggestedName?.trim().slice(0, 40) || "");
   const [accounts, setAccounts] = useState([{ name: "BCA", balance: "" }, { name: "Jago", balance: "" }]);
-  const [pockets, setPockets] = useState([{ name: "Food & coffee", budget: "", icon: "utensils" }, { name: "Bills", budget: "", icon: "home" }, { name: "Fun", budget: "", icon: "game" }]);
+  const [pockets, setPockets] = useState([{ name: t("defaultFood"), budget: "", icon: "utensils" }, { name: t("defaultBills"), budget: "", icon: "home" }, { name: t("defaultFun"), budget: "", icon: "game" }]);
   const [hasCard, setHasCard] = useState(false), [cardName, setCardName] = useState(""), [cardLimit, setCardLimit] = useState(""), [cardDebt, setCardDebt] = useState("0"), [dueDay, setDueDay] = useState("15");
   const [hasInstallment, setHasInstallment] = useState(false), [installmentName, setInstallmentName] = useState(""), [monthlyAmount, setMonthlyAmount] = useState(""), [nextDueMonth, setNextDueMonth] = useState(shiftMonth(today().slice(0, 7), 1)), [paymentsLeft, setPaymentsLeft] = useState("1");
   const [step, setStep] = useState(0), [stepError, setStepError] = useState("");
@@ -2115,7 +2115,7 @@ function StartProfile({
     const chosenAccounts = accounts.map((item) => ({ ...item, name: item.name.trim() })).filter((item) => item.name);
     if (!chosenAccounts.length || new Set(chosenAccounts.map((item) => item.name.toLowerCase())).size !== chosenAccounts.length) return;
     const next = emptyData(); next.name = name.trim(); next.accounts = chosenAccounts.map((item) => item.name); next.pockets = pockets.filter((item) => item.name.trim()).map((item, index) => ({ id: uid(), name: item.name.trim(), budget: Number(item.budget || 0), budgets: {}, createdMonth: today().slice(0, 7), icon: item.icon, color: COLORS[index % COLORS.length] }));
-    next.transactions = chosenAccounts.filter((item) => Number(item.balance) > 0).map((item) => ({ id: uid(), name: "Opening balance", amount: Number(item.balance), type: "income" as const, kind: "opening_balance" as const, date: today(), pocketId: "", account: item.name, note: "Opening balance when starting Saku" }));
+    next.transactions = chosenAccounts.filter((item) => Number(item.balance) > 0).map((item) => ({ id: uid(), name: t("openingBalance"), amount: Number(item.balance), type: "income" as const, kind: "opening_balance" as const, date: today(), pocketId: "", account: item.name, note: "Opening balance when starting Saku" }));
     if (hasCard && cardName.trim() && validAmount(Number(cardLimit))) {
       const cardId = uid(); next.creditCards = [{ id: cardId, name: cardName.trim(), limit: Number(cardLimit), openingDebt: Number(cardDebt || 0), dueDay: Number(dueDay) }];
       if (hasInstallment && installmentName.trim() && validAmount(Number(monthlyAmount)) && Number(paymentsLeft) >= 1) next.existingInstallments = [{ id: uid(), cardId, name: installmentName.trim(), monthlyAmount: Number(monthlyAmount), nextDueMonth, paymentsLeft: Number(paymentsLeft) }];
@@ -2221,7 +2221,7 @@ function SettingsView({
   async function readBackup(file?: File) {
     if (!file) return;
     try {
-      if (file.size > 20000000) throw new Error("Backup is too large.");
+      if (file.size > 20000000) throw new Error(t("backupTooLarge"));
       setRestore(validateData(JSON.parse(await file.text())));
     } catch (e) {
       notify(e instanceof Error ? e.message : "Invalid backup.");
@@ -2255,7 +2255,7 @@ function SettingsView({
       {notificationCaptureSupported() && <NotificationAccess data={data} notify={notify} />}
       {appLockSupported() && <AppLockSection settings={appLock} onChange={onAppLockChange} />}
       <section>
-        <h2>Local profile</h2>
+        <h2>{t("localProfile")}</h2>
         <p>Your workspace on this device.</p>
         <form
           className="settings-form"
@@ -2456,7 +2456,7 @@ function SettingsView({
               className="button primary"
               disabled={busy}
               onClick={() =>
-                void commit(restore, "Backup restored").then((ok) => {
+                void commit(restore, t("backupRestored")).then((ok) => {
                   if (ok) {
                     setName(restore.name);
                     setRestore(null);

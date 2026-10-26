@@ -163,7 +163,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
         }
       }, async (source, error) => {
         if (error instanceof LocalDraftWriteError) throw error;
-        const message = error instanceof Error ? error.message : "Could not process this file";
+        const message = error instanceof Error ? error.message : t("processFileFailed");
         const latest = draftRef.current;
         if (latest?.id === draftId) await save({ ...latest, sources: latest.sources.map((item) => item.id === source.id ? { ...item, error: message.slice(0, 180) } : item) });
         return ![401, 403, 429, 503].includes(Number((error as { status?: number })?.status));
@@ -231,7 +231,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       if (other) { paired.add(other.id); pairedByTransfer.set(row.id, other.id); }
     }
     const merchantRules = ready.reduce((rules, row) => row.direction === "expense" && ["purchase", "pay_later"].includes(row.activity) ? learnMerchant({ ...data, merchantRules: rules }, row.name, { name: importRowName(row), pocketId: row.pocketId }) : rules, data.merchantRules);
-    if (!(await commit({ ...data, transactions: [...data.transactions, ...additions], merchantRules }, "Reviewed import batch saved"))) return;
+    if (!(await commit({ ...data, transactions: [...data.transactions, ...additions], merchantRules }, t("importBatchSaved")))) return;
     if (draftRef.current?.id !== draftId) return;
     const saved = additions.map((transaction) => ({ id: transaction.id, fingerprint: JSON.stringify(transaction), pairedRowId: transaction.transferId ? pairedByTransfer.get(transaction.transferId) : undefined }));
     try { await save({ ...draftRef.current, rows: draftRef.current.rows.map((row) => paired.has(row.id) ? { ...row, decision: "skip" } : row), saved: [...draftRef.current.saved, ...saved] }); }
@@ -277,7 +277,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     try {
       await save({ ...draftRef.current, sources: draftRef.current.sources.filter((source) => source.id !== id), rows: draftRef.current.rows.filter((row) => row.sourceId !== id) });
       if (previewId === id) setPreviewId("");
-      setInfo("Source removed from this local draft.");
+      setInfo(t("sourceRemoved"));
     } catch { /* save explains the local storage problem */ }
   }
   async function newDraft() {
@@ -363,7 +363,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           })}
         </div> : null;
       })}
-      <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? t("sourceRow") : t("sourceRows")} {uncheckedDateSources.length ? t("afterSourceCheck") : t("canAddNow")}</strong><span>{readySpending > 0 && t("purchasesFees", { amount: money(readySpending) }) + " "}{readyIncome > 0 && t("moneyReceived", { amount: money(readyIncome) }) + " "}{readyMovementCount > 0 && t("transferRows", { count: readyMovementCount, unit: readyMovementCount === 1 ? t("row") : t("rows") }) + " "}{t("keptLater", { count: needsReview.length })}</span>{!!uncheckedDateSources.length && <p id="catchup-save-gate" className="catchup-save-gate">Compare these rows with {uncheckedDateSources.length === 1 ? uncheckedDateSources[0].name : t("yourScreenshots", { count: uncheckedDateSources.length })} for dates, amounts and money direction. <button className="text-button" type="button" onClick={() => setPreviewId(uncheckedDateSources[0].id)}>{t("preview")}</button></p>}</div>{!!uncheckedDateSources.length && <button className="button secondary" type="button" disabled={processing || saving} onClick={() => void markSourcesChecked(uncheckedDateSources.map((source) => source.id))}><Check size={16} /> {t("checkedSource")}</button>}<button className="button primary" aria-describedby={uncheckedDateSources.length ? "catchup-save-gate" : undefined} disabled={!ready.length || !!uncheckedDateSources.length || busy || processing || saving} onClick={() => void saveReady()}>{t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") })} <ArrowRight size={16} /></button></div></section>}
+      <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? t("sourceRow") : t("sourceRows")} {uncheckedDateSources.length ? t("afterSourceCheck") : t("canAddNow")}</strong><span>{readySpending > 0 && t("purchasesFees", { amount: money(readySpending) }) + " "}{readyIncome > 0 && t("moneyReceived", { amount: money(readyIncome) }) + " "}{readyMovementCount > 0 && t("transferRows", { count: readyMovementCount, unit: readyMovementCount === 1 ? t("row") : t("rows") }) + " "}{t("keptLater", { count: needsReview.length })}</span>{!!uncheckedDateSources.length && <p id="catchup-save-gate" className="catchup-save-gate">{t("compareRows", { source: uncheckedDateSources.length === 1 ? uncheckedDateSources[0].name : t("yourScreenshots", { count: uncheckedDateSources.length }) })} <button className="text-button" type="button" onClick={() => setPreviewId(uncheckedDateSources[0].id)}>{t("preview")}</button></p>}</div>{!!uncheckedDateSources.length && <button className="button secondary" type="button" disabled={processing || saving} onClick={() => void markSourcesChecked(uncheckedDateSources.map((source) => source.id))}><Check size={16} /> {t("checkedSource")}</button>}<button className="button primary" aria-describedby={uncheckedDateSources.length ? "catchup-save-gate" : undefined} disabled={!ready.length || !!uncheckedDateSources.length || busy || processing || saving} onClick={() => void saveReady()}>{t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") })} <ArrowRight size={16} /></button></div></section>}
     {!!draft?.saved.length && <section className="catchup-finish"><div><strong>{draft.saved.length} {t("savedDraft")}</strong><span>{t("existingSync")}</span></div><button className="button secondary" disabled={busy || processing || saving} onClick={() => void undo()}><RotateCcw size={15} /> {t("undoEntries")}</button></section>}
     {consentAsk && <Modal title={t("sendFiles")} subtitle={t("asksOnce")} onClose={() => setConsentAsk(false)}><p className="catchup-consent-text">{t("consentText")}</p><div className="form-footer"><button className="button secondary" type="button" onClick={() => setConsentAsk(false)}>{t("cancel")}</button><button className="button primary" type="button" onClick={() => { try { localStorage.setItem(importConsentKey(owner), "granted"); } catch { /* Without storage, Saku asks again next time. */ } setConsented(true); setConsentAsk(false); void extract(true); }}>{t("continue")}<ArrowRight size={16} /></button></div></Modal>}
     {preview && previewUrl && <Modal title={preview.name} subtitle={t("sourceFile")} onClose={() => setPreviewId("")}><div className="catchup-preview">{/\.pdf$/i.test(preview.name) ? <iframe title={preview.name} src={previewUrl} /> : <img alt={`${t("preview")} ${preview.name}`} src={previewUrl} />}</div></Modal>}
