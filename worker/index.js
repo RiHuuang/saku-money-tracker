@@ -1,3 +1,4 @@
+import { legalLanguage, legalPage } from "./legal.js";
 import { validAvatar } from "./avatar.js";
 import { createRemoteJWKSet } from "jose/jwks/remote";
 import { jwtVerify } from "jose/jwt/verify";
@@ -41,7 +42,6 @@ const fault = (status, message, extra = {}) => Object.assign(new Error(message),
 const reply = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { ...jsonHeaders, ...headers } });
 const cookies = (request) => Object.fromEntries((request.headers.get("cookie") || "").split("; ").filter(Boolean).map((part) => { const at = part.indexOf("="); return [part.slice(0, at), part.slice(at + 1)]; }));
 const cookie = (name, value, maxAge) => `${name}=${value}; ${cookieOptions}; Max-Age=${maxAge}`;
-const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
 async function readBody(request, limit = maxBody) {
   if (Number(request.headers.get("content-length") || 0) > limit) throw fault(413, "Request is too large");
@@ -433,21 +433,6 @@ async function deleteAccount(env, uid, user, sessionId) {
   return deletionStep(env, uid);
 }
 
-function legalPage(path, env) {
-  const email = escapeHtml(env.SUPPORT_EMAIL);
-  const pages = {
-    "/privacy": ["Privacy Notice", `<p>Saku processes your Google account identifier, email, name, optional profile image, financial ledger, sync revision, and authentication tokens to provide sign-in and synchronization. Your ledger and image are stored privately using Cloudflare Workers, D1, and R2. A readable mirror is stored in a spreadsheet owned by your Google account. Google refresh tokens are encrypted; Saku session secrets are stored as hashes.</p><p>When you choose AI import, Saku sends selected statement text or page images to Cloudflare Workers AI for transaction extraction. The original files and review drafts remain on your device; Saku does not add them to ledger backups or Sheets. Accepted transactions sync as part of your ledger. You can export data, sign out, revoke Saku access in Google, or delete your account from Settings.</p><p>On Android you can choose to let Saku read notifications from the bank and e-wallet apps you select. Saku checks the app before reading anything else, keeps only the amount, direction, balance and merchant name with account and reference numbers removed, encrypts them on your phone and deletes them after seven days, on sign-out or on account deletion. Notification text is never uploaded or synced. Only transactions you add join your ledger. You can pause or turn this off in Settings or Android's notification access settings at any time. If you also turn on name tidying, merchant names Saku hasn't seen before, with long numbers removed, are sent to Cloudflare Workers AI once each; amounts, accounts and notification text are not.</p>`],
-    "/terms": ["User Agreement", `<p>Saku helps you record and review information you provide. It is not a bank or financial adviser. You remain responsible for checking entries, statement matches, budgets, taxes, and payments.</p><p>You retain ownership of your ledger. You authorize Saku to process it for sign-in, backup, automatic synchronization, profile images, and Google Sheets mirroring. Reading bank and e-wallet notifications on Android is optional, uses only the apps you enable, and creates suggestions you review; it never records a transaction without your confirmation. Offline features can continue without cloud service. You can export or delete your account from Settings.</p>`],
-    "/account-deletion": ["Delete your Saku account", `<p>In Saku Settings, choose Delete account and type DELETE. This removes your Saku cloud identity, sessions, ledger snapshots, and profile image, revokes Google access, and asks Google Drive to trash the Saku-created folder. If you cannot access the app, email <a href="mailto:${email}">${email}</a> from the Google address used for Saku.</p>`],
-  };
-  const [title, body] = pages[path] || ["Saku", `<p>Saku is an offline-first money tracker. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/account-deletion">Account deletion</a></p>`];
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${title} - Saku</title><style>
-    :root{color-scheme:light;--canvas:#f7f6f0;--surface:#fff;--ink:#203b33;--muted:#60746a;--line:#dbe6dc;--teal:#176b55;--soft:#e4efe8}
-    @media(prefers-color-scheme:dark){:root{color-scheme:dark;--canvas:#101d18;--surface:#192c24;--ink:#edf3ed;--muted:#aec3b5;--line:#365144;--teal:#92d3b1;--soft:#284638}}
-    *{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}a{color:var(--teal);font-weight:650;text-underline-offset:3px}header{border-bottom:1px solid var(--line);background:var(--surface)}header div{max-width:820px;margin:auto;padding:20px 24px}.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-size:22px;font-weight:800;letter-spacing:-.04em;text-decoration:none}.mark{display:grid;width:34px;height:34px;place-items:center;border-radius:10px 10px 10px 4px;background:var(--teal);color:var(--surface);font-size:16px}.period{color:var(--teal)}main{max-width:820px;margin:auto;padding:54px 24px 88px}.eyebrow{margin:0 0 8px;color:var(--teal);font-size:12px;font-weight:700}h1{max-width:18ch;margin:0;color:var(--ink);font-size:clamp(34px,7vw,54px);line-height:1.04;letter-spacing:-.045em}time{display:block;margin:14px 0 30px;color:var(--muted);font-size:13px}.legal-copy{padding:26px 28px;border:1px solid var(--line);border-radius:18px;background:var(--surface)}p{margin:0 0 18px}p:last-child{margin-bottom:0}.contact{margin-top:18px;padding:18px 20px;border-left:4px solid var(--teal);border-radius:4px 14px 14px 4px;background:var(--soft)}a:focus-visible{outline:3px solid var(--teal);outline-offset:4px;border-radius:3px}@media(max-width:560px){header div{padding:16px 18px}main{padding:38px 18px 64px}.legal-copy{padding:22px 20px}h1{font-size:36px}}
-  </style></head><body><header><div><a class="brand" href="/"><span class="mark" aria-hidden="true">S</span><span>saku<span class="period">.</span></span></a></div></header><main><p class="eyebrow">Your money, in balance</p><h1>${title}</h1><time datetime="2026-10-26">Effective 26 October 2026</time><article class="legal-copy">${body}</article><p class="contact">Questions: <a href="mailto:${email}">${email}</a></p></main></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'", "x-content-type-options": "nosniff" } });
-}
-
 async function route(request, env) {
   const url = new URL(request.url), path = url.pathname, origin = request.headers.get("origin");
   if (url.hostname === "saku.saku-money-manager.workers.dev") {
@@ -471,7 +456,7 @@ async function route(request, env) {
     return env.LIVE_UPDATES.get(env.LIVE_UPDATES.idFromName(room)).fetch(new Request(`https://live/connect?hash=${encodeURIComponent(await hashToken(ticket))}`, request));
   }
   if (request.method === "OPTIONS" && /^\/v[12]\//.test(path)) return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-headers": "authorization,content-type,x-saku-version,x-saku-user-id,x-saku-app-build", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" } });
-  if (request.method === "GET" && ["/", "/privacy", "/terms", "/account-deletion"].includes(path) && path !== "/") return legalPage(path, env);
+  if (request.method === "GET" && ["/", "/privacy", "/terms", "/account-deletion"].includes(path) && path !== "/") return legalPage(path, env, legalLanguage(url));
   if (request.method === "GET" && path === "/health") return reply({ ok: true });
   if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, "cache-control": "public, max-age=300" });
   if (["GET", "HEAD"].includes(request.method) && path === "/download/saku.apk") return androidReleaseResponse(request, env, await androidReleaseManifest(env), false);

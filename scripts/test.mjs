@@ -28,6 +28,7 @@ try {
     await import("../worker/live-route.test.mjs");
     await import("../worker/agreement-route.test.mjs");
     await import("../worker/merchant-clean.test.mjs");
+    await import("../worker/legal.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });
