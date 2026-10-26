@@ -11,7 +11,8 @@ const desktopJourney = matchMedia('(min-width: 901px) and (min-height: 650px)');
 document.getElementById('year').textContent = String(new Date().getFullYear());
 
 document.querySelectorAll('.dark-image').forEach(image => {
-  image.alt = image.previousElementSibling.alt;
+  // Each theme image sits in its own <picture>, so its light twin is in the previous one.
+  image.alt = image.parentElement.previousElementSibling.querySelector('img').alt;
   image.removeAttribute('aria-hidden');
 });
 
