@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon layer: Android uses only alpha, so this holds the glyph strokes without a background. -->
+<!-- Themed-icon layer: Android uses only alpha, so this holds the "s." glyphs without a background. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="3"
-        android:strokeLineCap="round" android:strokeLineJoin="round"
-        android:pathData="M70,44L41,44Q36,44 36,39Q36,34 41,34L67,34L67,44M36,39L36,69Q36,74 41,74L70,74Q74,74 74,70L74,49Q74,44 70,44M74,53L63,53Q59,53 59,57L59,61Q59,65 63,65L74,65M65,59L66,59" />
+    <path android:fillColor="#FFFFFF" android:pathData="M47.96,74.05Q41.82,74.05 37.27,71.12Q32.71,68.19 31.02,63.18L37.94,59.86Q39.42,63.11 42.07,64.94Q44.72,66.78 47.96,66.78Q50.51,66.78 51.99,65.65Q53.47,64.52 53.47,62.68Q53.47,61.55 52.87,60.81Q52.27,60.07 51.25,59.54Q50.22,59.01 49.02,58.66L42.74,56.89Q37.87,55.48 35.36,52.59Q32.85,49.69 32.85,45.74Q32.85,42.21 34.65,39.56Q36.45,36.91 39.67,35.43Q42.88,33.95 47.05,33.95Q52.48,33.95 56.65,36.56Q60.81,39.17 62.58,43.90L55.52,47.22Q54.53,44.61 52.20,43.06Q49.87,41.50 46.97,41.50Q44.64,41.50 43.30,42.56Q41.96,43.62 41.96,45.32Q41.96,46.37 42.53,47.15Q43.09,47.93 44.12,48.42Q45.14,48.92 46.48,49.34L52.62,51.18Q57.35,52.59 59.93,55.41Q62.51,58.24 62.51,62.33Q62.51,65.79 60.67,68.44Q58.84,71.09 55.59,72.57Q52.34,74.05 47.96,74.05Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M67.66,73.20L67.66,63.32L76.98,63.32L76.98,73.20Z" />
 </vector>

@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties, type InputHTMLAttributes } from "react";
+import { markDot, markGlyph } from "./brandMark";
 import { createPortal } from "react-dom";
 import {
   ArrowDownLeft,
@@ -592,4 +593,9 @@ export function DirectionIcon({ income }: { income: boolean }) {
       {income ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
     </span>
   );
+}
+
+// The "s." brand mark; the dot keeps the landing page's accent while the letter follows currentColor.
+export function SakuMark({ size = 24 }: { size?: number }) {
+  return <svg className="saku-mark" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><path d={markGlyph} fill="currentColor" /><path d={markDot} fill="var(--mark-dot, #A8E6C1)" /></svg>;
 }

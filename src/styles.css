@@ -1,5 +1,5 @@
 :root {
-  font-family: "DM Sans", sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   color: #253338;
   background: #f6f8f9;
   font-synthesis: none;
@@ -1612,7 +1612,7 @@ main {
   color: var(--muted);
   font-size: 12px;
 }
-.balance-adjustment-form input, .balance-adjustment-effect strong { font-family: "DM Sans", sans-serif; font-variant-numeric: tabular-nums; }
+.balance-adjustment-form input, .balance-adjustment-effect strong { font-family: "Plus Jakarta Sans", sans-serif; font-variant-numeric: tabular-nums; }
 .balance-adjustment-effect strong { color: var(--ink); font-size: 14px; }
 .balance-adjustment-effect.positive { border-color: #cfe8df; background: #f0faf5; }
 .balance-adjustment-effect.positive strong { color: #176a53; }
@@ -3679,6 +3679,7 @@ main {
   --teal: #92d3b1;
   --accent-soft: #284638;
   --action-ink: #10231a;
+  --mark-dot: #176b55;
   --warning: #efbd7a;
   --danger: #f1939c;
   color: var(--ink);
