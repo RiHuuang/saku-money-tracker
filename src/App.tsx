@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { Preferences } from "@capacitor/preferences";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -18,6 +19,7 @@ import {
   ExternalLink,
   FileCheck2,
   LayoutDashboard,
+  Info,
   Leaf,
   LockKeyhole,
   LogOut,
@@ -27,7 +29,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  SlidersHorizontal,
   Target,
   Trash2,
   TrendingUp,
@@ -138,6 +139,7 @@ type Edit =
   | null;
 const cloudImportEnabled = true;
 const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
+const setupCompletedKey = "saku-setup-completed-v1";
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "transactions", label: "Activity", icon: ArrowDownLeft },
@@ -179,6 +181,8 @@ export default function App() {
   const authenticating = useRef(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [languagePreference, setLanguagePreference] = useState<LanguagePreference>("system");
+  const [setupCompletedAt, setSetupCompletedAt] = useState<string | null>(null);
+  const [showAvailabilityInfo, setShowAvailabilityInfo] = useState(false);
   setActiveLanguage(languagePreference);
   const [previousView, setPreviousView] = useState<View>("overview");
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
@@ -339,6 +343,7 @@ export default function App() {
   useEffect(() => {
     void loadTheme().then(setThemePreference).catch(() => {});
     void loadLanguage().then(setLanguagePreference).catch(() => {});
+    void Preferences.get({ key: setupCompletedKey }).then(({ value }) => setSetupCompletedAt(value)).catch(() => {});
   }, []);
   async function unlock() {
     if (authenticating.current) return;
@@ -749,7 +754,7 @@ export default function App() {
             <>
               {showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { setCheckTab(cloudImportEnabled ? "catchup" : "csv"); go("check"); }}>{cloudImportEnabled ? t("importScreenshot") : t("catchUpMonthly")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
-                <button className="balance-panel balance-action" onClick={() => go("insights")} aria-label={`View insights for ${monthLabel(month)}`}>
+                <div className="balance-panel balance-action">
                   <div className="balance-top">
                     <span>
                       <Wallet size={17} />
@@ -759,19 +764,19 @@ export default function App() {
                   </div>
                   <div className="balance-number"><FitMoney amount={stats.balance} /></div>
                   <p>
-                    {t("acrossAccounts", { count: data.accounts.length })} <span>·</span>{" "}
-                    {t("throughMonth", { month: monthLabel(month, true) })}
+                    {t("acrossAccounts", { count: data.accounts.length })}
                   </p>
                   <div className="balance-footer">
                     <span>
                       <span className="tiny-square" />
                       {t("budgetAvailability")}
+                      <button type="button" className="availability-info-button" aria-label={t("availabilityInfo")} aria-expanded={showAvailabilityInfo} onClick={() => setShowAvailabilityInfo((value) => !value)}><Info size={15} /></button>
                     </span>
                     <strong>{money(stats.available)} {t("available")}</strong>
                   </div>
-                  <p className="availability-explainer">{t("availabilityExplainer")}</p>
-                  <span className="balance-cta">{t("viewInsights")} <ArrowRight size={16} /></span>
-                </button>
+                  {showAvailabilityInfo && <p className="availability-explainer">{t("availabilityExplainer")}</p>}
+                  <button type="button" className="balance-cta" onClick={() => go("insights")}>{t("viewInsights")} <ArrowRight size={16} /></button>
+                </div>
                 <div className="metric-panel">
                   <div className="metric-label">
                     <DirectionIcon income />
@@ -958,9 +963,9 @@ export default function App() {
               </div>
               {stats.remaining > Math.max(0, stats.balance) && (
                 <div className="inline-warning">
-                  Your remaining pocket budgets exceed your recorded balance by{" "}
-                  {money(stats.remaining - Math.max(0, stats.balance))}. Add any
-                  missing income or adjust your plans.
+                  {setupCompletedAt && Date.now() - Date.parse(setupCompletedAt) < 7 * 24 * 60 * 60 * 1000
+                    ? t("planAboveCashFirstWeek", { amount: money(stats.remaining - Math.max(0, stats.balance)) })
+                    : t("planAboveCash", { amount: money(stats.remaining - Math.max(0, stats.balance)) })}
                 </div>
               )}
               {overspent.length > 0 && (
@@ -1311,6 +1316,9 @@ export default function App() {
           onClose={() => setEdit(null)}
           onStart={async (next) => {
             if (await commit(next, "Your own little fresh start.")) {
+              const completedAt = new Date().toISOString();
+              setSetupCompletedAt(completedAt);
+              void Preferences.set({ key: setupCompletedKey, value: completedAt }).catch(() => {});
               setEdit(null);
               setMonth(today().slice(0, 7));
               go("pockets");
@@ -1399,13 +1407,8 @@ function Transactions({
         </div></details>
       </div>
       <div className="transaction-filters">
-        <div className="transaction-filter-heading">
-          <span className="transaction-filter-icon" aria-hidden="true"><SlidersHorizontal size={17} /></span>
-          <span><strong>Filters</strong><small>Narrow this month</small></span>
-        </div>
-        <ChoiceField className="transaction-filter-field" label="Pocket" value={pocket} onValueChange={setPocket} options={[{ value: "all", label: "All pockets" }, ...data.pockets.map((p) => ({ value: p.id, label: p.name }))]} />
-        <ChoiceField className="transaction-filter-field" label="Account" value={account} onValueChange={setAccount} options={[{ value: "all", label: "All accounts" }, ...data.accounts.map((name) => ({ value: name, label: name, description: money(accountBalance(data, name)) })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: "Credit card" }))]} />
-        <span className="transaction-count">{rows.length} transactions</span>
+        <ChoiceField hideLabel className="transaction-filter-field" label={t("pocket")} value={pocket} onValueChange={setPocket} options={[{ value: "all", label: t("allPockets") }, ...data.pockets.map((p) => ({ value: p.id, label: p.name }))]} />
+        <ChoiceField hideLabel className="transaction-filter-field" label={t("account")} value={account} onValueChange={setAccount} options={[{ value: "all", label: t("allAccounts") }, ...data.accounts.map((name) => ({ value: name, label: name, description: money(accountBalance(data, name)) })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: t("creditCard") }))]} />
       </div>
       <div className="ledger">
         <div className="ledger-header">

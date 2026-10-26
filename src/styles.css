@@ -3577,6 +3577,22 @@ main {
     padding: 20px 17px;
   }
 }
+
+/* P3-2: keep explanation available without making it part of the Home summary. */
+.balance-action { cursor: default; }
+.balance-panel .balance-footer > span { display: inline-flex; align-items: center; gap: 7px; }
+.availability-info-button { display: inline-grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 0; border-radius: 50%; color: #e5fff3; background: #ffffff26; cursor: pointer; }
+.availability-info-button:focus-visible, .balance-cta:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.balance-cta { position: relative; z-index: 1; border: 0; padding: 0; background: none; cursor: pointer; }
+.transaction-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; padding: 0; border: 0; background: none; }
+.transaction-filter-field { flex: 0 1 auto; width: auto; max-width: min(50%, 210px); }
+.transaction-filter-field .choice-trigger { min-height: 38px; border-radius: 999px; padding: 7px 12px; font-size: 12px; }
+@media (max-width: 600px) {
+  .transaction-filters { flex-direction: row; padding: 0; }
+  .transaction-filter-field { flex: 1 1 0; min-width: 0; max-width: none; }
+  .transaction-tools { margin-top: 0; gap: 7px; }
+  .transaction-tools .search-field input { padding-block: 8px; }
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
