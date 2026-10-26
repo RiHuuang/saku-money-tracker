@@ -217,12 +217,13 @@ export default function App() {
       if (!useful(local)) throw new Error("Could not reach Saku Cloud. Connect to the internet and retry before setting up a workspace. Your cloud data has not changed.");
       // A saved local ledger remains available offline.
     }
-    const newerCleanCloud = scoped && !state.dirty && remoteState && remoteState.revision > state.revision && useful(remote);
-    if (useful(local) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
+    const localNeedsReview = scoped && (remoteState?.dirty ?? state.dirty);
+    const newerCleanCloud = scoped && remoteState && !remoteState.dirty && remoteState.revision > state.revision && useful(remote);
+    if ((useful(local) || localNeedsReview) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
       setResolution({ local: local!, remote: remote || emptyData(), remoteState });
       return;
     }
-    const chosen = newerCleanCloud ? remote! : useful(local) ? local! : useful(remote) ? remote! : emptyData();
+    const chosen = newerCleanCloud ? remote! : useful(local) || localNeedsReview ? local! : useful(remote) ? remote! : emptyData();
     await replaceData(chosen);
     if (remoteState && !remoteState.dirty && remote && JSON.stringify(chosen) === JSON.stringify(remote)) setCloud(await adoptCloudSnapshot(remoteState, false, chosen));
     setData(chosen);
