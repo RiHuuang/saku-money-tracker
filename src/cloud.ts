@@ -5,7 +5,8 @@ import { refreshHomeWidgets } from "./homeWidget";
 import { clearNotificationInbox } from "./notificationCapture";
 import { sheetChanges, sheetGridRows } from "./sheetMirror";
 import { downloadSnapshot, uploadSnapshot, type SnapshotRequest } from "./snapshotTransfer";
-import { acknowledgeNativeLedger } from "./nativeLedger";
+import { acknowledgeNativeLedger, loadNativeSyncBase, saveNativeSyncBase } from "./nativeLedger";
+import { mergeTransactionSnapshots } from "./transactionMerge";
 
 type NativeSession = { signedIn: boolean; accessToken?: string; refreshToken?: string };
 type Authorization = { code: string };
@@ -69,6 +70,30 @@ async function publicState(): Promise<Omit<CloudState, "signedIn" | "configured"
 }
 async function savePublic(state: Omit<CloudState, "signedIn" | "configured">) {
   await Preferences.set({ key: stateKey, value: JSON.stringify(state) });
+}
+const syncBaseKey = (userId: string) => `saku-sync-base-v1-${userId}`;
+async function loadSyncBase(userId: string): Promise<{ revision: number; data: Data } | null> {
+  if (native()) return loadNativeSyncBase(userId);
+  const { value } = await Preferences.get({ key: syncBaseKey(userId) });
+  if (!value) return null;
+  try {
+    const base = JSON.parse(value);
+    return Number.isSafeInteger(base.revision) ? { revision: base.revision, data: validateData(base.data) } : null;
+  } catch { return null; }
+}
+async function saveSyncBase(userId: string, revision: number, data: Data) {
+  if (native()) await saveNativeSyncBase(userId, revision, data);
+  else await Preferences.set({ key: syncBaseKey(userId), value: JSON.stringify({ revision, data: validateData(data) }) });
+}
+export async function removeSyncBase(userId: string) {
+  await Preferences.remove({ key: syncBaseKey(userId) });
+}
+/** Three-way merge of a rejected upload against the last snapshot the cloud acknowledged. */
+export async function mergeWithSyncBase(local: Data, remote: Data, state: CloudState) {
+  const userId = state.user?.id;
+  if (!userId || (await publicState()).user?.id !== userId) return { data: null, conflicts: ["workspace"] };
+  const base = await loadSyncBase(userId);
+  return mergeTransactionSnapshots(base && base.revision <= state.revision ? base.data : null, local, remote);
 }
 export async function markCloudDirty() {
   const state = await publicState();
@@ -212,6 +237,7 @@ export async function connectGoogleDrive(): Promise<CloudState> {
 export async function pushCloud(data: Data): Promise<CloudState> {
   const local = await publicState();
   const result = await uploadSnapshot(JSON.stringify(validateData(data)), local.revision, requestsFor(local.user?.id));
+  await saveSyncBase(local.user!.id, result.revision, data);
   const acknowledged = !native() || await acknowledgeNativeLedger(local.user!.id, data);
   const current = await publicState();
   if (current.user?.id !== local.user?.id) throw new Error("Google account changed during synchronization");
@@ -240,14 +266,17 @@ export async function adoptCloudSnapshot(state: CloudState, explicit = false, sn
   const current = await publicState();
   if (current.user?.id !== state.user?.id || (!explicit && (current.dirty || current.changeVersion !== state.changeVersion))) throw new Error("Local data changed during cloud download");
   if (native() && (!snapshot || !await acknowledgeNativeLedger(current.user!.id, snapshot))) throw new Error("Local data changed during cloud download");
+  if (snapshot) await saveSyncBase(current.user!.id, state.revision, snapshot);
   const next = { ...current, dirty: false, revision: state.revision, lastSyncedAt: state.lastSyncedAt, spreadsheetUrl: state.spreadsheetUrl, sheetPending: state.sheetPending };
   await savePublic(next);
   return { ...next, signedIn: true, configured: true };
 }
 
-export async function resolveCloudWithLocal(state: CloudState): Promise<CloudState> {
+export async function resolveCloudWithLocal(state: CloudState, remote?: Data): Promise<CloudState> {
   const current = await publicState();
   if (current.user?.id !== state.user?.id) throw new Error("Google account changed during synchronization");
+  // The reviewed cloud copy is what the next upload replaces, so it becomes the merge base.
+  if (remote) await saveSyncBase(current.user!.id, state.revision, remote);
   const next = { ...current, revision: state.revision, dirty: true, changeVersion: (current.changeVersion || 0) + 1 };
   await savePublic(next);
   return { ...next, signedIn: true, configured: true };
@@ -336,6 +365,7 @@ export async function deleteCloudAccount() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (native()) await plugin.clearSession();
+  await removeSyncBase(local.user!.id);
   await Preferences.remove({ key: stateKey });
   await refreshHomeWidgets();
   return result;

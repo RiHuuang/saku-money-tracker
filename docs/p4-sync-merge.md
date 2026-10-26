@@ -49,6 +49,28 @@ attempt. If the local ledger changes while download or upload is in flight,
 restart with the newest local snapshot. The user sees the existing conflict
 choice only for ambiguous edits, never a silent overwrite.
 
+## As implemented
+
+- The base is one table, `ledger_sync_base`, on Android (written by
+  `src/nativeLedger.ts` and by `LedgerDatabase.saveSyncBase` from the widget
+  job) and `saku-sync-base-v1-<user>` in Preferences on web. It is written
+  after every acknowledged upload, every adopted cloud copy, and when the user
+  reviews a conflict in favour of the device (the reviewed cloud copy is then
+  the base for the next upload).
+- Deletions are derived from the base: a row in the base but missing locally
+  was deleted here. Because the base only advances on acknowledgement, this is
+  the durable tombstone list, and no separate store is needed.
+- A base whose revision is newer than the cloud's, or that belongs to another
+  user, is ignored and the existing review screen is shown.
+- The foreground app merges at three points: a 409 during upload (up to three
+  merges per sync run), a live notice of a newer cloud copy while this device
+  has unsynced edits, and opening the workspace with unsynced edits. Each saves
+  the merge, records the cloud revision, and uploads; an edit made meanwhile
+  restarts from the newest local ledger instead.
+- The closed-app widget job records the base but does not merge. On a 409 with
+  different content it leaves the ledger dirty, and the app merges it on next
+  open.
+
 ## Acceptance gate
 
 1. Independent additions on phone and web both appear after a 409 with their

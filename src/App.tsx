@@ -115,6 +115,7 @@ import {
   deleteCloudAccount,
   legalUrl,
   markCloudDirty,
+  mergeWithSyncBase,
   mirrorCloud,
   pullCloud,
   pushCloud,
@@ -218,6 +219,7 @@ export default function App() {
       // A saved local ledger remains available offline.
     }
     const localNeedsReview = scoped && (remoteState?.dirty ?? state.dirty);
+    if (localNeedsReview && local && remote && remoteState && await mergeCloudChanges(local, remote, remoteState, false)) return;
     const newerCleanCloud = scoped && remoteState && !remoteState.dirty && remoteState.revision > state.revision && useful(remote);
     if ((useful(local) || localNeedsReview) && !newerCleanCloud && (!scoped || !remote || !useful(remote) || JSON.stringify(local) !== JSON.stringify(remote))) {
       setResolution({ local: local!, remote: remote || emptyData(), remoteState });
@@ -267,7 +269,7 @@ export default function App() {
           const result = await pullCloud();
           if (stopped || latest.current.data !== before || latest.current.edit || saving.current) return;
           if (result.state.dirty) {
-            if (result.data) setResolution({ local: before!, remote: result.data, remoteState: result.state });
+            if (result.data && !await mergeCloudChanges(before!, result.data, result.state)) setResolution({ local: before!, remote: result.data, remoteState: result.state });
           } else if (result.data) {
             await replaceData(result.data);
             const adopted = await adoptCloudSnapshot(result.state, false, result.data);
@@ -446,13 +448,23 @@ export default function App() {
     pendingSync.current = next;
     if (syncRunning.current || !cloud?.signedIn) return;
     syncRunning.current = true;
+    let merges = 0;
     try {
       while (pendingSync.current) {
-        const snapshot = pendingSync.current;
+        const snapshot: Data = pendingSync.current;
         pendingSync.current = null;
         activeSync.current = snapshot;
         await markCloudDirty();
-        setCloud(await pushCloud(snapshot));
+        try { setCloud(await pushCloud(snapshot)); }
+        catch (error) {
+          // Another device uploaded first: merge row by row, then upload the result.
+          if ((error as { status?: number }).status !== 409 || merges++ >= 3) throw error;
+          const remote = await pullCloud();
+          const merged: Data | null = remote.data && await mergeCloudChanges(snapshot, remote.data, remote.state);
+          if (merged) pendingSync.current ||= merged;
+          else if (latest.current.data !== snapshot && latest.current.data) pendingSync.current ||= latest.current.data;
+          else throw error;
+        }
         activeSync.current = null;
       }
       if (userInitiated) setToast("Cloud backup saved. Google Sheet is updating.");
@@ -466,6 +478,20 @@ export default function App() {
       syncRunning.current = false;
       void reconcileRef.current?.();
     }
+  }
+  /** Saves the three-way merge of local and cloud edits; null when the user must choose. */
+  async function mergeCloudChanges(local: Data, remote: Data, remoteState: CloudState, requireCurrent = true) {
+    if (saving.current || (requireCurrent && latest.current.data !== local)) return null;
+    const merged = await mergeWithSyncBase(local, remote, remoteState);
+    if (!merged.data || saving.current || (requireCurrent && latest.current.data !== local)) return null;
+    saving.current = true;
+    try {
+      await saveData(merged.data);
+      setCloud(await resolveCloudWithLocal(remoteState, remote));
+      setData(merged.data);
+      latest.current = { ...latest.current, data: merged.data };
+      return merged.data;
+    } finally { saving.current = false; }
   }
   async function attemptMirror(userInitiated = false) {
     if (mirrorRunning.current || !cloud?.signedIn || !cloud.sheetPending || !cloud.spreadsheetUrl) return;
