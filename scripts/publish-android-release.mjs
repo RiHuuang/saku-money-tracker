@@ -12,6 +12,8 @@ const values = Object.fromEntries(process.argv.slice(2).map((argument) => {
 const required = ["config", "apk", "version-code", "version-name", "minimum-build"];
 for (const name of required) if (!values[name]) throw new Error(`Missing --${name}=...`);
 const configPath = resolve(values.config), apkPath = resolve(values.apk);
+// Only the direct flavor can install the update it downloads; a Play build here would strand website users.
+if (/(?:^|[\\/._-])play(?:[\\/._-]|$)/i.test(apkPath) || !/(?:^|[\\/._-])direct(?:[\\/._-]|$)/i.test(apkPath) && !/saku-[\d.]+-build\d+-release\.apk$/i.test(apkPath)) throw new Error("Publish the direct-flavor APK (app-direct-release.apk); Play builds are uploaded to Play Console");
 const config = JSON.parse(await readFile(configPath, "utf8"));
 const bucket = config.r2_buckets?.find((entry) => entry.binding === "BUCKET")?.bucket_name;
 if (!bucket) throw new Error("The Wrangler config has no BUCKET R2 binding");

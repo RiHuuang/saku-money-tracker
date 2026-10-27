@@ -27,13 +27,13 @@ class WidgetConfigActivity : AppCompatActivity() {
         val pad = (20 * density).toInt()
         val prefs = WidgetLedger.widgetPreferences(this)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad); setBackgroundColor(if (dark) 0xff192c24.toInt() else 0xfff7f6f0.toInt()) }
-        root.addView(TextView(this).apply { text = "Saku widget"; textSize = 24f; setTextColor(ink) })
-        val privacy = CheckBox(this).apply { text = "Hide money amounts"; setTextColor(ink); isChecked = prefs.getBoolean("privacy:$widgetId", false) }
+        root.addView(TextView(this).apply { text = getString(R.string.widget_config_title); textSize = 24f; setTextColor(ink) })
+        val privacy = CheckBox(this).apply { text = getString(R.string.widget_hide_amounts); setTextColor(ink); isChecked = prefs.getBoolean("privacy:$widgetId", AppLockSettings.enabled(this@WidgetConfigActivity)) }
         root.addView(privacy)
         val isFavorites = AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId)?.provider?.className == FavoritesWidgetProvider::class.java.name
         val favoriteChecks = mutableListOf<Pair<String, CheckBox>>()
         if (isFavorites) {
-            root.addView(TextView(this).apply { text = "Choose up to four favorites"; setTextColor(muted); setPadding(0, pad / 2, 0, 0) })
+            root.addView(TextView(this).apply { text = getString(R.string.widget_choose_favorites); setTextColor(muted); setPadding(0, pad / 2, 0, 0) })
             val configured = prefs.getStringSet("favorites:$widgetId", null)
             WidgetLedger.favorites(this).forEachIndexed { index, favorite ->
                 val check = CheckBox(this).apply { text = "${favorite.name} · Rp ${favorite.amount}"; setTextColor(ink); isChecked = configured?.contains(favorite.id) ?: (index < 4) }
@@ -42,7 +42,7 @@ class WidgetConfigActivity : AppCompatActivity() {
             }
         }
         root.addView(Button(this).apply {
-            text = "Save widget"
+            text = getString(R.string.widget_save)
             isAllCaps = false
             minHeight = (48 * density).toInt()
             setTextColor(if (dark) 0xff10231a.toInt() else 0xffffffff.toInt())

@@ -1,15 +1,20 @@
+import { legalLanguage, legalPage } from "./legal.js";
 import { validAvatar } from "./avatar.js";
 import { createRemoteJWKSet } from "jose/jwks/remote";
 import { jwtVerify } from "jose/jwt/verify";
 import { decrypt, encrypt, encryptionKey, hashToken, pkceChallenge, timingSafeEqual, tokenPart } from "./crypto.js";
 import { avatarAfterSignIn, isGoogleAvatarUrl, sessionToken, splitSessionToken } from "../server/src/identity.js";
-import { aiImportAvailable, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, validateImportInput } from "./import-ai.js";
+import { CLEAN_RESERVATION, cleanMessages, parseCleanAnswer, validateCleanInput } from "./merchant-clean.js";
+import { aiImportAvailable, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
+import { withSecurityHeaders } from "./security-headers.js";
 export { UserLiveUpdates } from "./live.js";
 
 let jwks;
 let hasServedRequest = false;
 const googleAccess = new Map();
-const agreementVersions = new Set(["2026-09-28", "2026-09-29", "2026-10-03"]);
+// Older versions still sign in so installed apps keep working; the app then asks for the current one.
+const CURRENT_AGREEMENT = "2026-10-26";
+const agreementVersions = new Set(["2026-09-28", "2026-09-29", "2026-10-03", CURRENT_AGREEMENT]);
 const maxBody = 150_000;
 const chunkBytes = 250_000;
 const sheetNames = ["Transactions", "Pockets", "Accounts", "Cards", "Recurring", "Quick_entries", "Pocket_transfers", "Existing_installments"];
@@ -38,7 +43,6 @@ const fault = (status, message, extra = {}) => Object.assign(new Error(message),
 const reply = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { ...jsonHeaders, ...headers } });
 const cookies = (request) => Object.fromEntries((request.headers.get("cookie") || "").split("; ").filter(Boolean).map((part) => { const at = part.indexOf("="); return [part.slice(0, at), part.slice(at + 1)]; }));
 const cookie = (name, value, maxAge) => `${name}=${value}; ${cookieOptions}; Max-Age=${maxAge}`;
-const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
 async function readBody(request, limit = maxBody) {
   if (Number(request.headers.get("content-length") || 0) > limit) throw fault(413, "Request is too large");
@@ -54,7 +58,10 @@ async function googleJson(url, accessToken, options = {}) {
   // are already in the request, and parsing that echo wastes Worker CPU.
   if (response.ok && options.method === "PUT") return null;
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw fault([401, 429].includes(response.status) ? response.status : 502, `Google API failed (${response.status}): ${result.error?.message || "request rejected"}`);
+  if (!response.ok) {
+    console.error("Google API failed", response.status, result.error?.message || "request rejected");
+    throw fault([401, 429].includes(response.status) ? response.status : 502, "Google rejected the request; reconnect Google Drive");
+  }
   return result;
 }
 
@@ -115,13 +122,13 @@ async function beginLogin(env, tokens, agreementVersion, transport) {
   return pendingToken;
 }
 
-async function finishLogin(env, pendingToken, transport) {
+async function finishLogin(env, pendingToken, transport, label = "") {
   if (typeof pendingToken !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(pendingToken)) throw fault(401, "Google sign-in expired; try again");
   const row = await env.DB.prepare("DELETE FROM oauth_logins WHERE token_hash=? AND transport=? AND expires_at>? RETURNING payload")
     .bind(await hashToken(pendingToken), transport, Date.now()).first();
   if (!row) throw fault(401, "Google sign-in expired; try again");
   const { tokens, agreementVersion } = JSON.parse(await decrypt(row.payload, encryptionKey(env.TOKEN_ENCRYPTION_KEY)));
-  return signIn(env, tokens, agreementVersion);
+  return signIn(env, tokens, agreementVersion, label);
 }
 
 async function getUser(env, uid) {
@@ -204,17 +211,47 @@ function sheetChange(input) {
   return { range: input.range, before: input.before, after: input.after, count, width };
 }
 
-async function issueSession(env, uid, existingId, expectedRefreshHash) {
+// A rotated refresh token stays recognisable briefly, so two clients refreshing at once (the app and its
+// widget sync job) look like a race rather than theft. The columns are added on first use, like the AI budget tables.
+const REFRESH_RACE_MS = 60_000;
+// Remembered per database binding, so each database is checked once per isolate.
+const sessionColumnsReady = new WeakSet();
+async function ensureSessionColumns(env) {
+  if (sessionColumnsReady.has(env.DB)) return;
+  const row = await env.DB.prepare("SELECT group_concat(name) AS names FROM pragma_table_info('sessions')").first();
+  const columns = new Set(String(row?.names || "").split(","));
+  for (const [name, type] of [["previous_refresh_hash", "TEXT"], ["rotated_at", "INTEGER"], ["label", "TEXT"], ["created_at", "INTEGER"]]) {
+    if (columns.has(name)) continue;
+    try { await env.DB.prepare(`ALTER TABLE sessions ADD COLUMN ${name} ${type}`).run(); }
+    catch (error) {
+      // Another isolate may have added the column after our schema read.
+      if (!/duplicate column name/i.test(String(error))) throw error;
+    }
+  }
+  sessionColumnsReady.add(env.DB);
+}
+
+// A short, recognisable name for the devices list. Never the IP address or the full user agent.
+export function deviceLabel(transport, userAgent = "") {
+  if (transport === "android") return "Android app";
+  const browser = /Edg\//.test(userAgent) ? "Edge" : /Firefox\//.test(userAgent) ? "Firefox" : /Chrome\//.test(userAgent) ? "Chrome" : /Safari\//.test(userAgent) ? "Safari" : "A browser";
+  const system = /Android/.test(userAgent) ? "Android" : /iPhone|iPad/.test(userAgent) ? "iOS" : /Windows/.test(userAgent) ? "Windows" : /Mac OS X/.test(userAgent) ? "macOS" : /CrOS/.test(userAgent) ? "ChromeOS" : /Linux/.test(userAgent) ? "Linux" : "";
+  return system ? `${browser} on ${system}` : browser;
+}
+
+async function issueSession(env, uid, existingId, expectedRefreshHash, label = "") {
   const id = existingId || crypto.randomUUID();
   const accessSecret = tokenPart(), refreshSecret = tokenPart(), now = Date.now();
   const [accessHash, refreshHash] = await Promise.all([hashToken(accessSecret), hashToken(refreshSecret)]);
   if (existingId) {
-    const updated = await env.DB.prepare("UPDATE sessions SET access_hash=?,refresh_hash=?,access_expires_at=?,refresh_expires_at=?,updated_at=? WHERE id=? AND uid=? AND refresh_hash=? AND refresh_expires_at>?")
-      .bind(accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now, id, uid, expectedRefreshHash, now).run();
+    await ensureSessionColumns(env);
+    const updated = await env.DB.prepare("UPDATE sessions SET previous_refresh_hash=refresh_hash,rotated_at=?,access_hash=?,refresh_hash=?,access_expires_at=?,refresh_expires_at=?,updated_at=? WHERE id=? AND uid=? AND refresh_hash=? AND refresh_expires_at>?")
+      .bind(now, accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now, id, uid, expectedRefreshHash, now).run();
     if (!updated.meta.changes) throw fault(401, "Refresh session changed; retry with the current session");
   } else {
-    await env.DB.prepare("INSERT INTO sessions (id,uid,access_hash,refresh_hash,access_expires_at,refresh_expires_at,updated_at) VALUES (?,?,?,?,?,?,?)")
-      .bind(id, uid, accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now).run();
+    await ensureSessionColumns(env);
+    await env.DB.prepare("INSERT INTO sessions (id,uid,access_hash,refresh_hash,access_expires_at,refresh_expires_at,updated_at,label,created_at) VALUES (?,?,?,?,?,?,?,?,?)")
+      .bind(id, uid, accessHash, refreshHash, now + 15 * 60_000, now + 30 * 86400_000, now, label.slice(0, 40), now).run();
   }
   return { accessToken: sessionToken(id, accessSecret), refreshToken: sessionToken(id, refreshSecret) };
 }
@@ -301,7 +338,7 @@ async function provisionSheet(accessToken) {
   return { folderId: folder.id, spreadsheetId: spreadsheet.spreadsheetId, spreadsheetUrl: spreadsheet.spreadsheetUrl };
 }
 
-async function signIn(env, tokens, agreementVersion) {
+async function signIn(env, tokens, agreementVersion, label = "") {
   if (!agreementVersions.has(agreementVersion)) throw fault(400, "Accept the current Saku agreement before signing in");
   const profile = await profileFromToken(tokens.id_token, env.GOOGLE_OAUTH_CLIENT_ID);
   const existing = await getUser(env, profile.sub);
@@ -329,12 +366,12 @@ async function signIn(env, tokens, agreementVersion) {
   if (!existing?.spreadsheetId && drive.spreadsheetId) Object.assign(changes, { folderId: drive.folderId, spreadsheetId: drive.spreadsheetId, spreadsheetUrl: drive.spreadsheetUrl, sheetPending: true });
   if (encryptedRefreshToken) changes[driveGranted ? "googleRefreshToken" : "googleIdentityRefreshToken"] = encryptedRefreshToken;
   const saved = await putUser(env, profile.sub, user, changes);
-  const session = await issueSession(env, profile.sub);
+  const session = await issueSession(env, profile.sub, undefined, undefined, label);
   return { session, user: publicUser(profile.sub, saved), sync: { revision: saved.revision, spreadsheetUrl: saved.spreadsheetUrl || "", sheetPending: saved.sheetPending } };
 }
 
 function publicUser(uid, value) {
-  return { id: uid, name: value.name, email: value.email, hasAvatar: Boolean(value.avatarPath || value.googleAvatarUrl), avatarSource: value.avatarSource || (value.googleAvatarUrl ? "google" : undefined), avatarVersion: value.avatarVersion || "legacy" };
+  return { id: uid, name: value.name, email: value.email, hasAvatar: Boolean(value.avatarPath || value.googleAvatarUrl), avatarSource: value.avatarSource || (value.googleAvatarUrl ? "google" : undefined), avatarVersion: value.avatarVersion || "legacy", agreementVersion: value.agreementVersion || "" };
 }
 
 async function connectDrive(env, uid, tokens, sessionId) {
@@ -416,7 +453,9 @@ async function deleteAccount(env, uid, user, sessionId) {
     const started = await env.DB.prepare("UPDATE users SET data=json_set(data,'$.deleting',json('true')) WHERE uid=? AND coalesce(json_extract(data,'$.deleting'),0)=0 AND EXISTS(SELECT 1 FROM sessions WHERE id=? AND uid=users.uid)")
       .bind(uid, sessionId).run();
     if (started.meta.changes) {
+      await env.DB.prepare(USER_BUDGET_TABLE).run();
       await env.DB.batch([
+        env.DB.prepare("DELETE FROM import_ai_user_budget WHERE uid=?").bind(uid),
         env.DB.prepare("DELETE FROM sessions WHERE uid=? AND id<>?").bind(uid, sessionId),
         env.DB.prepare("DELETE FROM snapshot_upload_parts WHERE id IN (SELECT id FROM snapshot_uploads WHERE uid=?)").bind(uid),
         env.DB.prepare("DELETE FROM snapshot_uploads WHERE uid=?").bind(uid),
@@ -428,23 +467,12 @@ async function deleteAccount(env, uid, user, sessionId) {
   return deletionStep(env, uid);
 }
 
-function legalPage(path, env) {
-  const email = escapeHtml(env.SUPPORT_EMAIL);
-  const pages = {
-    "/privacy": ["Privacy Notice", `<p>Saku processes your Google account identifier, email, name, optional profile image, financial ledger, sync revision, and authentication tokens to provide sign-in and synchronization. Your ledger and image are stored privately using Cloudflare Workers, D1, and R2. A readable mirror is stored in a spreadsheet owned by your Google account. Google refresh tokens are encrypted; Saku session secrets are stored as hashes.</p><p>When you choose AI import, Saku sends selected statement text or page images to Cloudflare Workers AI for transaction extraction. The original files and review drafts remain on your device; Saku does not add them to ledger backups or Sheets. Accepted transactions sync as part of your ledger. You can export data, sign out, revoke Saku access in Google, or delete your account from Settings.</p>`],
-    "/terms": ["User Agreement", `<p>Saku helps you record and review information you provide. It is not a bank or financial adviser. You remain responsible for checking entries, statement matches, budgets, taxes, and payments.</p><p>You retain ownership of your ledger. You authorize Saku to process it for sign-in, backup, automatic synchronization, profile images, and Google Sheets mirroring. Offline features can continue without cloud service. You can export or delete your account from Settings.</p>`],
-    "/account-deletion": ["Delete your Saku account", `<p>In Saku Settings, choose Delete account and type DELETE. This removes your Saku cloud identity, sessions, ledger snapshots, and profile image, revokes Google access, and asks Google Drive to trash the Saku-created folder. If you cannot access the app, email <a href="mailto:${email}">${email}</a> from the Google address used for Saku.</p>`],
-  };
-  const [title, body] = pages[path] || ["Saku", `<p>Saku is an offline-first money tracker. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/account-deletion">Account deletion</a></p>`];
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${title} - Saku</title><style>
-    :root{color-scheme:light;--canvas:#f7f6f0;--surface:#fff;--ink:#203b33;--muted:#60746a;--line:#dbe6dc;--teal:#176b55;--soft:#e4efe8}
-    @media(prefers-color-scheme:dark){:root{color-scheme:dark;--canvas:#101d18;--surface:#192c24;--ink:#edf3ed;--muted:#aec3b5;--line:#365144;--teal:#92d3b1;--soft:#284638}}
-    *{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}a{color:var(--teal);font-weight:650;text-underline-offset:3px}header{border-bottom:1px solid var(--line);background:var(--surface)}header div{max-width:820px;margin:auto;padding:20px 24px}.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-size:22px;font-weight:800;letter-spacing:-.04em;text-decoration:none}.mark{display:grid;width:34px;height:34px;place-items:center;border-radius:10px 10px 10px 4px;background:var(--teal);color:var(--surface);font-size:16px}.period{color:var(--teal)}main{max-width:820px;margin:auto;padding:54px 24px 88px}.eyebrow{margin:0 0 8px;color:var(--teal);font-size:12px;font-weight:700}h1{max-width:18ch;margin:0;color:var(--ink);font-size:clamp(34px,7vw,54px);line-height:1.04;letter-spacing:-.045em}time{display:block;margin:14px 0 30px;color:var(--muted);font-size:13px}.legal-copy{padding:26px 28px;border:1px solid var(--line);border-radius:18px;background:var(--surface)}p{margin:0 0 18px}p:last-child{margin-bottom:0}.contact{margin-top:18px;padding:18px 20px;border-left:4px solid var(--teal);border-radius:4px 14px 14px 4px;background:var(--soft)}a:focus-visible{outline:3px solid var(--teal);outline-offset:4px;border-radius:3px}@media(max-width:560px){header div{padding:16px 18px}main{padding:38px 18px 64px}.legal-copy{padding:22px 20px}h1{font-size:36px}}
-  </style></head><body><header><div><a class="brand" href="/"><span class="mark" aria-hidden="true">S</span><span>saku<span class="period">.</span></span></a></div></header><main><p class="eyebrow">Your money, in balance</p><h1>${title}</h1><time datetime="2026-10-03">Effective 3 October 2026</time><article class="legal-copy">${body}</article><p class="contact">Questions: <a href="mailto:${email}">${email}</a></p></main></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'", "x-content-type-options": "nosniff" } });
-}
-
 async function route(request, env) {
   const url = new URL(request.url), path = url.pathname, origin = request.headers.get("origin");
+  if ((path.startsWith("/auth/") || path.startsWith("/v1/auth/")) && env.AUTH_RATE_LIMITER) {
+    const { success } = await env.AUTH_RATE_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") || "unknown" });
+    if (!success) return reply({ error: "Too many sign-in requests; try again in a minute" }, 429, corsHeaders(origin, env));
+  }
   if (url.hostname === "saku.saku-money-manager.workers.dev") {
     const successor = "https://app.sakumoney.my.id";
     if (["GET", "HEAD"].includes(request.method) && (path === "/" || ["/privacy", "/terms", "/account-deletion"].includes(path))) {
@@ -455,10 +483,11 @@ async function route(request, env) {
     }
     return reply({ error: "Update Saku to continue cloud sync.", code: "UPDATE_REQUIRED", updateUrl: successor }, 426);
   }
-  if (["GET", "HEAD"].includes(request.method) && path === "/") return env.ASSETS.fetch(request);
+  if (["GET", "HEAD"].includes(request.method) && path === "/") return withSecurityHeaders(await env.ASSETS.fetch(request));
   const allowedOrigins = new Set((env.ALLOWED_ORIGINS || "https://localhost").split(",").map((item) => item.trim()));
   const cors = corsHeaders(origin, env);
-  if (origin && origin !== url.origin && !allowedOrigins.has(origin)) throw fault(403, "Origin is not allowed");
+  const landingReleaseRequest = request.method === "GET" && path === "/v1/releases/android/latest" && origin === "https://sakumoney.my.id";
+  if (origin && origin !== url.origin && !allowedOrigins.has(origin) && !landingReleaseRequest) throw fault(403, "Origin is not allowed");
   if (request.method === "GET" && path === "/v1/live") {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") throw fault(400, "WebSocket required");
     const room = url.searchParams.get("room"), ticket = url.searchParams.get("ticket");
@@ -466,9 +495,9 @@ async function route(request, env) {
     return env.LIVE_UPDATES.get(env.LIVE_UPDATES.idFromName(room)).fetch(new Request(`https://live/connect?hash=${encodeURIComponent(await hashToken(ticket))}`, request));
   }
   if (request.method === "OPTIONS" && /^\/v[12]\//.test(path)) return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-headers": "authorization,content-type,x-saku-version,x-saku-user-id,x-saku-app-build", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" } });
-  if (request.method === "GET" && ["/", "/privacy", "/terms", "/account-deletion"].includes(path) && path !== "/") return legalPage(path, env);
+  if (request.method === "GET" && ["/", "/privacy", "/terms", "/account-deletion"].includes(path) && path !== "/") return legalPage(path, env, legalLanguage(url));
   if (request.method === "GET" && path === "/health") return reply({ ok: true });
-  if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, "cache-control": "public, max-age=300" });
+  if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, ...(landingReleaseRequest ? { "access-control-allow-origin": origin, vary: "Origin" } : {}), "cache-control": "public, max-age=300" });
   if (["GET", "HEAD"].includes(request.method) && path === "/download/saku.apk") return androidReleaseResponse(request, env, await androidReleaseManifest(env), false);
   const androidDownload = path.match(/^\/download\/android\/(\d+)\.apk$/);
   if (["GET", "HEAD"].includes(request.method) && androidDownload) {
@@ -480,6 +509,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/auth/google/start") {
     if (env.PUBLIC_LOGIN_ENABLED !== "true") throw fault(503, "Public login is not enabled yet");
     const state = tokenPart(), verifier = tokenPart(), challenge = await pkceChallenge(verifier);
+    await env.DB.prepare("DELETE FROM oauth_states WHERE expires_at<=?").bind(Date.now()).run();
     await env.DB.prepare("INSERT INTO oauth_states (state_hash,verifier,expires_at) VALUES (?,?,?)").bind(await hashToken(state), verifier, Date.now() + 10 * 60_000).run();
     const redirect = `${url.origin}/auth/google/callback`;
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -499,7 +529,7 @@ async function route(request, env) {
     if (!row || row.expires_at < Date.now()) throw fault(400, "Google sign-in expired; try again");
     await env.DB.prepare("DELETE FROM oauth_states WHERE state_hash = ?").bind(key).run();
     const tokens = await exchangeCode(env, code, `${url.origin}/auth/google/callback`, row.verifier);
-    const pendingToken = await beginLogin(env, tokens, "2026-10-03", "browser");
+    const pendingToken = await beginLogin(env, tokens, CURRENT_AGREEMENT, "browser");
     const headers = new Headers({ location: `${url.origin}/auth/google/finish`, "cache-control": "no-store" });
     headers.append("set-cookie", cookie("saku_login_pending", pendingToken, 300));
     headers.append("set-cookie", cookie("saku_oauth_state", "", 0));
@@ -507,7 +537,7 @@ async function route(request, env) {
   }
   if (request.method === "GET" && path === "/auth/google/finish") {
     if (env.PUBLIC_LOGIN_ENABLED !== "true") throw fault(503, "Public login is not enabled yet");
-    const result = await finishLogin(env, cookies(request).saku_login_pending, "browser");
+    const result = await finishLogin(env, cookies(request).saku_login_pending, "browser", deviceLabel("browser", request.headers.get("user-agent") || ""));
     const csrf = tokenPart();
     const headers = new Headers({ location: `${url.origin}/?auth=ok`, "cache-control": "no-store" });
     headers.append("set-cookie", cookie("saku_access", result.session.accessToken, 15 * 60));
@@ -566,7 +596,7 @@ async function route(request, env) {
   if (request.method === "POST" && path === "/v1/auth/google/finish") {
     if (env.PUBLIC_LOGIN_ENABLED !== "true") throw fault(503, "Public login is not enabled yet");
     const input = await readBody(request);
-    const result = await finishLogin(env, input.pendingToken, "android");
+    const result = await finishLogin(env, input.pendingToken, "android", deviceLabel("android"));
     return reply({ ...result.session, user: result.user, sync: result.sync }, 200, cors);
   }
   if (request.method === "POST" && path === "/v1/auth/refresh") {
@@ -575,21 +605,46 @@ async function route(request, env) {
     const value = browser ? cookies(request).saku_refresh : (await readBody(request)).refreshToken;
     const parsed = splitSessionToken(value);
     if (!parsed) throw fault(401, "Invalid refresh session");
-    const row = await env.DB.prepare("SELECT uid,refresh_hash,refresh_expires_at FROM sessions WHERE id = ?").bind(parsed.id).first();
-    if (!row || row.refresh_expires_at < Date.now() || !timingSafeEqual(row.refresh_hash, await hashToken(parsed.secret))) throw fault(401, "Refresh session expired");
+    await ensureSessionColumns(env);
+    const row = await env.DB.prepare("SELECT uid,refresh_hash,refresh_expires_at,previous_refresh_hash,rotated_at FROM sessions WHERE id = ?").bind(parsed.id).first();
+    if (!row || row.refresh_expires_at < Date.now()) throw fault(401, "Refresh session expired");
+    const presented = await hashToken(parsed.secret);
+    if (!timingSafeEqual(row.refresh_hash, presented)) {
+      if (row.previous_refresh_hash && timingSafeEqual(row.previous_refresh_hash, presented) && Date.now() - (row.rotated_at || 0) <= REFRESH_RACE_MS)
+        throw fault(401, "Refresh session changed; retry with the current session");
+      // Any other stale secret for a live session means a copied token was used: end the session everywhere.
+      await env.DB.prepare("DELETE FROM sessions WHERE id=? AND refresh_hash=?").bind(parsed.id, row.refresh_hash).run();
+      await liveRevoke(env, row.uid, parsed.id);
+      throw fault(401, "Refresh session expired");
+    }
     const next = await issueSession(env, row.uid, parsed.id, row.refresh_hash);
     return browser ? setBrowserSession(reply({ ok: true }), next) : reply(next, 200, cors);
   }
 
-  if (!path.startsWith("/v1/") && !path.startsWith("/v2/")) return env.ASSETS.fetch(request);
+  if (!path.startsWith("/v1/") && !path.startsWith("/v2/")) return withSecurityHeaders(await env.ASSETS.fetch(request));
   const auth = await authenticate(request, env);
   const expectedUid = request.headers.get("x-saku-user-id");
   if (expectedUid && expectedUid !== auth.uid) throw fault(409, "Google account changed during synchronization");
-  if (auth.browser && request.method !== "GET" && (path.startsWith("/v2/") || path === "/v1/me" || path === "/v1/live-ticket") && expectedUid !== auth.uid) throw fault(403, "Account identity is required");
+  if (auth.browser && request.method !== "GET" && (path.startsWith("/v2/") || path === "/v1/me" || path === "/v1/me/agreement" || path.startsWith("/v1/sessions") || path === "/v1/live-ticket") && expectedUid !== auth.uid) throw fault(403, "Account identity is required");
   const user = auth.user;
   if (!user) throw fault(404, "Account not found");
   if (user.deleting && !(request.method === "DELETE" && path === "/v1/me")) throw fault(410, "Account deletion is in progress");
   if (env.WRITE_ENABLED !== "true" && ((request.method === "PUT" && (path === "/v1/me" || path.startsWith("/v2/"))) || (request.method === "DELETE" && path === "/v1/me") || (request.method === "POST" && (path === "/v1/auth/google/drive" || path.startsWith("/v2/"))))) throw fault(503, "Cloud writes are paused for migration");
+  if (request.method === "POST" && path === "/v1/merchants/clean") {
+    if (expectedUid !== auth.uid) throw fault(403, "Account identity is required");
+    if (!aiImportAvailable(env)) throw fault(503, "AI name cleaning is unavailable");
+    let names;
+    try { names = validateCleanInput(await readBody(request, 8_000)); }
+    catch (error) { throw fault(400, error.message); }
+    const day = new Date().toISOString().slice(0, 10);
+    const reservation = await reserveImport(env.DB, day, auth.uid, CLEAN_RESERVATION);
+    if (!reservation.reserved) throw fault(429, reservation.limit === "user" ? "You've used today's AI allowance for your account." : "Saku's shared AI allowance is used for today.");
+    let answer;
+    try { answer = await env.AI.run(MODEL, { messages: cleanMessages(names), max_completion_tokens: 512, temperature: 0, seed: 0, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, store: false, n: 1 }); }
+    catch { await settleImport(env.DB, day, auth.uid, { usage: { prompt_tokens: 0, completion_tokens: 0 } }, CLEAN_RESERVATION); throw fault(502, "Names could not be tidied right now."); }
+    await settleImport(env.DB, day, auth.uid, answer, CLEAN_RESERVATION);
+    return reply({ results: parseCleanAnswer(answer, names) }, 200, cors);
+  }
   if (request.method === "POST" && path === "/v1/import/extract") {
     if (expectedUid !== auth.uid) throw fault(403, "Account identity is required");
     if (!aiImportAvailable(env)) throw fault(503, "AI import is unavailable");
@@ -599,9 +654,10 @@ async function route(request, env) {
     catch (error) { throw fault(400, error.message); }
     const day = new Date().toISOString().slice(0, 10);
     const runPass = async (messages) => {
-      if (!(await reserveImport(env.DB, day))) throw fault(429, "Daily AI import allowance is used. Your draft is saved on this device; try again after 07:00 WIB.");
+      const reservation = await reserveImport(env.DB, day, auth.uid);
+      if (!reservation.reserved) throw fault(429, reservation.limit === "user" ? "You've used today's AI import allowance for your account. Your draft is saved on this device; try again after 07:00 WIB." : "Saku's shared AI import allowance is used for today. Your draft is saved on this device; try again after 07:00 WIB.");
       const answer = await env.AI.run(MODEL, { messages, max_completion_tokens: 4096, temperature: 0, seed: 0, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, store: false, n: 1 });
-      await settleImport(env.DB, day, answer);
+      await settleImport(env.DB, day, auth.uid, answer);
       return answer;
     };
     try {
@@ -612,6 +668,20 @@ async function route(request, env) {
       if (error?.status === 429) throw error;
       throw fault(502, "Could not extract this page. It remains in your local draft for retry.");
     }
+  }
+  if (request.method === "GET" && path === "/v1/sessions") {
+    await ensureSessionColumns(env);
+    const { results } = await env.DB.prepare("SELECT id,label,created_at,updated_at FROM sessions WHERE uid=? AND refresh_expires_at>? ORDER BY updated_at DESC").bind(auth.uid, Date.now()).all();
+    return reply({ sessions: results.map((row) => ({ id: row.id, label: row.label || "Earlier sign-in", createdAt: row.created_at || null, lastActiveAt: row.updated_at, current: row.id === auth.sessionId })) }, 200, cors);
+  }
+  const sessionPath = path.match(/^\/v1\/sessions\/([0-9a-f-]{36})$/);
+  if (request.method === "DELETE" && sessionPath) {
+    // Scoped to the caller's own sessions: another account's id simply isn't found.
+    const deleted = await env.DB.prepare("DELETE FROM sessions WHERE id=? AND uid=?").bind(sessionPath[1], auth.uid).run();
+    if (!deleted.meta.changes) throw fault(404, "Device not found");
+    await liveRevoke(env, auth.uid, sessionPath[1]);
+    const current = sessionPath[1] === auth.sessionId;
+    return current && auth.browser ? clearBrowserSession(reply({ ok: true, current })) : reply({ ok: true, current }, 200, cors);
   }
   if (request.method === "POST" && path === "/v1/auth/logout") {
     await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(auth.sessionId).run();
@@ -643,6 +713,12 @@ async function route(request, env) {
     const bytes = new Uint8Array(await request.arrayBuffer());
     if (bytes.length !== size || !validAvatar(bytes)) throw fault(400, "Choose a static profile image up to 512 pixels");
     const next = await saveCustomAvatar(env, auth, name, bytes);
+    return reply({ user: ownUser(next) }, 200, cors);
+  }
+  if (request.method === "POST" && path === "/v1/me/agreement") {
+    const input = await readBody(request);
+    if (input.agreementVersion !== CURRENT_AGREEMENT) throw fault(400, "Accept the current Saku agreement");
+    const next = await patchUser(env, auth.uid, { agreementVersion: CURRENT_AGREEMENT, agreementAcceptedAt: Date.now() }, auth.sessionId);
     return reply({ user: ownUser(next) }, 200, cors);
   }
   if (request.method === "PUT" && path === "/v1/me") {

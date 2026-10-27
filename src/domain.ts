@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { localeTag } from "./i18n";
 
 export type Pocket = {
   id: string;
@@ -73,7 +74,10 @@ export type Data = {
   favorites: Favorite[];
   pocketTransfers: PocketTransfer[];
   existingInstallments: ExistingInstallment[];
+  checkedDays: string[];
+  merchantRules: MerchantRule[];
 };
+export type MerchantRule = { key: string; name: string; pocketId: string; updatedAt: string };
 export const COLORS = [
   "#15786e",
   "#8270ce",
@@ -95,27 +99,73 @@ export const ICONS = [
   "gift",
 ];
 export const uid = () => crypto.randomUUID();
-export const today = () => {
+export const daysAgo = (days: number) => {
   const d = new Date();
+  d.setDate(d.getDate() - days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+export const today = () => daysAgo(0);
+export const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(localeTag(), { weekday: "short", day: "numeric", month: "short" });
+// Before merchant memory (P1-5), a name matches only exactly, ignoring case and outer spaces.
+const entryKey = (name: string) => name.trim().toLocaleLowerCase("id-ID");
+const everydayExpense = (t: Transaction) => t.type === "expense" && (!t.kind || t.kind === "card_purchase");
+export function lastPocketFor(data: Data, name: string) {
+  const key = entryKey(name);
+  if (!key) return undefined;
+  let match: Transaction | undefined;
+  for (const t of data.transactions)
+    if (everydayExpense(t) && entryKey(t.name) === key && (!match || t.date >= match.date)) match = t;
+  return match?.pocketId;
+}
+// Templates for the catch-up sheet: the most frequent recent expenses that aren't already quick entries.
+export function frequentExpenses(data: Data, todayISO: string, limit = 5): Favorite[] {
+  const since = shiftDate(todayISO, -60), taken = new Set(data.favorites.map((f) => entryKey(f.name)));
+  const groups = new Map<string, { count: number; latest: Transaction }>();
+  for (const t of data.transactions) {
+    const key = entryKey(t.name);
+    if (!everydayExpense(t) || t.recurringRuleId || t.split || t.date <= since || t.date > todayISO || taken.has(key) || (t.cardId && !data.creditCards.some((c) => c.id === t.cardId))) continue;
+    const group = groups.get(key);
+    if (!group) groups.set(key, { count: 1, latest: t });
+    else { group.count++; if (t.date >= group.latest.date) group.latest = t; }
+  }
+  return [...groups.entries()].sort(([, a], [, b]) => b.count - a.count || b.latest.date.localeCompare(a.latest.date)).slice(0, limit).map(([key, { latest }]) => ({
+    id: `recent:${key}`, name: latest.name, amount: latest.amount, type: "expense", pocketId: latest.pocketId, account: latest.account,
+    ...(latest.kind === "card_purchase" ? { cardId: latest.cardId } : {}),
+  }));
+}
 export const money = (n: number) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(n);
+export const groupDigits = (n: number) => n.toLocaleString("id-ID");
 export const compact = (n: number) =>
   Math.abs(n) >= 1000000
-    ? `${(n / 1000000).toLocaleString("en", { maximumFractionDigits: 1 })}m`
+    ? `${(n / 1000000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`
     : Math.abs(n) >= 1000
-      ? `${(n / 1000).toLocaleString("en", { maximumFractionDigits: 0 })}k`
+      ? `${(n / 1000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} rb`
       : String(n);
 export const monthLabel = (month: string, short = false) =>
-  new Date(`${month}-01T12:00:00`).toLocaleDateString("en-GB", {
+  new Date(`${month}-01T12:00:00`).toLocaleDateString(localeTag(), {
     month: short ? "short" : "long",
     year: "numeric",
   });
+export function shiftDate(date: string, delta: number) {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+// Recurring bills post on their due date, so they don't show the user was recording that day.
+const realEntry = (t: Transaction) => t.kind !== "opening_balance" && !t.recurringRuleId;
+export function catchUpGap(data: Data, todayISO: string, checkedDays = data.checkedDays) {
+  const known = data.transactions.filter((t) => t.date <= todayISO);
+  const last = [...known.filter(realEntry).map((t) => t.date), ...checkedDays.filter((d) => d <= todayISO)].sort().at(-1) || known.map((t) => t.date).sort().at(-1);
+  if (!last) return [];
+  const days: string[] = [];
+  for (let day = todayISO; day > last && days.length < 14; day = shiftDate(day, -1)) days.unshift(day);
+  return days;
+}
 export function shiftMonth(month: string, delta: number) {
   const d = new Date(`${month}-01T12:00:00`);
   d.setMonth(d.getMonth() + delta);
@@ -245,6 +295,16 @@ export function summary(data: Data, month: string) {
     accounts: data.accounts.map((account) => ({ account, balance: accountBalance(data, account) })),
   };
 }
+export function averageDailySpending(data: Data, month: string, todayISO = today()) {
+  const end = [todayISO, `${month}-${new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate()}`].sort()[0];
+  if (!end.startsWith(month)) return 0;
+  const first = data.transactions
+    .filter((item) => item.date <= end && item.kind !== "opening_balance" && item.kind !== "account_transfer")
+    .reduce((earliest, item) => item.date < earliest ? item.date : earliest, end);
+  const start = [first, `${month}-01`].sort()[1];
+  const days = Math.max(1, (Date.parse(`${end}T12:00:00Z`) - Date.parse(`${start}T12:00:00Z`)) / 86400000 + 1);
+  return Math.round(summary(data, month).expenses / days);
+}
 export function emptyData(): Data {
   return {
     version: 3,
@@ -258,6 +318,8 @@ export function emptyData(): Data {
     favorites: [],
     pocketTransfers: [],
     existingInstallments: [],
+    checkedDays: [],
+    merchantRules: [],
   };
 }
 export function demoData(month = today().slice(0, 7)): Data {
@@ -328,6 +390,8 @@ export function demoData(month = today().slice(0, 7)): Data {
     favorites: [],
     pocketTransfers: [],
     existingInstallments: [],
+    checkedDays: [],
+    merchantRules: [],
   };
 }
 
@@ -336,9 +400,10 @@ export function validateData(input: unknown): Data {
   const v2 = legacy?.version === 1
     ? { ...legacy, version: 2, creditCards: [], recurring: [], favorites: [] }
     : legacy;
-  const d = (v2?.version === 2
+  const v3 = (v2?.version === 2
     ? { ...v2, version: 3, pocketTransfers: [], existingInstallments: [] }
     : v2) as Data;
+  const d = (v3 && typeof v3 === "object" ? { ...v3, checkedDays: v3.checkedDays ?? [], merchantRules: v3.merchantRules ?? [] } : v3) as Data;
   if (
     !d ||
     d.version !== 3 ||
@@ -359,6 +424,14 @@ export function validateData(input: unknown): Data {
     !Array.isArray(d.favorites) ||
     !Array.isArray(d.pocketTransfers) ||
     !Array.isArray(d.existingInstallments) ||
+    !Array.isArray(d.checkedDays) ||
+    d.checkedDays.length > 3660 ||
+    d.checkedDays.some((day) => typeof day !== "string" || !validDate(day)) ||
+    new Set(d.checkedDays).size !== d.checkedDays.length ||
+    !Array.isArray(d.merchantRules) ||
+    d.merchantRules.length > 500 ||
+    d.merchantRules.some((rule) => !rule || typeof rule.key !== "string" || !rule.key || rule.key.length > 100 || typeof rule.name !== "string" || !rule.name.trim() || rule.name.length > 100 || typeof rule.pocketId !== "string" || typeof rule.updatedAt !== "string" || rule.updatedAt.length > 40) ||
+    new Set(d.merchantRules.map((rule) => rule.key)).size !== d.merchantRules.length ||
     d.pockets.length > 1000 ||
     d.transactions.length > 100000 ||
     d.creditCards.length > 30 ||
@@ -511,6 +584,8 @@ export function validateData(input: unknown): Data {
       throw new Error("The backup contains an invalid existing installment.");
     installmentIds.add(item.id);
   }
+  // A rule may outlive its pocket; it then suggests Unassigned rather than blocking the ledger.
+  d.merchantRules = d.merchantRules.map((rule) => !rule.pocketId || ids.has(rule.pocketId) ? rule : { ...rule, pocketId: "" });
   return d;
 }
 

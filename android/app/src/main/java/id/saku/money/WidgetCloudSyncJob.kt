@@ -77,9 +77,15 @@ class WidgetCloudSyncJob : JobService() {
             val userId = cloud.optJSONObject("user")?.optString("id").orEmpty()
             if (userId.isBlank()) return true
             expectedUserId = userId
+            val pending = LedgerDatabase.load(this, userId)?.let { it.revision > it.syncedRevision } == true
+            if (pending && !cloud.optBoolean("dirty")) {
+                cloud.put("dirty", true)
+                if (!prefs.edit().putString("saku-cloud-state-v1", cloud.toString()).commit()) return false
+            }
             if (!cloud.optBoolean("dirty")) return mirrorLatest(cloud)
             val ledgerKey = "saku-ledger-v3-$userId"
-            val ledgerText = prefs.getString(ledgerKey, null) ?: return true
+            val stored = LedgerDatabase.load(this, userId)
+            val ledgerText = stored?.ledger?.toString() ?: prefs.getString(ledgerKey, null) ?: return true
             val ledger = runCatching { JSONObject(ledgerText) }.getOrNull() ?: return true
             val baseRevision = cloud.optInt("revision", 0)
             val response = upload(ledger.toString(), baseRevision)
@@ -87,16 +93,19 @@ class WidgetCloudSyncJob : JobService() {
             if (response.status !in 200..299) return terminal(response.status)
 
             val result = JSONObject(response.body)
-            val currentLedger = prefs.getString(ledgerKey, null)
+            if (stored != null && result.has("revision")) LedgerDatabase.saveSyncBase(this, userId, result.getInt("revision"), ledger)
+            val currentStored = LedgerDatabase.load(this, userId)
+            val currentLedger = currentStored?.ledger?.toString() ?: prefs.getString(ledgerKey, null)
+            val unchanged = if (stored != null) currentStored?.revision == stored.revision && LedgerDatabase.acknowledge(this, userId, stored.revision) else currentLedger == ledgerText
             val currentCloud = prefs.getString("saku-cloud-state-v1", null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: cloud
             if (currentCloud.optJSONObject("user")?.optString("id") != userId) return true
             currentCloud.put("revision", maxOf(currentCloud.optInt("revision", 0), result.optInt("revision", baseRevision)))
                 .put("lastSyncedAt", java.time.Instant.now().toString())
                 .put("spreadsheetUrl", result.optString("spreadsheetUrl", currentCloud.optString("spreadsheetUrl")))
                 .put("sheetPending", result.optBoolean("sheetPending"))
-                .put("dirty", currentLedger != ledgerText)
+                .put("dirty", !unchanged)
             if (!prefs.edit().putString("saku-cloud-state-v1", currentCloud.toString()).commit()) return false
-            if (currentLedger == ledgerText) return mirrorLatest(currentCloud)
+            if (unchanged) return mirrorLatest(currentCloud)
         }
         return false
     }
@@ -106,10 +115,14 @@ class WidgetCloudSyncJob : JobService() {
         if (remote.status !in 200..299) return terminal(remote.status)
         if (remote.status == 204) return true
         val remoteLedger = download(remote) ?: return true
-        val currentLedger = prefs.getString(ledgerKey, null) ?: return true
+        val stored = LedgerDatabase.load(this, expectedUserId)
+        val currentLedger = stored?.ledger?.toString() ?: prefs.getString(ledgerKey, null) ?: return true
         if (!WidgetCloudSync.sameLedger(currentLedger, remoteLedger)) return true
+        if (stored != null && LedgerDatabase.load(this, expectedUserId)?.revision != stored.revision) return false
         val cloud = prefs.getString("saku-cloud-state-v1", null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return true
         if (cloud.optJSONObject("user")?.optString("id") != expectedUserId) return true
+        if (stored != null) remote.revision?.let { LedgerDatabase.saveSyncBase(this, expectedUserId, it, remoteLedger) }
+        if (stored != null && !LedgerDatabase.acknowledge(this, expectedUserId, stored.revision)) return false
         cloud.put("dirty", false)
             .put("revision", remote.revision ?: cloud.optInt("revision", 0))
             .put("lastSyncedAt", java.time.Instant.now().toString())

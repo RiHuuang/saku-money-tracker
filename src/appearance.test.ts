@@ -15,9 +15,9 @@ test("appearance preference defaults to system and resolves against device theme
 
 test("back navigation returns from More children to More, then the previous tab", () => {
   assert.equal(backDestination("settings", "pockets"), "more");
-  assert.equal(backDestination("check", "transactions"), "more");
+  assert.equal(backDestination("check", "transactions"), "overview", "Catch up is a main tab");
+  assert.equal(backDestination("plans", "overview"), "more", "Plans lives in More");
   assert.equal(backDestination("more", "pockets"), "pockets");
   assert.equal(backDestination("more", "more"), "overview");
-  assert.equal(backDestination("plans", "overview"), "overview");
   assert.equal(backDestination("overview", "overview"), null);
 });

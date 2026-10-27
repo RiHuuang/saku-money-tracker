@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
@@ -40,7 +41,8 @@ const releaseKey = "saku-update-release-v1";
 const dismissedKey = "saku-update-dismissed-v1";
 
 export function AppUpdateProvider({ children }: { children: ReactNode }) {
-  const native = Capacitor.isNativePlatform();
+  // Play builds don't register the updater, so they never ask Saku for releases.
+  const native = Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("AppUpdate");
   const [installed, setInstalled] = useState<NativeStatus>();
   const [release, setRelease] = useState<AndroidRelease>();
   const [checking, setChecking] = useState(false);
@@ -73,16 +75,16 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
         if (remembered) { await applyRelease(current, remembered); return; }
       }
       const response = await fetch(`${apiUrl}/v1/releases/android/latest`, { headers: { accept: "application/json" } });
-      if (!response.ok) throw new Error("Could not check for a Saku update");
+      if (!response.ok) throw new Error(t("updateCheckFailedSaku"));
       const next: unknown = await response.json();
-      if (!validRelease(next)) throw new Error("Saku received invalid update information");
+      if (!validRelease(next)) throw new Error(t("updateInvalidInfo"));
       await Promise.all([
         Preferences.set({ key: checkedKey, value: String(Date.now()) }),
         Preferences.set({ key: releaseKey, value: JSON.stringify(next) }),
       ]);
       await applyRelease(current, next);
     } catch (reason) {
-      if (force) setError(reason instanceof Error ? reason.message : "Could not check for updates");
+      if (force) setError(reason instanceof Error ? reason.message : t("updateCheckFailed"));
     } finally { checkingRef.current = false; setChecking(false); }
   };
 
@@ -108,7 +110,7 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
     } catch (reason) {
       const code = (reason as { code?: string }).code;
       if (code === "CANCELLED") setPhase("idle");
-      else { setPhase("error"); setError(reason instanceof Error ? reason.message : "Could not install the update"); }
+      else { setPhase("error"); setError(reason instanceof Error ? reason.message : t("updateInstallFailed")); }
     }
   };
   const cancel = async () => { await plugin.cancel(); setPhase("idle"); setProgress(0); };
@@ -134,19 +136,19 @@ function UpdatePrompt() {
     <section className="update-card" role="dialog" aria-modal="true" aria-labelledby="update-title">
       <div className="update-icon"><PackageCheck size={25} /></div>
       <p className="update-eyebrow">SAKU {release.versionName}</p>
-      <h2 id="update-title">{update.critical ? "Update needed for cloud sync" : "A new Saku is ready"}</h2>
-      <p>{update.critical ? "Your ledger stays available on this phone. Install this update to resume backup and sync." : "Install it from Saku, then Android will ask you to approve the update."}</p>
+      <h2 id="update-title">{update.critical ? t("updateNeededForSync") : t("updateReady")}</h2>
+      <p>{update.critical ? t("updateNeededBody") : t("updateReadyBody")}</p>
       {!!release.notes.length && <ul>{release.notes.map((note) => <li key={note}>{note}</li>)}</ul>}
-      <div className="update-trust"><ShieldCheck size={17} /><span>Verified before Android opens the installer</span><strong>{size}</strong></div>
-      {update.phase === "downloading" && <div className="update-progress" aria-live="polite"><span style={{ width: `${Math.round(update.progress * 100)}%` }} /><p>Downloading securely… {Math.round(update.progress * 100)}%</p></div>}
-      {update.meteredConfirmation && <div className="update-notice"><Wifi size={17} /><p>This connection may use mobile data. The update is {size}.</p></div>}
-      {update.phase === "permission" && <div className="update-notice"><p>Allow Saku to install updates in Android Settings, then return and tap Install again.</p></div>}
-      {update.phase === "installer" && <div className="update-notice"><p>Android’s installer is open. Approve the update there; your Saku data stays in place.</p></div>}
+      <div className="update-trust"><ShieldCheck size={17} /><span>{t("updateVerified")}</span><strong>{size}</strong></div>
+      {update.phase === "downloading" && <div className="update-progress" aria-live="polite"><span style={{ width: `${Math.round(update.progress * 100)}%` }} /><p>{t("updateDownloading", { percent: Math.round(update.progress * 100) })}</p></div>}
+      {update.meteredConfirmation && <div className="update-notice"><Wifi size={17} /><p>{t("updateMetered", { size })}</p></div>}
+      {update.phase === "permission" && <div className="update-notice"><p>{t("updatePermission")}</p></div>}
+      {update.phase === "installer" && <div className="update-notice"><p>{t("updateInstallerOpen")}</p></div>}
       {update.error && <p className="form-error" role="alert">{update.error}</p>}
       <div className="update-actions">
-        {update.phase === "downloading" ? <button className="button secondary" onClick={() => void update.cancel()}>Cancel download</button> : <>
-          <button className="button secondary" onClick={() => void update.dismiss()}>{update.critical ? "Use Saku offline" : "Remind me in 3 days"}</button>
-          <button className="button primary" onClick={() => void update.install(update.meteredConfirmation)}><Download size={17} />{update.meteredConfirmation ? "Use mobile data" : update.phase === "permission" ? "Install again" : "Install update"}</button>
+        {update.phase === "downloading" ? <button className="button secondary" onClick={() => void update.cancel()}>{t("updateCancelDownload")}</button> : <>
+          <button className="button secondary" onClick={() => void update.dismiss()}>{update.critical ? t("updateUseOffline") : t("updateRemindLater")}</button>
+          <button className="button primary" onClick={() => void update.install(update.meteredConfirmation)}><Download size={17} />{update.meteredConfirmation ? t("updateUseMobileData") : update.phase === "permission" ? t("updateInstallAgain") : t("updateInstall")}</button>
         </>}
       </div>
     </section>
@@ -157,9 +159,9 @@ export function AppUpdateSettings() {
   const update = useAppUpdate();
   if (!update.native) return null;
   return <section className="app-update-settings">
-    <div className="cloud-heading"><span className="connection-icon"><RefreshCw size={23} /></span><div><h2>App updates</h2><p>Saku checks once a day and asks before downloading or installing anything.</p></div></div>
-    <div className="app-update-row"><span><strong>Installed</strong><small>{update.installed ? `Saku ${update.installed.versionName} · build ${update.installed.versionCode}` : "Checking this installation"}</small></span><span className={`sync-state ${update.available ? "pending" : ""}`}>{update.available ? `Version ${update.release?.versionName} ready` : "Up to date"}</span></div>
+    <div className="cloud-heading"><span className="connection-icon"><RefreshCw size={23} /></span><div><h2>{t("appUpdates")}</h2><p>{t("appUpdatesBody")}</p></div></div>
+    <div className="app-update-row"><span><strong>{t("updateInstalled")}</strong><small>{update.installed ? t("updateInstalledVersion", { version: update.installed.versionName, build: update.installed.versionCode }) : t("updateCheckingInstall")}</small></span><span className={`sync-state ${update.available ? "pending" : ""}`}>{update.available ? t("updateVersionReady", { version: update.release?.versionName ?? "" }) : t("upToDate")}</span></div>
     {update.error && <p className="form-error" role="alert">{update.error}</p>}
-    <div className="settings-actions"><button className="button secondary" disabled={update.checking} onClick={() => void update.checkNow()}><RefreshCw size={16} />{update.checking ? "Checking…" : "Check now"}</button>{update.available && <button className="button primary" onClick={() => void update.install()}><Download size={16} />Install update</button>}</div>
+    <div className="settings-actions"><button className="button secondary" disabled={update.checking} onClick={() => void update.checkNow()}><RefreshCw size={16} />{update.checking ? t("updateChecking") : t("updateCheckNow")}</button>{update.available && <button className="button primary" onClick={() => void update.install()}><Download size={16} />{t("updateInstall")}</button>}</div>
   </section>;
 }

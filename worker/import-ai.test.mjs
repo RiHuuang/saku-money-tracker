@@ -29,7 +29,7 @@ assert.equal(DAILY_CAP, 4000);
 assert.equal(RESERVATION, 2500);
 assert.equal(DAILY_CAP * 2, 8000);
 const response = { choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ rows: [{ date: "2026-10-10", name: "Tokopedia", amount: 41244, direction: "expense", activity: "purchase" }] }) } }], usage: { prompt_tokens: 1000, completion_tokens: 100 } };
-assert.deepEqual(parseImportAnswer(response)[0], { date: "", dateEvidence: "", name: "Tokopedia", paymentMethod: "", amount: 41244, direction: "expense", activity: "purchase" });
+assert.deepEqual(parseImportAnswer(response)[0], { date: "", dateEvidence: "", name: "Tokopedia", cleanName: "Tokopedia", paymentMethod: "", amount: 41244, direction: "expense", activity: "purchase" });
 assert.equal(dateFromPrintedEvidence("Kemarin 05 Sep 2025"), "2025-09-05");
 assert.equal(dateFromPrintedEvidence("Jumat 9 Okt 2026"), "2026-10-09");
 assert.equal(dateFromPrintedEvidence("14/10/2026 · 08:12"), "2026-10-14");
@@ -101,3 +101,18 @@ assert.equal(neuronsUsed({}), RESERVATION);
 assert.throws(() => parseImportAnswer({ choices: [{ finish_reason: "length", message: { content: "{}" } }] }));
 assert.throws(() => parseImportAnswer({ response: "not json" }));
 console.log("AI import: bounded inputs, source prompts, output validation and neuron accounting passed");
+
+const cleanNameOf = (name, cleanName) => parseImportAnswer({ response: JSON.stringify({ rows: [{ date: "2026-10-10", name, cleanName, amount: 28000, direction: "expense", activity: "purchase" }] }) })[0].cleanName;
+assert.equal(cleanNameOf("QRIS ALFAMART 0123 JKT", " Alfamart "), "Alfamart");
+assert.equal(cleanNameOf("GRAB* A-5XK2 RIDE", "Grab"), "Grab");
+assert.equal(cleanNameOf("Synthetic shop", undefined), "Synthetic shop", "missing cleanName falls back to the printed name");
+assert.equal(cleanNameOf("Synthetic shop", "x".repeat(61)), "Synthetic shop", "an overlong cleanName falls back to the printed name");
+assert.equal(cleanNameOf("Synthetic shop", "Shop 12345"), "Synthetic shop", "a cleanName with a code-like digit run falls back to the printed name");
+assert.equal(cleanNameOf("Synthetic shop", "Shop 123"), "Shop 123", "short numbers such as a store brand survive");
+assert.equal(cleanNameOf("A".repeat(100), ""), "A".repeat(60), "the fallback is cut to the cleanName limit");
+const cleanFirst = [{ date: "2026-10-10", dateEvidence: "10/10/2026", name: "QRIS ALFAMART 0123 JKT", cleanName: "Alfamart", paymentMethod: "BCA", amount: 28000, direction: "expense", activity: "purchase" }];
+const cleanSecond = [{ ...cleanFirst[0], cleanName: "Alfamart Jakarta" }, { ...cleanFirst[0], name: "Synthetic second row", cleanName: "Second", amount: 5000 }];
+assert.deepEqual(mergeImportPasses(cleanFirst, cleanSecond), cleanSecond, "rows that differ only in cleanName still match exactly and keep the verified pass");
+assert.deepEqual(mergeImportPasses([...cleanFirst, cleanFirst[0]], [cleanSecond[0], { ...cleanFirst[0], cleanName: "Other" }]).map((row) => row.cleanName), ["Alfamart Jakarta", "Other"], "duplicate rows pair one-to-one even when cleanName differs");
+console.log("Import AI cleanName: validation fallbacks and cleanName-insensitive pass merging passed");
+

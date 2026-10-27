@@ -30,8 +30,8 @@ android {
         applicationId "id.saku.money"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '14')
-        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.3.4'
+        versionCode Integer.parseInt(project.findProperty('SAKU_VERSION_CODE') ?: '15')
+        versionName project.findProperty('SAKU_VERSION_NAME') ?: '2.4.0'
         // Production stays ARM64-only. Explicit emulator builds package the x86_64
         // variants so the signed app can be exercised on the Windows Android emulator.
         ndk { abiFilters(emulatorBuild ? 'x86_64' : 'arm64-v8a') }
@@ -53,6 +53,12 @@ android {
         }
     }
     buildFeatures { buildConfig true }
+    // One app on two channels: the website APK updates itself, the Play build leaves updates to Play.
+    flavorDimensions = ["distribution"]
+    productFlavors {
+        direct { dimension "distribution" }
+        play { dimension "distribution" }
+    }
     signingConfigs {
         release {
             if (releaseSigningConfigured) {
@@ -94,6 +100,9 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "androidx.biometric:biometric:1.1.0"
+    implementation 'net.zetetic:sqlcipher-android:4.17.0@aar'
+    implementation 'androidx.sqlite:sqlite:2.4.0'
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     testImplementation 'org.json:json:20250517'

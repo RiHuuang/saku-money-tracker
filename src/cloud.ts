@@ -2,8 +2,11 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { validateData, type Data } from "./domain";
 import { refreshHomeWidgets } from "./homeWidget";
+import { clearNotificationInbox } from "./notificationCapture";
 import { sheetChanges, sheetGridRows } from "./sheetMirror";
 import { downloadSnapshot, uploadSnapshot, type SnapshotRequest } from "./snapshotTransfer";
+import { acknowledgeNativeLedger, loadNativeSyncBase, saveNativeSyncBase } from "./nativeLedger";
+import { mergeTransactionSnapshots } from "./transactionMerge";
 
 type NativeSession = { signedIn: boolean; accessToken?: string; refreshToken?: string };
 type Authorization = { code: string };
@@ -31,6 +34,7 @@ export type CloudState = {
     hasAvatar: boolean;
     avatarVersion?: string;
     avatarSource?: "google" | "custom";
+    agreementVersion?: string;
   };
 };
 type AuthResponse = {
@@ -43,7 +47,7 @@ type AuthResponse = {
 const plugin = registerPlugin<GoogleAuthPlugin>("GoogleAuth");
 const stateKey = "saku-cloud-state-v1";
 export const SAKU_ANDROID_BUILD = 10;
-export const AGREEMENT_VERSION = "2026-10-03";
+export const AGREEMENT_VERSION = "2026-10-26";
 const apiUrl = Capacitor.isNativePlatform() ? (import.meta.env.VITE_SAKU_API_URL || "").replace(/\/$/, "") : "";
 export const legalUrl = (page: "privacy" | "terms" | "account-deletion") => `${apiUrl}/${page}`;
 const native = () => Capacitor.isNativePlatform();
@@ -66,6 +70,30 @@ async function publicState(): Promise<Omit<CloudState, "signedIn" | "configured"
 }
 async function savePublic(state: Omit<CloudState, "signedIn" | "configured">) {
   await Preferences.set({ key: stateKey, value: JSON.stringify(state) });
+}
+const syncBaseKey = (userId: string) => `saku-sync-base-v1-${userId}`;
+async function loadSyncBase(userId: string): Promise<{ revision: number; data: Data } | null> {
+  if (native()) return loadNativeSyncBase(userId);
+  const { value } = await Preferences.get({ key: syncBaseKey(userId) });
+  if (!value) return null;
+  try {
+    const base = JSON.parse(value);
+    return Number.isSafeInteger(base.revision) ? { revision: base.revision, data: validateData(base.data) } : null;
+  } catch { return null; }
+}
+async function saveSyncBase(userId: string, revision: number, data: Data) {
+  if (native()) await saveNativeSyncBase(userId, revision, data);
+  else await Preferences.set({ key: syncBaseKey(userId), value: JSON.stringify({ revision, data: validateData(data) }) });
+}
+export async function removeSyncBase(userId: string) {
+  await Preferences.remove({ key: syncBaseKey(userId) });
+}
+/** Three-way merge of a rejected upload against the last snapshot the cloud acknowledged. */
+export async function mergeWithSyncBase(local: Data, remote: Data, state: CloudState) {
+  const userId = state.user?.id;
+  if (!userId || (await publicState()).user?.id !== userId) return { data: null, conflicts: ["workspace"] };
+  const base = await loadSyncBase(userId);
+  return mergeTransactionSnapshots(base && base.revision <= state.revision ? base.data : null, local, remote);
 }
 export async function markCloudDirty() {
   const state = await publicState();
@@ -160,7 +188,7 @@ function requestsFor(userId: string | undefined): SnapshotRequest {
     return response;
   };
 }
-export async function extractImportPage(userId: string, page: { month: string } & ({ kind: "text"; text: string } | { kind: "image"; image: string })): Promise<{ rows: { date: string; dateEvidence: string; name: string; paymentMethod: string; amount: number; direction: "expense" | "income" | "unknown"; activity: "purchase" | "transfer" | "topup" | "card_payment" | "refund" | "income" | "fee" | "interest" | "pay_later" | "reward" | "pending" | "failed" | "unknown" }[] }> {
+export async function extractImportPage(userId: string, page: { month: string } & ({ kind: "text"; text: string } | { kind: "image"; image: string })): Promise<{ rows: { date: string; dateEvidence: string; name: string; cleanName?: string; paymentMethod: string; amount: number; direction: "expense" | "income" | "unknown"; activity: "purchase" | "transfer" | "topup" | "card_payment" | "refund" | "income" | "fee" | "interest" | "pay_later" | "reward" | "pending" | "failed" | "unknown" }[] }> {
   const send = requestsFor(userId);
   try {
     return (await send("/v1/import/extract", { method: "POST", body: JSON.stringify(page) })).json();
@@ -209,9 +237,11 @@ export async function connectGoogleDrive(): Promise<CloudState> {
 export async function pushCloud(data: Data): Promise<CloudState> {
   const local = await publicState();
   const result = await uploadSnapshot(JSON.stringify(validateData(data)), local.revision, requestsFor(local.user?.id));
+  await saveSyncBase(local.user!.id, result.revision, data);
+  const acknowledged = !native() || await acknowledgeNativeLedger(local.user!.id, data);
   const current = await publicState();
   if (current.user?.id !== local.user?.id) throw new Error("Google account changed during synchronization");
-  const next = { ...current, signedIn: true, configured: true, dirty: current.changeVersion !== local.changeVersion, revision: result.revision, lastSyncedAt: new Date().toISOString(), spreadsheetUrl: result.spreadsheetUrl, sheetPending: Boolean(result.sheetPending) };
+  const next = { ...current, signedIn: true, configured: true, dirty: !acknowledged || current.changeVersion !== local.changeVersion, revision: result.revision, lastSyncedAt: new Date().toISOString(), spreadsheetUrl: result.spreadsheetUrl, sheetPending: Boolean(result.sheetPending) };
   await savePublic(next);
   return next;
 }
@@ -232,17 +262,21 @@ export async function pullCloud(): Promise<{ data: Data | null; state: CloudStat
   return { data, state: next };
 }
 
-export async function adoptCloudSnapshot(state: CloudState, explicit = false): Promise<CloudState> {
+export async function adoptCloudSnapshot(state: CloudState, explicit = false, snapshot?: Data): Promise<CloudState> {
   const current = await publicState();
   if (current.user?.id !== state.user?.id || (!explicit && (current.dirty || current.changeVersion !== state.changeVersion))) throw new Error("Local data changed during cloud download");
+  if (native() && (!snapshot || !await acknowledgeNativeLedger(current.user!.id, snapshot))) throw new Error("Local data changed during cloud download");
+  if (snapshot) await saveSyncBase(current.user!.id, state.revision, snapshot);
   const next = { ...current, dirty: false, revision: state.revision, lastSyncedAt: state.lastSyncedAt, spreadsheetUrl: state.spreadsheetUrl, sheetPending: state.sheetPending };
   await savePublic(next);
   return { ...next, signedIn: true, configured: true };
 }
 
-export async function resolveCloudWithLocal(state: CloudState): Promise<CloudState> {
+export async function resolveCloudWithLocal(state: CloudState, remote?: Data): Promise<CloudState> {
   const current = await publicState();
   if (current.user?.id !== state.user?.id) throw new Error("Google account changed during synchronization");
+  // The reviewed cloud copy is what the next upload replaces, so it becomes the merge base.
+  if (remote) await saveSyncBase(current.user!.id, state.revision, remote);
   const next = { ...current, revision: state.revision, dirty: true, changeVersion: (current.changeVersion || 0) + 1 };
   await savePublic(next);
   return { ...next, signedIn: true, configured: true };
@@ -264,7 +298,8 @@ export async function liveTicket(): Promise<{ room: string; ticket: string }> {
 }
 
 export function liveUrl(room: string, ticket: string): string {
-  const url = new URL(`${apiUrl}/v1/live`);
+  // On the web apiUrl is empty, so resolve against the page.
+  const url = new URL(`${apiUrl}/v1/live`, location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.search = new URLSearchParams({ room, ticket }).toString();
   return url.toString();
@@ -316,6 +351,7 @@ export async function signOutGoogle() {
   try { await request("/v1/auth/logout", { method: "POST", body: "{}" }, false); } catch { /* Local sign-out still wins. */ }
   if (native()) await plugin.clearSession();
   await Preferences.remove({ key: stateKey });
+  await clearNotificationInbox();
   await refreshHomeWidgets();
 }
 export async function deleteCloudAccount() {
@@ -330,6 +366,7 @@ export async function deleteCloudAccount() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (native()) await plugin.clearSession();
+  await removeSyncBase(local.user!.id);
   await Preferences.remove({ key: stateKey });
   await refreshHomeWidgets();
   return result;
@@ -349,6 +386,27 @@ export async function updateProfile(name: string, image?: string) {
   if (current.user?.id !== local.user?.id) throw new Error("Google account changed during synchronization");
   await savePublic({ ...current, user });
   return { ...current, signedIn: true, configured: true, user } as CloudState;
+}
+export async function acceptAgreement() {
+  const local = await publicState();
+  const result = await (await requestsFor(local.user?.id)("/v1/me/agreement", { method: "POST", body: JSON.stringify({ agreementVersion: AGREEMENT_VERSION }) })).json();
+  const current = await publicState();
+  if (current.user?.id !== local.user?.id) throw new Error("Google account changed during synchronization");
+  const user = identified(result.user);
+  await savePublic({ ...current, user });
+  return { ...current, signedIn: true, configured: true, user } as CloudState;
+}
+export async function cleanMerchantNames(userId: string, names: string[]): Promise<{ name: string; cleanName: string }[]> {
+  return (await (await requestsFor(userId)("/v1/merchants/clean", { method: "POST", body: JSON.stringify({ names }) })).json()).results;
+}
+export type SignedInDevice = { id: string; label: string; createdAt: number | null; lastActiveAt: number; current: boolean };
+export async function listDevices(): Promise<SignedInDevice[]> {
+  const user = (await publicState()).user;
+  return (await (await requestsFor(user?.id)("/v1/sessions")).json()).sessions;
+}
+export async function signOutDevice(id: string) {
+  const user = (await publicState()).user;
+  await requestsFor(user?.id)(`/v1/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 export async function loadAvatarUrl(version?: string) {
   try {

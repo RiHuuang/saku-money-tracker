@@ -10,8 +10,39 @@ const desktopJourney = matchMedia('(min-width: 901px) and (min-height: 650px)');
 
 document.getElementById('year').textContent = String(new Date().getFullYear());
 
+// This public endpoint reads the same latest.json that serves the APK download.
+fetch('https://app.sakumoney.my.id/v1/releases/android/latest', { cache: 'no-store' })
+  .then(response => {
+    if (!response.ok) throw new Error('Release unavailable');
+    return response.json();
+  })
+  .then(release => {
+    if (!/^\d+\.\d+\.\d+$/.test(release.versionName) || !/^[a-f0-9]{64}$/.test(release.sha256) || !Number.isFinite(Date.parse(release.releasedAt)) || !Array.isArray(release.notes)) return;
+    document.querySelectorAll('[data-release]').forEach(panel => {
+      panel.querySelector('[data-release-version]').textContent = 'Versi ' + release.versionName;
+      const date = panel.querySelector('[data-release-date]');
+      date.dateTime = release.releasedAt;
+      date.textContent = new Date(release.releasedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      panel.querySelector('[data-release-hash]').textContent = release.sha256.slice(0, 12) + '…' + release.sha256.slice(-8);
+      const notes = panel.querySelector('[data-release-notes]');
+      release.notes.slice(0, 3).forEach(note => {
+        const item = document.createElement('li');
+        item.textContent = note;
+        notes.append(item);
+      });
+      const copy = panel.querySelector('[data-release-copy]');
+      if (!navigator.clipboard?.writeText) copy.hidden = true;
+      else copy.addEventListener('click', () => {
+        navigator.clipboard.writeText(release.sha256).then(() => { copy.textContent = 'Tersalin'; }, () => { copy.textContent = 'Gagal menyalin'; });
+      });
+      panel.hidden = false;
+    });
+  })
+  .catch(() => {});
+
 document.querySelectorAll('.dark-image').forEach(image => {
-  image.alt = image.previousElementSibling.alt;
+  // Each theme image sits in its own <picture>, so its light twin is in the previous one.
+  image.alt = image.parentElement.previousElementSibling.querySelector('img').alt;
   image.removeAttribute('aria-hidden');
 });
 

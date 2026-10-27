@@ -1,5 +1,6 @@
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+// The legacy build carries polyfills for older Android System WebViews (e.g. no global Iterator).
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
+import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { localStatementAI } from "./localStatementAI";
 import type { SourceLine } from "./pdfStatement";
 

@@ -12,15 +12,25 @@ const uid = "synthetic-import-route-user", id = "synthetic-import-route-session"
 const hash = nodeCrypto.createHash("sha256").update(secret).digest("hex");
 sqlite.prepare("INSERT INTO users VALUES(?,?,0,NULL,?)").run(uid, JSON.stringify({ name: "Synthetic", email: "synthetic@example.invalid" }), now);
 sqlite.prepare("INSERT INTO sessions VALUES(?,?,?,?,?,?,?)").run(id, uid, hash, hash, now + 600000, now + 600000, now);
+const otherUid = "synthetic-import-route-other", otherId = "synthetic-import-route-other-session";
+sqlite.prepare("INSERT INTO users VALUES(?,?,0,NULL,?)").run(otherUid, JSON.stringify({ name: "Other", email: "other@example.invalid" }), now);
+sqlite.prepare("INSERT INTO sessions VALUES(?,?,?,?,?,?,?)").run(otherId, otherUid, hash, hash, now + 600000, now + 600000, now);
 const prepared = (sql, values = []) => ({
   bind: (...args) => prepared(sql, args),
   first: async () => sqlite.prepare(sql).get(...values) ?? null,
   run: async () => ({ meta: { changes: Number(sqlite.prepare(sql).run(...values).changes) } }),
+  all: async () => /\bRETURNING\b|^\s*SELECT/i.test(sql) ? { results: sqlite.prepare(sql).all(...values), meta: {} } : { results: [], meta: { changes: Number(sqlite.prepare(sql).run(...values).changes) } },
 });
+// D1 runs a batch as one transaction on one connection, so changes() sees the previous statement.
+const batch = async (statements) => {
+  sqlite.exec("BEGIN");
+  try { const results = []; for (const statement of statements) results.push(await statement.all()); sqlite.exec("COMMIT"); return results; }
+  catch (error) { sqlite.exec("ROLLBACK"); throw error; }
+};
 let aiCalls = 0;
 let aiOptions;
 const env = {
-  DB: { prepare: prepared }, AI_IMPORT_ENABLED: "false",
+  DB: { prepare: prepared, batch }, AI_IMPORT_ENABLED: "false",
   AI: { run: async (_model, options) => {
     aiCalls++;
     aiOptions = options;
@@ -86,8 +96,22 @@ try {
   assert.equal(aiCalls, 8);
   const day = new Date().toISOString().slice(0, 10);
   assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_budget WHERE day=?").get(day).neurons, 96);
-  sqlite.prepare("UPDATE import_ai_budget SET neurons=3990 WHERE day=?").run(day);
-  assert.equal((await request()).status, 429, "the app allowance must stop another call");
+  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?").get(uid, day).neurons, 96, "refunds reduce the user's counter as well as the shared one");
+  sqlite.prepare("UPDATE import_ai_user_budget SET neurons=1200 WHERE uid=? AND day=?").run(uid, day);
+  const ownLimit = await request();
+  assert.equal(ownLimit.status, 429, "a user at their own cap is stopped");
+  assert.match((await ownLimit.json()).error, /your account/);
   assert.equal(aiCalls, 8);
+  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_budget WHERE day=?").get(day).neurons, 96, "a refused user reservation leaves the shared counter untouched");
+  const otherUser = await request(input, { authorization: `Bearer ${otherId}.${secret}`, "x-saku-user-id": otherUid });
+  assert.equal(otherUser.status, 200, "another user can still extract");
+  assert.equal(aiCalls, 10);
+  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?").get(otherUid, day).neurons, 24);
+  sqlite.prepare("UPDATE import_ai_budget SET neurons=3990 WHERE day=?").run(day);
+  const sharedLimit = await request(input, { authorization: `Bearer ${otherId}.${secret}`, "x-saku-user-id": otherUid });
+  assert.equal(sharedLimit.status, 429, "the app allowance must stop another call");
+  assert.match((await sharedLimit.json()).error, /shared/);
+  assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?").get(otherUid, day).neurons, 24, "a refused shared reservation leaves the user's counter untouched");
+  assert.equal(aiCalls, 10);
   console.log("AI import route: auth, release gate, input validation and quota passed with a stub binding");
 } finally { delete crypto.subtle.timingSafeEqual; sqlite.close(); }

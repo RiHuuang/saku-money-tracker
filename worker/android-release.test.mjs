@@ -35,6 +35,14 @@ const env = { BUCKET: bucket, ANDROID_RELEASE_ENABLED: "true", ASSETS: { fetch: 
 const latest = await worker.fetch(request("GET", "/v1/releases/android/latest"), env);
 assert.equal(latest.status, 200);
 assert.deepEqual(await latest.json(), manifest);
+const landing = await worker.fetch(new Request("https://saku.example/v1/releases/android/latest", { headers: { Origin: "https://sakumoney.my.id" } }), env);
+assert.equal(landing.status, 200);
+assert.equal(landing.headers.get("access-control-allow-origin"), "https://sakumoney.my.id");
+assert.deepEqual(await landing.json(), manifest);
+const otherOrigin = await worker.fetch(new Request("https://saku.example/v1/releases/android/latest", { headers: { Origin: "https://untrusted.example" } }), env);
+assert.equal(otherOrigin.status, 403);
+const privateRoute = await worker.fetch(new Request("https://saku.example/v1/me", { headers: { Origin: "https://sakumoney.my.id" } }), env);
+assert.equal(privateRoute.status, 403, "the landing origin can read only public release metadata");
 const response = await worker.fetch(request(), env);
 assert.equal(response.status, 200);
 assert.equal(response.headers.get("content-type"), "application/vnd.android.package-archive");

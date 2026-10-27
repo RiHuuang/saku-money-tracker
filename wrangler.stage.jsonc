@@ -9,6 +9,7 @@
   "triggers": { "crons": ["*/5 * * * *"] },
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/v1/*", "/v2/*", "/auth/*", "/download/*", "/health", "/privacy", "/terms", "/account-deletion"] },
   "d1_databases": [{ "binding": "DB", "database_name": "saku-stage", "database_id": "8c119b08-260c-4baa-be51-197478416c2b" }],
+  "ratelimits": [{ "name": "AUTH_RATE_LIMITER", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "saku-stage-data" }],
   "ai": { "binding": "AI" },
   "durable_objects": { "bindings": [{ "name": "LIVE_UPDATES", "class_name": "UserLiveUpdates" }] },

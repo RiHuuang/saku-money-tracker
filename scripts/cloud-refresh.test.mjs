@@ -6,11 +6,13 @@ const bundle = await build({
   entryPoints: ["src/cloud.ts"], bundle: true, platform: "node", format: "esm", write: false,
   define: { "import.meta.env.VITE_SAKU_API_URL": JSON.stringify("https://api.example.invalid") },
   plugins: [{ name: "native-session-fixture", setup(builder) {
-    builder.onResolve({ filter: /^@capacitor\/(core|preferences)$|^\.\/homeWidget$/ }, ({ path }) => ({ path, namespace: "fixture" }));
+    builder.onResolve({ filter: /^@capacitor\/(core|preferences)$|^\.\/(homeWidget|nativeLedger)$/ }, ({ path }) => ({ path, namespace: "fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ contents: path === "@capacitor/core"
       ? "export const Capacitor={isNativePlatform:()=>true}; export const registerPlugin=()=>globalThis.sakuSessionFixture.plugin;"
       : path === "@capacitor/preferences"
         ? "export const Preferences=globalThis.sakuSessionFixture.preferences;"
+      : path === "./nativeLedger"
+        ? "export const acknowledgeNativeLedger=async()=>true; export const loadNativeSyncBase=async()=>null; export const saveNativeSyncBase=async()=>{};"
         : "export const refreshHomeWidgets=async()=>{};" }));
   } }],
 });
