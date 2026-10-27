@@ -47,4 +47,9 @@ export const en = {
   workspaceOf: "{name}'s workspace", myWorkspace: "My workspace", tableTransaction: "TRANSACTION", tableDate: "DATE", tableAmount: "AMOUNT",
   newBalanceFor: "New balance for {account} in rupiah", iconNamed: "{name} icon", changesWaiting: "Changes waiting", iconUtensils: "Food", iconShopping: "Shopping", iconCar: "Transport", iconGame: "Fun", iconHome: "Home", iconHeart: "Health", iconPlane: "Travel", iconBook: "Learning", iconCoffee: "Coffee", iconGift: "Gifts",
   pocketName: "Pocket name", thisAmountRepeatsAsThe: "This amount repeats as the default for future months.", saveProfile: "Save profile",
+  retry: "Retry",
+  appErrorBody: "Something went wrong on this screen. Your data is safe on this device; reopen Saku to continue.",
+  noIncomeRecordedThisMonth: "No income recorded this month",
+  balanceAdjustmentRemoved: "Balance adjustment removed", markedAsNothingSpent: "Marked as nothing spent", pocketBudgetMoved: "Pocket budget moved", pocketDeleted: "Pocket deleted", profileUpdated: "Profile updated", repaymentRecorded: "Repayment recorded", transferDeleted: "Transfer deleted", yourOwnLittleFreshStart: "Your own little fresh start.", transactionDeleted: "Transaction deleted", accountRemoved: "Account removed", pocketActivity: "Pocket activity", closeChoices: "Close choices", statementChecked: "Statement checked",
+  merchantNamesTidied: "Merchant names tidied",
 } as const;

@@ -49,4 +49,9 @@ export const id = {
   workspaceOf: "Ruang kerja {name}", myWorkspace: "Ruang kerjaku", tableTransaction: "TRANSAKSI", tableDate: "TANGGAL", tableAmount: "JUMLAH",
   newBalanceFor: "Saldo baru untuk {account} dalam rupiah", iconNamed: "Ikon {name}", changesWaiting: "Perubahan menunggu", iconUtensils: "Makanan", iconShopping: "Belanja", iconCar: "Transportasi", iconGame: "Hiburan", iconHome: "Rumah", iconHeart: "Kesehatan", iconPlane: "Perjalanan", iconBook: "Belajar", iconCoffee: "Kopi", iconGift: "Hadiah",
   pocketName: "Nama kantong", thisAmountRepeatsAsThe: "Jumlah ini dipakai lagi sebagai bawaan untuk bulan-bulan berikutnya.", saveProfile: "Simpan profil",
+  retry: "Coba lagi",
+  appErrorBody: "Terjadi masalah di layar ini. Datamu aman di perangkat ini; buka lagi Saku untuk melanjutkan.",
+  noIncomeRecordedThisMonth: "Belum ada pemasukan tercatat bulan ini",
+  balanceAdjustmentRemoved: "Penyesuaian saldo dihapus", markedAsNothingSpent: "Ditandai tanpa pengeluaran", pocketBudgetMoved: "Anggaran kantong dipindahkan", pocketDeleted: "Kantong dihapus", profileUpdated: "Profil diperbarui", repaymentRecorded: "Pembayaran kembali dicatat", transferDeleted: "Transfer dihapus", yourOwnLittleFreshStart: "Awal baru versimu sendiri.", transactionDeleted: "Transaksi dihapus", accountRemoved: "Akun dihapus", pocketActivity: "Aktivitas kantong", closeChoices: "Tutup pilihan", statementChecked: "Sudah dicek dengan laporan",
+  merchantNamesTidied: "Nama merchant dirapikan",
 } satisfies Record<keyof typeof en, string>;

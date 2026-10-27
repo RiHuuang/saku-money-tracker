@@ -46,7 +46,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
         // Each answer becomes a merchant rule, so a name is sent at most once.
         const results = await cleanMerchantNames(userId, names);
         const merchantRules = results.reduce((rules, result) => learnMerchant({ ...data, merchantRules: rules }, result.name, { name: result.cleanName, pocketId: "" }), data.merchantRules);
-        if (merchantRules !== data.merchantRules) await commit({ ...data, merchantRules }, "Merchant names tidied");
+        if (merchantRules !== data.merchantRules) await commit({ ...data, merchantRules }, t("merchantNamesTidied"));
       } catch { /* Raw names stay usable; cleaning is a convenience. */ }
     })();
   }, [items, userId, cleaned]);

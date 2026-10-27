@@ -242,7 +242,11 @@ export default function App() {
         const state = await loadCloudState();
         setCloud(state);
         if (state.signedIn && state.user?.id) await openWorkspace(state);
-      } catch { setLoadError(t("sakuCouldNotOpenYour")); }
+      } catch (error) {
+        // The message stays generic for the user; the cause is kept for diagnosis.
+        console.error("Saku could not open the workspace", error);
+        setLoadError(t("sakuCouldNotOpenYour"));
+      }
     })();
   }, []);
   async function openWorkspace(state: CloudState) {
@@ -620,7 +624,7 @@ export default function App() {
               className="button primary"
               onClick={() => location.reload()}
             >
-              Retry
+              {t("retry")}
             </button>
             <label className="button secondary">
               {t("restoreBackup")}
@@ -771,7 +775,7 @@ export default function App() {
             <div>
               {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={() => go("more")}><ChevronLeft size={17} /> {t("more")}</button>}
               {selectedPocket && view === "pockets" && <button className="back-to-more" onClick={() => setSelectedPocketId(null)}><ChevronLeft size={17} /> {t("allPockets")}</button>}
-              <p>{selectedPocket && view === "pockets" ? "Pocket activity" : titles[view][0]}</p>
+              <p>{selectedPocket && view === "pockets" ? t("pocketActivity") : titles[view][0]}</p>
               <h1>{selectedPocket && view === "pockets" ? selectedPocket.name : titles[view][1]}</h1>
             </div>
             <div className="heading-actions">
@@ -1123,7 +1127,7 @@ export default function App() {
                   <small>
                     {stats.income
                       ? t("percentOfIncome", { percent: Math.round(((stats.income - stats.expenses) / stats.income) * 100) })
-                      : "No income recorded this month"}
+                      : t("noIncomeRecordedThisMonth")}
                   </small>
                 </div>
                 <div>
@@ -1243,7 +1247,7 @@ export default function App() {
       {edit?.type === "account_transfer" && <TransactionEditor data={data} transaction={edit.value} initialTransfer month={month} busy={busy} onClose={() => setEdit(null)} onSave={async () => false} onDelete={async () => {}} onRepay={async () => {}} onTransfer={async (rows, oldTransferId) => {
         const kept = data.transactions.filter((t) => !oldTransferId || t.transferId !== oldTransferId);
         if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? t("transferUpdated") : t("transferRecorded"))) setEdit(null);
-      }} onDeleteTransfer={async (transferId) => { if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, "Transfer deleted")) setEdit(null); }} />}
+      }} onDeleteTransfer={async (transferId) => { if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, t("transferDeleted"))) setEdit(null); }} />}
       {edit?.type === "balance_adjustment" && <BalanceAdjustmentEditor
         key={edit.value?.id || edit.account}
         data={data}
@@ -1258,11 +1262,11 @@ export default function App() {
           if (await commit({ ...data, transactions }, edit.value ? t("balanceAdjustmentUpdated") : t("accountBalanceAdjusted"))) setEdit(null);
         }}
         onDelete={async (id) => {
-          if (await commit({ ...data, transactions: data.transactions.filter((item) => item.id !== id) }, "Balance adjustment removed")) setEdit(null);
+          if (await commit({ ...data, transactions: data.transactions.filter((item) => item.id !== id) }, t("balanceAdjustmentRemoved"))) setEdit(null);
         }}
       />}
-      {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, "Pocket budget moved")) setEdit(null); }} />}
-      {catchUpSheet && !edit && <Suspense fallback={null}><CatchUpDays data={data} days={catchUpSheet.days} index={catchUpSheet.index} busy={busy} onIndex={(index) => setCatchUpSheet({ ...catchUpSheet, index })} onAdd={(date, favorite) => setEdit({ type: "transaction", date, favorite })} onEdit={(value) => openTransaction(value)} onNothingSpent={(day) => commit({ ...data, checkedDays: [...new Set([...data.checkedDays, day])].sort() }, "Marked as nothing spent")} onClose={() => setCatchUpSheet(null)} /></Suspense>}
+      {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, t("pocketBudgetMoved"))) setEdit(null); }} />}
+      {catchUpSheet && !edit && <Suspense fallback={null}><CatchUpDays data={data} days={catchUpSheet.days} index={catchUpSheet.index} busy={busy} onIndex={(index) => setCatchUpSheet({ ...catchUpSheet, index })} onAdd={(date, favorite) => setEdit({ type: "transaction", date, favorite })} onEdit={(value) => openTransaction(value)} onNothingSpent={(day) => commit({ ...data, checkedDays: [...new Set([...data.checkedDays, day])].sort() }, t("markedAsNothingSpent"))} onClose={() => setCatchUpSheet(null)} /></Suspense>}
       {edit?.type === "transaction" && (
         <TransactionEditor
           key={edit.value?.id || edit.favorite?.id || edit.cardId || edit.pocketId || edit.date || "new"}
@@ -1313,7 +1317,7 @@ export default function App() {
                   ...data,
                   transactions: data.transactions.filter((t) => t.id !== id && t.forTransactionId !== id),
                 },
-                "Transaction deleted",
+                t("transactionDeleted"),
               )
             )
               setEdit(null);
@@ -1328,14 +1332,14 @@ export default function App() {
             await commit({ ...data, transactions: [...data.transactions, {
               id: uid(), name: `Repaid: ${source.name}`, amount, type: "income", date,
               pocketId: "", account, note: "", kind: "reimbursement", forTransactionId: sourceId,
-            }] }, "Repayment recorded");
+            }] }, t("repaymentRecorded"));
           }}
           onTransfer={async (rows, oldTransferId) => {
             const kept = data.transactions.filter((t) => !oldTransferId || t.transferId !== oldTransferId);
             if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? t("transferUpdated") : t("transferRecorded"))) setEdit(null);
           }}
           onDeleteTransfer={async (transferId) => {
-            if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, "Transfer deleted")) setEdit(null);
+            if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, t("transferDeleted"))) setEdit(null);
           }}
         />
       )}
@@ -1366,7 +1370,7 @@ export default function App() {
             if (
               await commit(
                 { ...data, pockets: data.pockets.filter((p) => p.id !== id) },
-                "Pocket deleted",
+                t("pocketDeleted"),
               )
             )
               setEdit(null);
@@ -1375,7 +1379,7 @@ export default function App() {
       )}
       {edit?.type === "pocket_delete" && <Modal title={t("deleteNamed", { name: edit.value.name })} subtitle={t("thisPocketWillBeRemoved")} onClose={() => setEdit(null)}>
         {pocketHasReferences(data, edit.value.id) ? <p className="editor-help">{t("thisPocketHasTransactionsRecurring")}</p> : <p>{t("deleteThisPocketAndIts")}</p>}
-        <div className="form-footer"><button className="button secondary" onClick={() => setEdit(null)}>{t("cancel")}</button>{!pocketHasReferences(data, edit.value.id) && <button className="button danger" disabled={busy} onClick={() => void commit({ ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) }, "Pocket deleted").then((saved) => { if (saved) setEdit(null); })}>{t("deletePocket")}</button>}</div>
+        <div className="form-footer"><button className="button secondary" onClick={() => setEdit(null)}>{t("cancel")}</button>{!pocketHasReferences(data, edit.value.id) && <button className="button danger" disabled={busy} onClick={() => void commit({ ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) }, t("pocketDeleted")).then((saved) => { if (saved) setEdit(null); })}>{t("deletePocket")}</button>}</div>
       </Modal>}
       {edit?.type === "start" && (
         <StartProfile
@@ -1383,7 +1387,7 @@ export default function App() {
           suggestedName={cloud?.user?.name}
           onClose={() => setEdit(null)}
           onStart={async (next) => {
-            if (await commit(next, "Your own little fresh start.")) {
+            if (await commit(next, t("yourOwnLittleFreshStart"))) {
               const completedAt = new Date().toISOString();
               setSetupCompletedAt(completedAt);
               void Preferences.set({ key: setupCompletedKey, value: completedAt }).catch(() => {});
@@ -2379,7 +2383,7 @@ function SettingsView({
           onSubmit={(e) => {
             e.preventDefault();
             void cloudAction(async () => {
-              if (!(await commit({ ...data, name: name.trim() }, "Profile updated"))) return;
+              if (!(await commit({ ...data, name: name.trim() }, t("profileUpdated")))) return;
               if (cloud?.signedIn) setCloud(await updateProfile(name.trim(), profileImage));
               setProfileImage(undefined);
             });
@@ -2424,7 +2428,7 @@ function SettingsView({
                           ...data,
                           accounts: data.accounts.filter((x) => x !== a),
                         },
-                        "Account removed",
+                        t("accountRemoved"),
                       )
                     }
                   >

@@ -117,7 +117,7 @@ export function ChoiceField({
         <div className="choice-sheet-handle" aria-hidden="true" />
         <header className="choice-sheet-header">
           <div><span>{translate("chooseOne")}</span><h2 id={titleId}>{label}</h2></div>
-          <IconButton label="Close choices" onClick={close}><X size={19} /></IconButton>
+          <IconButton label={translate("closeChoices")} onClick={close}><X size={19} /></IconButton>
         </header>
         {shouldSearch && <label className="choice-sheet-search"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${label.toLocaleLowerCase("en-US")}`} /></label>}
         <div className="choice-sheet-list" role="listbox" aria-label={label} tabIndex={-1} onKeyDown={(event) => {
@@ -407,7 +407,7 @@ export function TransactionList({
                   <Check
                     size={13}
                     className="verified"
-                    aria-label="Statement checked"
+                    aria-label={translate("statementChecked")}
                   />
                 )}
               </strong>
