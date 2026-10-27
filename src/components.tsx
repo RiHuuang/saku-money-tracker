@@ -289,7 +289,7 @@ export function Modal({
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <IconButton label="Close dialog" onClick={onClose}>
+          <IconButton label={translate("closeDialog")} onClick={onClose}>
             <X size={20} />
           </IconButton>
         </div>
@@ -343,7 +343,7 @@ export function PocketCard({
       <h3>{p.name}</h3>
       <div className={`pocket-value ${remaining < 0 ? "negative" : ""}`}>
         <strong className="pocket-money"><FitMoney amount={Math.abs(remaining)} /></strong>
-        <span>{remaining < 0 ? "over budget" : "left"}</span>
+        <span>{remaining < 0 ? translate("overBudget") : translate("left")}</span>
       </div>
       <div className="progress">
         <i
@@ -358,7 +358,7 @@ export function PocketCard({
         <span>{percent}%</span>
       </div>
     </button>
-    {onEdit && <div className="pocket-card-actions"><button type="button" className="pocket-menu-trigger" aria-label={`Options for ${p.name}`} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={20} /></button>
+    {onEdit && <div className="pocket-card-actions"><button type="button" className="pocket-menu-trigger" aria-label={translate("optionsFor", { name: p.name })} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={20} /></button>
       {menuOpen && <div className="pocket-menu"><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }}>{translate("editPocket")}</button><button type="button" onClick={() => { setMenuOpen(false); (onDelete || onEdit)(); }}>{translate("deletePocketMenu")}</button></div>}
     </div>}
     </div>

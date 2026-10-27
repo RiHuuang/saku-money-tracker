@@ -723,7 +723,7 @@ export default function App() {
             </span>
             <span>
               <strong>
-                {data.name}'s workspace
+                {t("workspaceOf", { name: data.name })}
               </strong>
               <small>
                 {cloud?.signedIn ? cloud.user?.email : t("localProfile")}
@@ -736,7 +736,7 @@ export default function App() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            My workspace <ChevronRight size={13} />
+            {t("myWorkspace")} <ChevronRight size={13} />
             <span>
               {navigation.find((n) => n.id === view) ? t(navigationKeys[view as keyof typeof navigationKeys]) : t("settings")}
             </span>
@@ -1054,7 +1054,7 @@ export default function App() {
                   budget. Review the highlighted balances below.
                 </div>
               )}
-              <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? `${money(stats.unassigned)} is waiting for a pocket.` : "Move this month's plan without moving cash."}</p></div><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div>
+              <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div>
               <div className="pocket-grid all-pockets">
                 {stats.pockets.map((p) => (
                   <PocketCard
@@ -1086,7 +1086,7 @@ export default function App() {
             <div className="insights-view">
               <div className="insights-summary">
                 <div>
-                  <span className="eyebrow">THIS MONTH'S BIGGEST CATEGORY</span>
+                  <span className="eyebrow">{t("biggestCategory")}</span>
                   <h2>
                     {topPocket?.spent
                       ? topPocket.name
@@ -1143,7 +1143,7 @@ export default function App() {
                       </span>
                       <span>
                         <i className="out-dot" />
-                        Expenses
+                        {t("expenses")}
                       </span>
                     </div>
                   </div>
@@ -1480,9 +1480,9 @@ function Transactions({
       </div>
       <div className="ledger">
         <div className="ledger-header">
-          <span>TRANSACTION</span>
-          <span>DATE</span>
-          <span>AMOUNT</span>
+          <span>{t("tableTransaction")}</span>
+          <span>{t("tableDate")}</span>
+          <span>{t("tableAmount")}</span>
         </div>
         <TransactionList
           transactions={rows}
@@ -1553,7 +1553,7 @@ function BalanceAdjustmentEditor({
           <ArrowRight size={20} aria-hidden="true" />
           <div><span>{t("afterAdjustment")}</span><strong>{validTarget ? money(targetBalance) : "Not set"}</strong></div>
         </div>
-        <label className="field">{t("newBalance")}<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="0" max="1000000000000" value={target} onValueChange={setTarget} placeholder="0" required aria-label={`New balance for ${account} in rupiah`} /></div></label>
+        <label className="field">{t("newBalance")}<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="0" max="1000000000000" value={target} onValueChange={setTarget} placeholder="0" required aria-label={t("newBalanceFor", { account })} /></div></label>
         <div className={`balance-adjustment-effect ${difference < 0 ? "negative" : difference > 0 ? "positive" : ""}`}>
           <span>{difference > 0 ? "Saku will add" : difference < 0 ? t("sakuWillSubtract") : t("noAdjustmentNeeded")}</span>
           {difference !== 0 && <strong>{difference > 0 ? "+" : "−"}{money(Math.abs(difference))}</strong>}
@@ -1992,7 +1992,7 @@ function PocketEditor({
             <PocketIcon name={icon} color={color} size={30} />
           </div>
           <label className="field">
-            Pocket name
+            {t("pocketName")}
             <input
               autoFocus
               value={name}
@@ -2020,7 +2020,7 @@ function PocketEditor({
             </div>
             {!pocket && (
               <small>
-                This amount repeats as the default for future months.
+                {t("thisAmountRepeatsAsThe")}
               </small>
             )}
           </label>
@@ -2046,8 +2046,8 @@ function PocketEditor({
               <button
                 key={i}
                 type="button"
-                title={i}
-                aria-label={`${i} icon`}
+                title={t(iconLabelKey(i))}
+                aria-label={t("iconNamed", { name: t(iconLabelKey(i)) })}
                 aria-pressed={icon === i}
                 className={icon === i ? "chosen" : ""}
                 onClick={() => setIcon(i)}
@@ -2385,7 +2385,7 @@ function SettingsView({
           }}
         >
           <label className="field">
-            Your name
+            {t("yourName")}
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -2394,9 +2394,9 @@ function SettingsView({
               pattern=".*\S.*"
             />
           </label>
-          <div className="profile-photo-field"><span>{t("profilePhoto")} <span className="optional">optional</span></span><button type="button" className="profile-photo-button" aria-label={t("chooseProfilePhoto")} onClick={() => profileFile.current?.click()}>{profileImage || avatarUrl ? <img src={profileImage || avatarUrl} alt="" /> : <span>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}<span className="profile-photo-edit"><Camera size={15} /></span></button><small>{t("tapThePhotoToChoose")}</small><input ref={profileFile} type="file" accept="image/*" hidden onChange={(e) => { void readProfileImage(e.target.files?.[0]); e.target.value = ""; }} /></div>
+          <div className="profile-photo-field"><span>{t("profilePhoto")} <span className="optional">{t("optional")}</span></span><button type="button" className="profile-photo-button" aria-label={t("chooseProfilePhoto")} onClick={() => profileFile.current?.click()}>{profileImage || avatarUrl ? <img src={profileImage || avatarUrl} alt="" /> : <span>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}<span className="profile-photo-edit"><Camera size={15} /></span></button><small>{t("tapThePhotoToChoose")}</small><input ref={profileFile} type="file" accept="image/*" hidden onChange={(e) => { void readProfileImage(e.target.files?.[0]); e.target.value = ""; }} /></div>
           <button className="button primary" disabled={busy}>
-            Save profile
+            {t("saveProfile")}
           </button>
         </form>
       </section>
@@ -2494,7 +2494,7 @@ function SettingsView({
             <div className="cloud-user">
               <CircleUserRound size={21} />
               <span><strong>{cloud.user?.name}</strong><small>{cloud.user?.email}</small></span>
-              <span className={`sync-state ${cloud.dirty || cloud.sheetPending ? "pending" : ""}`}>{cloud.dirty ? "Changes waiting" : cloud.sheetPending ? t("sheetPending") : t("upToDate")}</span>
+              <span className={`sync-state ${cloud.dirty || cloud.sheetPending ? "pending" : ""}`}>{cloud.dirty ? t("changesWaiting") : cloud.sheetPending ? t("sheetPending") : t("upToDate")}</span>
             </div>
             <div className="settings-actions">
               {(cloud.dirty || cloud.sheetPending) && <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(syncNow)}><Upload size={17} />{t("retrySync")}</button>}
@@ -2560,7 +2560,7 @@ function SettingsView({
           onClose={() => setRestore(null)}
         >
           <div className="restore-summary">
-            <strong>{restore.name}'s workspace</strong>
+            <strong>{t("workspaceOf", { name: restore.name })}</strong>
             <p>
               {restore.transactions.length} transactions ·{" "}
               {restore.pockets.length} pockets
@@ -2695,6 +2695,8 @@ function deviceLabelText(label: string) {
   const [browser, system] = label.split(" on ");
   return system ? t("deviceBrowserOn", { browser: browser === "A browser" ? t("deviceBrowser") : browser, system }) : label;
 }
+const iconLabelKeys = { utensils: "iconUtensils", shopping: "iconShopping", car: "iconCar", game: "iconGame", home: "iconHome", heart: "iconHeart", plane: "iconPlane", book: "iconBook", coffee: "iconCoffee", gift: "iconGift" } as const;
+function iconLabelKey(icon: string) { return iconLabelKeys[icon as keyof typeof iconLabelKeys] ?? "iconHome"; }
 function SignedInDevices({ notify, onSignedOutHere }: { notify: (message: string) => void; onSignedOutHere: (id: string) => Promise<void> }) {
   const [devices, setDevices] = useState<SignedInDevice[] | null>(null), [busy, setBusy] = useState("");
   const load = () => listDevices().then(setDevices).catch(() => setDevices([]));
