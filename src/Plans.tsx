@@ -1,11 +1,12 @@
 import { localeTag, t as translate } from "./i18n";
 import { useState, type FormEvent } from "react";
-import { CalendarDays, CreditCard as CreditCardIcon, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarDays, CreditCard as CreditCardIcon, HandCoins, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
   accountBalance, cardBalance, cardDue, dueRules, installmentAmounts, money, shiftMonth, today, uid, validAmount, validDate,
   type CreditCard, type Data, type RecurringRule, type Transaction,
 } from "./domain";
 import { ChoiceField, Modal, MoneyInput, SegmentedChoice } from "./components";
+import { owedByPerson } from "./owed";
 
 type Props = {
   data: Data;
@@ -14,10 +15,17 @@ type Props = {
   commit: (next: Data, message: string) => Promise<boolean>;
   notify: (message: string) => void;
   onNewPurchase: (cardId: string) => void;
+  onOpenOwed: (source: Transaction, person: string) => void;
 };
 
-export default function Plans({ data, month, busy, commit, notify, onNewPurchase }: Props) {
-  const [tab, setTab] = useState<"cards" | "bills">("cards");
+export default function Plans({ data, month, busy, commit, notify, onNewPurchase, onOpenOwed }: Props) {
+  const [tab, setTab] = useState<"cards" | "bills" | "owed">("cards");
+  const [loanOpen, setLoanOpen] = useState(false);
+  const [loanDirection, setLoanDirection] = useState<"loan_given" | "loan_received">("loan_given");
+  const [loanPerson, setLoanPerson] = useState("");
+  const [loanAmount, setLoanAmount] = useState("");
+  const [loanAccount, setLoanAccount] = useState(data.accounts[0]);
+  const [loanDate, setLoanDate] = useState(today());
   const [cardDraft, setCardDraft] = useState<CreditCard | null>(null);
   const [cardName, setCardName] = useState("");
   const [limit, setLimit] = useState("");
@@ -42,6 +50,16 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
   const paymentBalance = paymentCard ? cardBalance(data, paymentCard.id) : 0;
   const paymentAmount = Number(payAmount);
   const paymentCreditAfter = validAmount(paymentAmount) ? Math.max(0, paymentAmount - paymentBalance) : 0;
+  const owed = owedByPerson(data);
+
+  async function saveLoan(e: FormEvent) {
+    e.preventDefault();
+    if (!loanPerson.trim() || loanPerson.trim().length > 80 || !validAmount(Number(loanAmount)) || !data.accounts.includes(loanAccount) || !validDate(loanDate) || loanDate > today()) {
+      notify(translate("checkLoanDetails")); return;
+    }
+    const row: Transaction = { id: uid(), name: loanDirection === "loan_given" ? translate("loanToName", { name: loanPerson.trim() }) : translate("loanFromName", { name: loanPerson.trim() }), amount: Number(loanAmount), type: loanDirection === "loan_given" ? "expense" : "income", kind: loanDirection, person: loanPerson.trim(), date: loanDate, pocketId: "", account: loanAccount, note: "" };
+    if (await commit({ ...data, transactions: [...data.transactions, row] }, translate("loanRecorded"))) { setLoanOpen(false); setLoanAmount(""); setLoanPerson(""); }
+  }
 
   function openPayment(cardId: string) {
     setPayCard(cardId);
@@ -140,9 +158,10 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
   }
 
   return <div className="plans-view">
-    <div className="segmented plans-tabs" role="tablist" aria-label={translate("cardsAndBills")}>
+    <div className="segmented plans-tabs" role="tablist" aria-label={translate("plansTabs")}>
       <button role="tab" aria-selected={tab === "cards"} className={tab === "cards" ? "selected" : ""} onClick={() => setTab("cards")}><CreditCardIcon size={16} /> {translate("creditCards")}</button>
       <button role="tab" aria-selected={tab === "bills"} className={tab === "bills" ? "selected" : ""} onClick={() => setTab("bills")}><RotateCcw size={16} /> {translate("recurring")}</button>
+      <button role="tab" aria-selected={tab === "owed"} className={tab === "owed" ? "selected" : ""} onClick={() => setTab("owed")}><HandCoins size={16} /> {translate("owed")}</button>
     </div>
     {tab === "cards" ? <>
       <div className="section-heading plans-heading"><div><h2>{translate("yourCards")}</h2><p>{translate("purchasesCountAgainstPocketsWhen")}</p></div><button className="button secondary" onClick={() => editCard()}><Plus size={16} /> {translate("addCard")}</button></div>
@@ -175,6 +194,20 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
         <ChoiceField label={translate("paidFrom")} value={payAccount} onValueChange={setPayAccount} options={data.accounts.map((account) => ({ value: account, label: account, description: translate("recordedBalanceAmount", { amount: money(accountBalance(data, account)) }) }))} />
         <label className="field">{translate("date")}<input type="date" max={today()} required value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
       </div>{paymentCreditAfter > 0 && <p className="plans-payment-credit">This payment will leave {money(paymentCreditAfter)} as card credit. Available credit will be {money(paymentCard.limit - paymentBalance + paymentAmount)}.</p>}<div className="plans-form-actions"><button className="button primary" disabled={busy}>{translate("recordPayment")}</button><button type="button" className="button secondary" onClick={() => setPayCard("")}>{translate("cancel")}</button></div></form></Modal>}
+    </> : tab === "owed" ? <>
+      <div className="section-heading plans-heading"><div><h2>{translate("owed")}</h2><p>{translate("owedHelp")}</p></div><button className="button secondary" onClick={() => setLoanOpen(true)}><Plus size={16} /> {translate("addLoan")}</button></div>
+      {!owed.length && <p className="plans-empty">{translate("owedEmpty")}</p>}
+      <div className="rule-list">{owed.map((group) => <section className="credit-card-item" key={group.person || "legacy"}>
+        <div className="credit-card-top"><span className="credit-card-icon"><HandCoins size={20} /></span><div><h3>{group.person || translate("unnamedPeople")}</h3><small>{group.net >= 0 ? translate("theyOweYou") : translate("youOweThem")}</small></div><strong>{money(Math.abs(group.net))}</strong></div>
+        <div className="card-purchases">{group.entries.map((entry) => <div key={`${entry.source.id}:${entry.person}`}><span>{entry.source.date} · {entry.source.name}<small>{entry.direction === "they_owe_me" ? translate("theyOweYou") : translate("youOweThem")}</small></span><strong>{money(entry.remaining)}</strong><button className="button secondary" onClick={() => onOpenOwed(entry.source, entry.person)}>{translate("recordRepayment")}</button></div>)}</div>
+      </section>)}</div>
+      {loanOpen && <Modal title={translate("addLoan")} subtitle={translate("loanHelp")} onClose={() => setLoanOpen(false)}><form className="plans-form" onSubmit={(e) => void saveLoan(e)}><div className="plans-fields">
+        <SegmentedChoice label={translate("direction")} value={loanDirection} onValueChange={(value) => setLoanDirection(value as "loan_given" | "loan_received")} options={[{ value: "loan_given", label: translate("iLentMoney") }, { value: "loan_received", label: translate("iBorrowedMoney") }]} />
+        <label className="field">{translate("personName")}<input required maxLength={80} value={loanPerson} onChange={(e) => setLoanPerson(e.target.value)} /></label>
+        <label className="field">{translate("amountRp")}<MoneyInput min={1} required value={loanAmount} onValueChange={setLoanAmount} /></label>
+        <ChoiceField label={translate("account")} value={loanAccount} onValueChange={setLoanAccount} options={data.accounts.map((account) => ({ value: account, label: account }))} />
+        <label className="field">{translate("date")}<input type="date" max={today()} required value={loanDate} onChange={(e) => setLoanDate(e.target.value)} /></label>
+      </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>{translate("addLoan")}</button><button type="button" className="button secondary" onClick={() => setLoanOpen(false)}>{translate("cancel")}</button></div></form></Modal>}
     </> : <>
       <div className="section-heading plans-heading"><div><h2>{translate("recurringBills")}</h2><p>{money(data.recurring.filter((r) => r.active && r.type === "expense").reduce((n, r) => n + r.amount * 12, 0))} planned per year · Record each charge only when it happens.</p></div><button className="button secondary" onClick={() => editRule()}><Plus size={16} /> {translate("addBill")}</button></div>
       {pending.length > 0 && <section className="due-list"><h3>{translate("readyToRecord")}</h3>{pending.map(({ rule, date }) => <div key={`${rule.id}:${date}`} className="due-row"><CalendarDays size={17} /><div><strong>{rule.name}</strong><small>Due {date} · {rule.account}</small></div><strong>{money(rule.amount)}</strong><button className="button primary" disabled={busy} onClick={() => void postRule(rule, date)}>{rule.cardId ? translate("markCharged") : rule.type === "income" ? translate("recordIncome") : translate("markPaid")}</button><button className="text-button" disabled={busy} onClick={() => void skipRule(rule, date)}>{translate("skip")}</button></div>)}</section>}

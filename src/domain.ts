@@ -20,13 +20,14 @@ export type Transaction = {
   account: string;
   note: string;
   verified?: boolean;
-  kind?: "card_purchase" | "card_payment" | "reimbursement" | "opening_balance" | "account_transfer" | "balance_adjustment";
+  kind?: "card_purchase" | "card_payment" | "reimbursement" | "opening_balance" | "account_transfer" | "balance_adjustment" | "loan_given" | "loan_received";
   cardId?: string;
   installments?: number;
   firstDueMonth?: string;
   recurringRuleId?: string;
   occurrenceMonth?: string;
-  split?: { people: number; ownAmount: number };
+  split?: { people: number; ownAmount: number; shares?: { person: string; amount: number }[] };
+  person?: string;
   forTransactionId?: string;
   transferId?: string;
 };
@@ -180,11 +181,11 @@ export const validAmount = (n: number) =>
 export const budgetFor = (p: Pocket, m: string) =>
   m < p.createdMonth ? 0 : (p.budgets[m] ?? p.budget);
 export const isSpending = (t: Transaction) =>
-  t.type === "expense" && !["card_payment", "account_transfer", "balance_adjustment"].includes(t.kind || "");
+  t.type === "expense" && !["card_payment", "account_transfer", "balance_adjustment", "loan_given", "reimbursement"].includes(t.kind || "");
 export const personalAmount = (t: Transaction) =>
   t.split?.ownAmount ?? t.amount;
 export const isIncome = (t: Transaction) =>
-  t.type === "income" && !["reimbursement", "opening_balance", "account_transfer", "balance_adjustment"].includes(t.kind || "");
+  t.type === "income" && !["reimbursement", "opening_balance", "account_transfer", "balance_adjustment", "loan_received"].includes(t.kind || "");
 export function accountBalance(data: Data, account: string) {
   return data.transactions.filter((t) => t.account === account && t.kind !== "card_purchase")
     .reduce((sum, t) => sum + (t.type === "income" ? t.amount : -t.amount), 0);
@@ -487,7 +488,7 @@ export function validateData(input: unknown): Data {
   let absoluteTotal = 0;
   for (const t of d.transactions) {
     const card = d.creditCards.find((c) => c.id === t?.cardId);
-    const special = ["card_purchase", "card_payment", "reimbursement", "opening_balance", "account_transfer", "balance_adjustment"].includes(t?.kind || "");
+    const special = ["card_purchase", "card_payment", "reimbursement", "opening_balance", "account_transfer", "balance_adjustment", "loan_given", "loan_received"].includes(t?.kind || "");
     if (
       !t ||
       typeof t.id !== "string" ||
@@ -502,7 +503,9 @@ export function validateData(input: unknown): Data {
       (t.type === "expense" && !["card_payment", "account_transfer"].includes(t.kind || "") && t.pocketId !== "" && !ids.has(t.pocketId)) ||
       (t.kind === "card_payment" && (t.type !== "expense" || t.pocketId !== "" || !card)) ||
       (t.kind === "card_purchase" && (t.type !== "expense" || !card || t.account !== card.name)) ||
-      (t.kind === "reimbursement" && (t.type !== "income" || !t.forTransactionId)) ||
+      (t.kind === "reimbursement" && (!t.forTransactionId || t.pocketId !== "")) ||
+      (t.kind === "loan_given" && (t.type !== "expense" || t.pocketId !== "")) ||
+      (t.kind === "loan_received" && (t.type !== "income" || t.pocketId !== "")) ||
       (t.kind === "opening_balance" && (t.type !== "income" || t.pocketId !== "")) ||
       (t.kind === "account_transfer" && (t.pocketId !== "" || !t.transferId)) ||
       (t.kind === "balance_adjustment" && (t.pocketId !== "" || typeof t.note !== "string" || !t.note.trim() || t.cardId !== undefined || t.recurringRuleId !== undefined || t.occurrenceMonth !== undefined || t.split !== undefined)) ||
@@ -512,7 +515,11 @@ export function validateData(input: unknown): Data {
       (t.cardId !== undefined && (t.kind !== "card_purchase" && t.kind !== "card_payment" || !card)) ||
       (t.kind === "card_purchase" && (!Number.isInteger(t.installments) || (t.installments || 0) < 1 || (t.installments || 0) > 60 || !validDate(`${t.firstDueMonth}-01`) || t.firstDueMonth! < t.date.slice(0, 7))) ||
       (t.kind !== "card_purchase" && (t.installments !== undefined || t.firstDueMonth !== undefined)) ||
-      (t.split !== undefined && (!isSpending(t) || !Number.isInteger(t.split.people) || t.split.people < 2 || t.split.people > 30 || !validAmount(t.split.ownAmount) || t.split.ownAmount > t.amount)) ||
+      (t.split !== undefined && (!isSpending(t) || !Number.isInteger(t.split.people) || t.split.people < 2 || t.split.people > 30 || !validAmount(t.split.ownAmount) || t.split.ownAmount > t.amount ||
+        (t.split.shares !== undefined && (!Array.isArray(t.split.shares) || t.split.shares.length !== t.split.people - 1 || t.split.shares.some((share) => !share || typeof share.person !== "string" || !share.person.trim() || share.person.length > 80 || !validAmount(share.amount)) ||
+          new Set(t.split.shares.map((share) => share.person.trim().toLocaleLowerCase("id-ID"))).size !== t.split.shares.length || t.split.shares.reduce((sum, share) => sum + share.amount, 0) !== t.amount - t.split.ownAmount)))) ||
+      (t.person !== undefined && (typeof t.person !== "string" || !t.person.trim() || t.person.length > 80 || !["loan_given", "loan_received", "reimbursement"].includes(t.kind || ""))) ||
+      (["loan_given", "loan_received"].includes(t.kind || "") && !t.person) ||
       (t.forTransactionId !== undefined && t.kind !== "reimbursement") ||
       (t.transferId !== undefined && t.kind !== "account_transfer") ||
       (t.recurringRuleId !== undefined && (typeof t.recurringRuleId !== "string" || !t.recurringRuleId)) ||
@@ -536,13 +543,24 @@ export function validateData(input: unknown): Data {
     throw new Error("A bank transfer must have one matching money-out and money-in entry.");
   for (const t of d.transactions.filter((t) => t.kind === "reimbursement")) {
     const source = d.transactions.find((x) => x.id === t.forTransactionId);
-    if (!source?.split || t.date < source.date)
-      throw new Error("A reimbursement has no valid shared expense.");
+    if (!source || t.date < source.date) throw new Error("A repayment has no valid source.");
+    if (source.split) {
+      if (t.type !== "income" || (source.split.shares ? !source.split.shares.some((share) => share.person === t.person) : t.person !== undefined))
+        throw new Error("A shared-expense repayment has an invalid person or direction.");
+    } else if (source.kind === "loan_given" || source.kind === "loan_received") {
+      if (t.person !== source.person || t.type !== (source.kind === "loan_given" ? "income" : "expense"))
+        throw new Error("A loan repayment has an invalid person or direction.");
+    } else throw new Error("A repayment has no valid source.");
   }
   for (const source of d.transactions.filter((t) => t.split)) {
-    const repaid = d.transactions.filter((t) => t.forTransactionId === source.id).reduce((n, t) => n + t.amount, 0);
-    if (repaid > source.amount - source.split!.ownAmount)
+    const repayments = d.transactions.filter((t) => t.forTransactionId === source.id);
+    const repaid = repayments.reduce((n, t) => n + t.amount, 0);
+    if (repaid > source.amount - source.split!.ownAmount || source.split!.shares?.some((share) => repayments.filter((t) => t.person === share.person).reduce((n, t) => n + t.amount, 0) > share.amount))
       throw new Error("Repayments exceed the amount owed.");
+  }
+  for (const source of d.transactions.filter((t) => t.kind === "loan_given" || t.kind === "loan_received")) {
+    if (d.transactions.filter((t) => t.forTransactionId === source.id).reduce((sum, t) => sum + t.amount, 0) > source.amount)
+      throw new Error("Repayments exceed the loan.");
   }
   const ruleIds = new Set<string>();
   for (const r of d.recurring) {
@@ -819,6 +837,8 @@ export function exportCSV(transactions: Transaction[], pockets: Pocket[]) {
       occurrenceMonth: t.occurrenceMonth || "",
       splitPeople: t.split?.people || "",
       splitOwnAmount: t.split?.ownAmount || "",
+      splitShares: t.split?.shares || "",
+      person: t.person || "",
       forTransactionId: t.forTransactionId || "",
       transferId: t.transferId || "",
       statementChecked: !!t.verified,

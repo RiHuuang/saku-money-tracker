@@ -71,6 +71,7 @@ import {
   type Transaction,
 } from "./domain";
 import { learnMerchant, suggestMerchant } from "./merchants";
+import { owedEntries } from "./owed";
 import { listImportDrafts } from "./importDraft";
 import { notificationCapture, notificationCaptureSupported } from "./notificationCapture";
 import NotificationAccess from "./NotificationAccess";
@@ -138,7 +139,7 @@ import {
 } from "./cloud";
 
 type Edit =
-  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string; date?: string }
+  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string; date?: string; repayPerson?: string }
   | { type: "balance_adjustment"; account: string; value?: Transaction }
   | { type: "pocket"; value?: Pocket }
   | { type: "pocket_delete"; value: Pocket }
@@ -1201,7 +1202,7 @@ export default function App() {
               {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
           )}
-          {view === "plans" && <Suspense fallback={<p className="loading-view">{t("loadingPlans")}</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} /></Suspense>}
+          {view === "plans" && <Suspense fallback={<p className="loading-view">{t("loadingPlans")}</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} onOpenOwed={(value, repayPerson) => setEdit({ type: "transaction", value, repayPerson })} /></Suspense>}
           {view === "settings" && (
             <SettingsView
               data={data}
@@ -1272,6 +1273,7 @@ export default function App() {
           key={edit.value?.id || edit.favorite?.id || edit.cardId || edit.pocketId || edit.date || "new"}
           data={data}
           transaction={edit.value}
+          initialRepayPerson={edit.repayPerson}
           initialCardId={edit.cardId}
           initialPocketId={edit.pocketId}
           initialDate={edit.date}
@@ -1292,7 +1294,7 @@ export default function App() {
                 {
                   ...data,
                   transactions: edit.value
-                    ? data.transactions.map((x) => (x.id === t.id ? t : x))
+                    ? data.transactions.map((x) => x.id === t.id ? t : x.forTransactionId === t.id && (t.kind === "loan_given" || t.kind === "loan_received") ? { ...x, person: t.person } : x)
                     : [...data.transactions, t],
                   recurring,
                   favorites: favorite ? [...data.favorites, favorite] : data.favorites,
@@ -1322,16 +1324,16 @@ export default function App() {
             )
               setEdit(null);
           }}
-          onRepay={async (sourceId, amount, account, date) => {
+          onRepay={async (sourceId, person, amount, account, date) => {
             const source = data.transactions.find((t) => t.id === sourceId);
-            const paid = data.transactions.filter((t) => t.forTransactionId === sourceId).reduce((n, t) => n + t.amount, 0);
-            if (!source?.split || !validAmount(amount) || paid + amount > source.amount - source.split.ownAmount || date < source.date || date > today()) {
+            const open = owedEntries(data).find((entry) => entry.source.id === sourceId && entry.person === person);
+            if (!source || !open || !validAmount(amount) || amount > open.remaining || !data.accounts.includes(account) || date < source.date || date > today()) {
               setToast(t("checkTheRepaymentAmountAnd"));
               return;
             }
             await commit({ ...data, transactions: [...data.transactions, {
-              id: uid(), name: `Repaid: ${source.name}`, amount, type: "income", date,
-              pocketId: "", account, note: "", kind: "reimbursement", forTransactionId: sourceId,
+              id: uid(), name: t("repaidSource", { name: source.name }), amount, type: open.direction === "i_owe_them" ? "expense" : "income", date,
+              pocketId: "", account, note: "", kind: "reimbursement", person: person || undefined, forTransactionId: sourceId,
             }] }, t("repaymentRecorded"));
           }}
           onTransfer={async (rows, oldTransferId) => {
@@ -1580,6 +1582,7 @@ function BalanceAdjustmentEditor({
 function TransactionEditor({
   data,
   transaction,
+  initialRepayPerson,
   initialTransfer,
   initialCardId,
   initialPocketId,
@@ -1596,6 +1599,7 @@ function TransactionEditor({
 }: {
   data: Data;
   transaction?: Transaction;
+  initialRepayPerson?: string;
   initialTransfer?: boolean;
   initialCardId?: string;
   initialPocketId?: string;
@@ -1606,11 +1610,11 @@ function TransactionEditor({
   onClose: () => void;
   onSave: (t: Transaction, rule?: RecurringRule | null, favorite?: Favorite, keepOpen?: boolean) => Promise<boolean>;
   onDelete: (id: string) => Promise<void>;
-  onRepay: (sourceId: string, amount: number, account: string, date: string) => Promise<void>;
+  onRepay: (sourceId: string, person: string, amount: number, account: string, date: string) => Promise<void>;
   onTransfer: (rows: Transaction[], oldTransferId?: string) => Promise<void>;
   onDeleteTransfer: (transferId: string) => Promise<void>;
 }) {
-  const special = transaction?.kind === "card_payment" || transaction?.kind === "reimbursement";
+  const special = transaction?.kind === "card_payment" || transaction?.kind === "reimbursement" || transaction?.kind === "loan_given" || transaction?.kind === "loan_received";
   const transferPair = transaction?.transferId ? data.transactions.find((item) => item.transferId === transaction.transferId && item.id !== transaction.id) : undefined;
   const transferOutgoing = transaction?.type === "expense" ? transaction : transferPair?.type === "expense" ? transferPair : undefined;
   const transferIncoming = transaction?.type === "income" ? transaction : transferPair?.type === "income" ? transferPair : undefined;
@@ -1638,15 +1642,18 @@ function TransactionEditor({
     [shared, setShared] = useState(!!transaction?.split),
     [people, setPeople] = useState(String(transaction?.split?.people || 4)),
     [ownAmount, setOwnAmount] = useState(transaction?.split ? String(transaction.split.ownAmount) : ""),
+    [shareNames, setShareNames] = useState(transaction?.split?.shares?.map((share) => share.person).join(", ") || ""),
+    [loanPerson, setLoanPerson] = useState(transaction?.person || ""),
     [saveFavorite, setSaveFavorite] = useState(false),
     [repayAmount, setRepayAmount] = useState(""),
     [repayAccount, setRepayAccount] = useState(data.accounts[0]),
     [repayDate, setRepayDate] = useState(today()),
+    [repayPerson, setRepayPerson] = useState(initialRepayPerson || transaction?.split?.shares?.[0]?.person || transaction?.person || ""),
     [scanning, setScanning] = useState(false),
     [scanInfo, setScanInfo] = useState(""),
     [note, setNote] = useState(transaction?.note || ""),
     [error, setError] = useState(""),
-    [moreOpen, setMoreOpen] = useState(Boolean(transaction?.note || transaction?.split || transaction?.recurringRuleId)),
+    [moreOpen, setMoreOpen] = useState(Boolean(transaction?.note || transaction?.split || transaction?.kind === "loan_given" || transaction?.kind === "loan_received" || transaction?.recurringRuleId)),
     [deleting, setDeleting] = useState(false);
   const type = mode === "income" ? "income" : "expense";
   const transferBalance = accountBalance(
@@ -1708,6 +1715,15 @@ function TransactionEditor({
     if (shared && (!Number.isInteger(Number(people)) || Number(people) < 2 || Number(people) > 30 || !validAmount(Number(ownAmount || Math.ceil(Number(amount) / Number(people)))) || Number(ownAmount || Math.ceil(Number(amount) / Number(people))) > Number(amount))) {
       setError(t("shareError")); return;
     }
+    const names = shareNames.split(",").map((value) => value.trim()).filter(Boolean);
+    if (shared && names.length && (names.length !== Number(people) - 1 || new Set(names.map((value) => value.toLocaleLowerCase("id-ID"))).size !== names.length || names.some((value) => value.length > 80))) {
+      setError(t("shareNamesError")); return;
+    }
+    if (shared && !transaction && !names.length) { setError(t("shareNamesError")); return; }
+    if ((transaction?.kind === "loan_given" || transaction?.kind === "loan_received") && (!loanPerson.trim() || loanPerson.trim().length > 80)) { setError(t("checkLoanDetails")); return; }
+    const ownShare = Number(ownAmount || Math.ceil(Number(amount) / Number(people)));
+    if (shared && names.length && Number(amount) - ownShare < names.length) { setError(t("shareError")); return; }
+    const remainingShare = Number(amount) - ownShare;
     const card = data.creditCards.find((c) => c.id === cardId);
     if (cardId && !card) { setError(t("cardError")); return; }
     if (cardId && (!Number.isInteger(Number(installments)) || Number(installments) < 1 || Number(installments) > 60 || !/^\d{4}-\d{2}$/.test(firstDueMonth) || firstDueMonth < date.slice(0, 7))) {
@@ -1720,12 +1736,12 @@ function TransactionEditor({
       amount: Number(amount),
       type,
       date,
-      pocketId: type === "income" || transaction?.kind === "card_payment" ? "" : pocket,
+      pocketId: type === "income" || special ? "" : pocket,
       account: type === "expense" && card && !special ? card.name : account,
       note: note.trim(),
       verified: false,
-      ...(special ? { kind: transaction!.kind, cardId: transaction!.cardId, forTransactionId: transaction!.forTransactionId } : card && type === "expense" ? { kind: "card_purchase" as const, cardId: card.id, installments: Number(installments), firstDueMonth } : {}),
-      ...(shared && !special && type === "expense" ? { split: { people: Number(people), ownAmount: Number(ownAmount || Math.ceil(Number(amount) / Number(people))) } } : {}),
+      ...(special ? { kind: transaction!.kind, cardId: transaction!.cardId, forTransactionId: transaction!.forTransactionId, person: transaction!.kind === "loan_given" || transaction!.kind === "loan_received" ? loanPerson.trim() : transaction!.person } : card && type === "expense" ? { kind: "card_purchase" as const, cardId: card.id, installments: Number(installments), firstDueMonth } : {}),
+      ...(shared && !special && type === "expense" ? { split: { people: Number(people), ownAmount: ownShare, ...(names.length ? { shares: names.map((person, index) => ({ person, amount: Math.floor(remainingShare / names.length) + (index < remainingShare % names.length ? 1 : 0) })) } : {}) } } : {}),
       ...(ruleId ? { recurringRuleId: ruleId, occurrenceMonth: transaction?.occurrenceMonth } : {}),
     };
     const rule = recurring && !special ? {
@@ -1821,6 +1837,7 @@ function TransactionEditor({
               required
             />
           </label>
+          {(transaction?.kind === "loan_given" || transaction?.kind === "loan_received") && <label className="field">{t("personName")}<input value={loanPerson} maxLength={80} required onChange={(e) => setLoanPerson(e.target.value)} /></label>}
           {type === "expense" && !special && <label className="field">{t("paidWith")}
             <ChoiceField hideLabel label={t("paidWith")} value={cardId ? `card:${cardId}` : `bank:${account}`} options={paymentChoices} onValueChange={(value) => {
               if (value.startsWith("card:")) setCardId(value.slice(5));
@@ -1828,7 +1845,7 @@ function TransactionEditor({
             }} />
           </label>}
           {type === "expense" && (
-            transaction?.kind !== "card_payment" &&
+            !special &&
             <label className="field">
               {t("pocket")}
               <ChoiceField hideLabel label={t("pocket")} value={pocket} onValueChange={(value) => { setPocket(value); setPocketChosen(true); }} options={pocketChoices} />
@@ -1854,10 +1871,10 @@ function TransactionEditor({
           </div>}
           <details className="editor-more" open={moreOpen || Boolean(error)} onToggle={(event) => setMoreOpen(event.currentTarget.open)}><summary>{t("moreDetails")} <span>{t("moreDetailsSubtitle")}</span></summary>
           {type === "expense" && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} /> {t("shared")}</label>}
-          {shared && type === "expense" && !special && <div className="form-columns"><label className="field">{t("peopleIncludingYou")}<input type="number" min={2} max={30} value={people} onChange={(e) => setPeople(e.target.value)} /></label><label className="field">{t("yourShareRupiah")}<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={setOwnAmount} /></label><p className="editor-help">{t("sharedPaymentHelp")}</p></div>}
+          {shared && type === "expense" && !special && <div className="form-columns"><label className="field">{t("peopleIncludingYou")}<input type="number" min={2} max={30} value={people} onChange={(e) => setPeople(e.target.value)} /></label><label className="field">{t("yourShareRupiah")}<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={setOwnAmount} /></label><label className="field">{t("shareNames")}<input value={shareNames} onChange={(e) => setShareNames(e.target.value)} placeholder={t("shareNamesExample")} /></label><p className="editor-help">{t("sharedPaymentHelp")}</p></div>}
           {!special && <label className="checkbox-label editor-option"><input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} /> {t("repeatMonthly")}</label>}
           {!transaction && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={saveFavorite} onChange={(e) => setSaveFavorite(e.target.checked)} /> {t("saveQuick")}</label>}
-          {transaction?.split && <div className="repayment-review"><strong>{t("sharedPayment")}</strong><p>{t("othersOweRepaid", { amount: money(transaction.amount - transaction.split.ownAmount), repaid: money(data.transactions.filter((item) => item.forTransactionId === transaction.id).reduce((n, item) => n + item.amount, 0)) })}</p><div className="plans-fields"><label className="field">{t("repaymentRupiah")}<MoneyInput min={1} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">{t("receivedIn")}<ChoiceField hideLabel label={t("repaymentAccount")} value={repayAccount} onValueChange={setRepayAccount} options={accountChoices} /></label><label className="field">{t("receivedOn")}<input type="date" min={transaction.date} max={today()} value={repayDate} onChange={(e) => setRepayDate(e.target.value)} /></label></div><button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount))} onClick={() => void onRepay(transaction.id, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>{t("recordRepayment")}</button></div>}
+          {transaction && (transaction.split || transaction.kind === "loan_given" || transaction.kind === "loan_received") && (() => { const open = owedEntries(data).filter((entry) => entry.source.id === transaction.id); const selected = open.find((entry) => entry.person === repayPerson) || open[0]; return <div className="repayment-review"><strong>{transaction.split ? t("sharedPayment") : t("owed")}</strong><p>{t("remainingAmount", { amount: money(open.reduce((sum, entry) => sum + entry.remaining, 0)) })}</p>{open.length > 0 && <div className="plans-fields">{open.length > 1 && <ChoiceField label={t("personName")} value={selected.person} onValueChange={setRepayPerson} options={open.map((entry) => ({ value: entry.person, label: entry.person || t("unnamedPeople"), description: money(entry.remaining) }))} />}<label className="field">{t("repaymentRupiah")}<MoneyInput min={1} max={selected.remaining} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">{selected.direction === "i_owe_them" ? t("paidFrom") : t("receivedIn")}<ChoiceField hideLabel label={t("repaymentAccount")} value={repayAccount} onValueChange={setRepayAccount} options={accountChoices} /></label><label className="field">{t("date")}<input type="date" min={transaction.date} max={today()} value={repayDate} onChange={(e) => setRepayDate(e.target.value)} /></label></div>}{open.length > 0 && <button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount)) || !selected} onClick={() => void onRepay(transaction.id, selected.person, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>{t("recordRepayment")}</button>}</div>; })()}
           <label className="field">
             {t("note")} <span className="optional">{t("optional")}</span>
             <textarea
