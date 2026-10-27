@@ -1306,10 +1306,12 @@ main {
 }
 .toast > button {
   display: flex;
-  color: #b9d0c5;
+  /* The toast inverts with the theme, so its controls follow its text colour. */
+  color: inherit;
+  opacity: .78;
   margin-left: 12px;
 }
-.toast-action { font-weight: 700; text-decoration: underline; }
+.toast-action { font-weight: 700; text-decoration: underline; opacity: 1; }
 .empty {
   text-align: center;
   padding: 42px 20px;

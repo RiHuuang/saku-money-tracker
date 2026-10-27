@@ -530,7 +530,8 @@ export default function App() {
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
       const status = typeof error === "object" && error && "status" in error ? (error as { status?: number }).status : undefined;
       const message = status === 409 ? t("syncConflict") : t("savedOffline");
-      setToast((current) => typeof current === "string" ? message : { ...current, message: `${current.message} · ${message}` });
+      // Keep an Undo toast actionable; repeated failures must not repeat the same notice.
+      setToast((current) => typeof current === "string" ? message : current.message.includes(message) ? current : { ...current, message: `${current.message} · ${message}` });
     } finally {
       syncRunning.current = false;
       void reconcileRef.current?.(failed);
