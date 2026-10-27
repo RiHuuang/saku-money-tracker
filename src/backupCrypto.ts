@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 // Password-protected backups: AES-256-GCM with a PBKDF2-SHA-256 key. Everything runs on the device and the
 // password is never stored, so a forgotten password cannot be recovered.
 export const BACKUP_ITERATIONS = 600_000;
@@ -22,7 +23,7 @@ async function backupKey(password: string, salt: Uint8Array<ArrayBuffer>, iterat
 }
 
 export async function encryptBackup(json: string, password: string): Promise<string> {
-  if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`Use a password of at least ${MIN_PASSWORD_LENGTH} characters.`);
+  if (password.length < MIN_PASSWORD_LENGTH) throw new Error(t("backupPasswordTooShort", { count: MIN_PASSWORD_LENGTH }));
   const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
   const data = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await backupKey(password, salt, BACKUP_ITERATIONS), new TextEncoder().encode(json)));
   const file: EncryptedBackup = { saku: "encrypted-backup", version: 1, kdf: "PBKDF2-SHA256", iterations: BACKUP_ITERATIONS, salt: toBase64(salt), iv: toBase64(iv), data: toBase64(data) };
@@ -31,9 +32,9 @@ export async function encryptBackup(json: string, password: string): Promise<str
 
 export async function decryptBackup(file: EncryptedBackup, password: string): Promise<string> {
   // Too few iterations would weaken the file; too many could freeze the device.
-  if (file.iterations < BACKUP_ITERATIONS || file.iterations > MAX_ITERATIONS) throw new Error("This protected backup uses unsupported settings.");
+  if (file.iterations < BACKUP_ITERATIONS || file.iterations > MAX_ITERATIONS) throw new Error(t("backupUnsupported"));
   try {
     const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(file.iv) }, await backupKey(password, fromBase64(file.salt), file.iterations), fromBase64(file.data));
     return new TextDecoder().decode(plain);
-  } catch { throw new WrongBackupPassword("Wrong password, or the backup file is damaged."); }
+  } catch { throw new WrongBackupPassword(t("backupWrongPassword")); }
 }

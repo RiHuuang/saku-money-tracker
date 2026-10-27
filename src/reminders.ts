@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { Preferences } from "@capacitor/preferences";
@@ -31,7 +32,7 @@ export function reminderPlan(data: Data, settings: ReminderSettings, now: Date):
     const day = shiftDate(today, offset), when = at(day, settings.time);
     if (when <= now) continue;
     const gap = catchUpGap(data, day).length;
-    plan.push({ id: DAILY_IDS + offset, at: when, title: "Saku", body: gap ? `${gap} ${gap === 1 ? "day" : "days"} to catch up, about 1 minute.` : "Anything else to add today?", extra: { kind: "catchup" } });
+    plan.push({ id: DAILY_IDS + offset, at: when, title: "Saku", body: gap ? t(gap === 1 ? "reminderCatchUpOne" : "reminderCatchUpMany", { count: gap }) : t("reminderAnythingElse"), extra: { kind: "catchup" } });
   }
   data.creditCards.forEach((card, index) => {
     for (let monthOffset = 0; monthOffset < 2; monthOffset++) {
@@ -39,7 +40,7 @@ export function reminderPlan(data: Data, settings: ReminderSettings, now: Date):
       const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
       const remindOn = shiftDate(`${month}-${String(Math.min(card.dueDay, lastDay)).padStart(2, "0")}`, -3), when = at(remindOn, settings.time);
       if (when > now && cardDue(data, card.id, month) > 0)
-        plan.push({ id: CARD_IDS + index * 2 + monthOffset, at: when, title: "Saku", body: `${card.name} payment is due in 3 days.`, extra: { kind: "card", cardId: card.id } });
+        plan.push({ id: CARD_IDS + index * 2 + monthOffset, at: when, title: "Saku", body: t("reminderCardDue", { card: card.name }), extra: { kind: "card", cardId: card.id } });
     }
   });
   return plan;
