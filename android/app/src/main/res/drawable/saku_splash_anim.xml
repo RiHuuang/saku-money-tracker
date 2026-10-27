@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash intro: the pocket pops up on its forest disc, then the coin drops in behind the pocket's front. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="108dp" android:height="108dp"
+            android:viewportWidth="108" android:viewportHeight="108">
+            <path android:fillColor="#0F2E25" android:pathData="M54,18A36,36 0 1 1 54,90A36,36 0 1 1 54,18Z" />
+            <group android:name="pocket" android:pivotX="54" android:pivotY="66" android:scaleX="0.3" android:scaleY="0.3">
+                <group android:translateX="34.28" android:translateY="32.97" android:scaleX="0.29" android:scaleY="0.29">
+                    <path android:fillColor="#24604D" android:pathData="M21,36H115A20,20 0 0 1 135,56V120H1V56A20,20 0 0 1 21,36Z" />
+                    <group android:name="coin" android:translateY="-170">
+                        <path android:name="coinFill" android:fillColor="#A8E6C1" android:fillAlpha="0"
+                            android:pathData="M54,32A32,32 0 1 1 118,32A32,32 0 1 1 54,32Z" />
+                    </group>
+                    <path android:fillColor="#F4F1E8" android:pathData="M0,72L136,50V134A20,20 0 0 1 116,154H20A20,20 0 0 1 0,134Z" />
+                </group>
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="pocket">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="scaleX" android:valueFrom="0.3" android:valueTo="1"
+                    android:duration="420" android:interpolator="@android:anim/overshoot_interpolator" />
+                <objectAnimator android:propertyName="scaleY" android:valueFrom="0.3" android:valueTo="1"
+                    android:duration="420" android:interpolator="@android:anim/overshoot_interpolator" />
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="coin">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="translateY" android:valueFrom="-170" android:valueTo="0"
+                android:startOffset="360" android:duration="480" android:interpolator="@android:anim/bounce_interpolator" />
+        </aapt:attr>
+    </target>
+    <target android:name="coinFill">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha" android:valueFrom="0" android:valueTo="1"
+                android:startOffset="360" android:duration="120" />
+        </aapt:attr>
+    </target>
+</animated-vector>

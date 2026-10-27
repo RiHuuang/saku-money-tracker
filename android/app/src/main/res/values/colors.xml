@@ -4,6 +4,9 @@
     <color name="colorPrimaryDark">#12665E</color>
     <color name="colorAccent">#529E83</color>
     <color name="saku_background">#F7F6F0</color>
+    <color name="saku_icon_background">#0F2E25</color>
+    <color name="saku_wordmark_ink">#203B33</color>
+    <color name="saku_wordmark_dot">#176B55</color>
     <color name="widget_surface">#FFFFFF</color>
     <color name="widget_text">#203B33</color>
     <color name="widget_muted">#60746A</color>
