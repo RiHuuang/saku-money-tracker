@@ -13,6 +13,9 @@ function exclusive<T>(work: () => Promise<T>): Promise<T> {
 
 async function database() {
   connection ||= (async () => {
+    // A WebView reload keeps the native connection but empties the JS registry; reconcile
+    // them first or createConnection fails with "Connection saku-ledger already exists".
+    await sqlite.checkConnectionsConsistency().catch(() => undefined);
     const existing = await sqlite.isConnection("saku-ledger", false);
     const db = existing.result
       ? await sqlite.retrieveConnection("saku-ledger", false)
