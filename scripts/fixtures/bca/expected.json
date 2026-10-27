@@ -1,0 +1,48 @@
+{
+  "note": "Synthetic myBCA rows. 'expect' is what Saku should store; date TODAY means the day the screenshot is read.",
+  "owner": "RANI SUSANTO",
+  "screens": [
+    {
+      "id": "bca-1",
+      "account": "123 - 456 - 7890",
+      "rows": [
+        { "printedDate": "PEND", "printedRef": "2710/FTSCY/WS95271 315229.00 barang te sis 27ok t SINTA", "printedType": "TRSF E-BANKING CR", "amount": 315229, "direction": "income",
+          "expect": { "date": "TODAY", "kind": "income", "name": "Transfer dari Sinta", "note": "barang te sis 27okt" } },
+        { "printedDate": "27 Oct 2026", "printedRef": "2710/FTSCY/WS95271 250000.00 haidilaaao MAYA LESTARI W", "printedType": "TRSF E-BANKING CR", "amount": 250000, "direction": "income",
+          "expect": { "date": "2026-10-27", "kind": "income", "name": "Transfer dari Maya Lestari W", "note": "haidilaaao" } },
+        { "printedDate": "27 Oct 2026", "printedRef": "2710/FTSCY/WS95271 55000.00 BAGUS PRAKOSO", "printedType": "TRSF E-BANKING CR", "amount": 55000, "direction": "income",
+          "expect": { "date": "2026-10-27", "kind": "income", "name": "Transfer dari Bagus Prakoso", "note": "" } },
+        { "printedDate": "27 Oct 2026", "printedRef": "2710/FTSCY/WS95271 40000.00 makan siang DIMAS ARYA", "printedType": "TRSF E-BANKING DB", "amount": 40000, "direction": "expense",
+          "expect": { "date": "2026-10-27", "kind": "expense", "name": "Transfer ke Dimas Arya", "note": "makan siang" } }
+      ]
+    },
+    {
+      "id": "bca-2",
+      "account": "123 - 456 - 7890",
+      "rows": [
+        { "printedDate": "24 Oct 2026", "printedRef": "2410/FTFVA/WS95271 72345/DANA - - 081200000123", "printedType": "TRSF E-BANKING DB", "amount": 500000, "direction": "expense",
+          "expect": { "date": "2026-10-24", "kind": "wallet_topup", "wallet": "DANA", "name": "Isi saldo DANA", "note": "" } },
+        { "printedDate": "24 Oct 2026", "printedRef": "0100 BCA CARD 0000000011112222 RANI SUSANTO", "printedType": "KARTU KREDIT/PL", "amount": 990200, "direction": "expense",
+          "expect": { "date": "2026-10-24", "kind": "card_payment", "name": "Bayar kartu kredit BCA", "note": "" } },
+        { "printedDate": "24 Oct 2026", "printedRef": "TOPUP081200000123 0145200100000001 001700001 400001", "printedType": "FLAZZ BCA", "amount": 200000, "direction": "expense",
+          "expect": { "date": "2026-10-24", "kind": "wallet_topup", "wallet": "Flazz", "name": "Isi saldo Flazz", "note": "" } },
+        { "printedDate": "23 Oct 2026", "printedRef": "2310/FTSCY/WS95031 25000.00 makaaaaasi AGNES PUTRI", "printedType": "TRSF E-BANKING CR", "amount": 25000, "direction": "income",
+          "expect": { "date": "2026-10-23", "kind": "income", "name": "Transfer dari Agnes Putri", "note": "makaaaaasi" } }
+      ]
+    },
+    {
+      "id": "bca-3",
+      "account": "123 - 456 - 7890",
+      "rows": [
+        { "printedDate": "23 Oct 2026", "printedRef": "0100 BCA CARD 0000000011112222 RANI SUSANTO", "printedType": "KARTU KREDIT/PL", "amount": 2353050, "direction": "expense",
+          "expect": { "date": "2026-10-23", "kind": "card_payment", "name": "Bayar kartu kredit BCA", "note": "" } },
+        { "printedDate": "23 Oct 2026", "printedRef": "TGL: 1023 QR 014 00000.00jajanan ah", "printedType": "TRANSAKSI DEBIT", "amount": 15000, "direction": "expense",
+          "expect": { "date": "2026-10-23", "kind": "expense", "name": "jajanan ah", "note": "" } },
+        { "printedDate": "23 Oct 2026", "printedRef": "099800000", "printedType": "SETORAN PEMINDAHAN", "amount": 10560772, "direction": "income",
+          "expect": { "date": "2026-10-23", "kind": "income", "name": "Setoran", "note": "" } },
+        { "printedDate": "22 Oct 2026", "printedRef": "2210/FTSCY/WS95271 18000.00 BAGUS PRAKOSO", "printedType": "TRSF E-BANKING CR", "amount": 18000, "direction": "income",
+          "expect": { "date": "2026-10-22", "kind": "income", "name": "Transfer dari Bagus Prakoso", "note": "" } }
+      ]
+    }
+  ]
+}

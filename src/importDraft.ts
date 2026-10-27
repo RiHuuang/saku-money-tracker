@@ -17,6 +17,10 @@ export type ImportRow = {
   cardId?: string;
   firstDueMonth?: string;
   confirmedSeparate?: boolean;
+  // BCA reading: the transfer note, a field the two reads disagreed on, and a match already in the ledger.
+  note?: string;
+  check?: string;
+  alreadyInSaku?: boolean;
 };
 export type ImportSource = {
   id: string;

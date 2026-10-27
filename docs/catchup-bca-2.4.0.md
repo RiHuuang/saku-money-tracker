@@ -56,3 +56,14 @@ Follow `docs/catchup-audit-2.4.0.md`:
 ## Ship rule
 
 2.4.0 doesn't deploy to production until Tasks 1–4 pass on stage and on the owner's phone.
+
+## Status (2026-10-28)
+
+- **Task 1:** done. On the 12 synthetic rows (`scripts/fixtures/bca/`, scored with `bench.mjs` on stage), the general reader got 11/12 amounts, 11/12 directions, 10/12 dates, 9/12 types and 7/12 notes. It invented 1 row and **misread Rp 2.353.050 as Rp 2.535.050**. The cost per screenshot wasn't measured, because stage D1 kept returning error 7403.
+- **Task 2:** done. `worker/import-bca.js` has the model copy each row's printed fields over two independent reads; the code decides the meaning. A disagreement between the reads, or a reference amount that differs from the IDR line, sends the row to review. On stage this scored **12/12 on every field, with 0 invented rows** (version `9e5bf08b`). Non-BCA screenshots and statements return `not_bca`.
+- **Task 3:** done. `prepareBcaRow` skips a row when the ledger already has the same account, amount and direction within ±1 day ("Sudah ada di Saku"). It fills in the BCA card for card payments and the Flazz/DANA account for top-ups; without that account, a top-up becomes spending. Money in always goes to review.
+- **Task 4:** done.
+  - Gone: "Apa yang terjadi?", the payment-method field, the three notes before processing, the account legend, the review tabs, the several-accounts switch, and the sub-lines under each choice.
+  - Changed: the consent text and help lines are shorter, the search placeholder is translated, and the BCA account is preset.
+  - An expanded row went from 82 to 43 words.
+- **Still to check:** the owner's real myBCA screenshots on the phone, and a BCA e-statement PDF (statements still use the general reader, gated to BCA by the text).

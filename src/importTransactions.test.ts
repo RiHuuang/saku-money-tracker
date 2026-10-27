@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, bcaAccount, prepareBcaRow, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -290,3 +290,22 @@ test("counts draft rows still waiting for a decision", () => {
   assert.equal(importRowsWaiting([], data), 0);
 });
 
+
+test("BCA rows fill in the card and wallet they imply and skip what the ledger has", () => {
+  const data = { ...ledger, accounts: ["BCA", "GoPay", "Flazz"], transactions: [{ id: "t1", name: "Kopi", amount: 15000, type: "expense" as const, date: "2026-10-23", account: "BCA", pocketId: "", note: "" }] };
+  assert.equal(bcaAccount(data), "BCA");
+  const flazz = prepareBcaRow({ ...base, name: "TOPUP FLAZZ BCA", paymentMethod: "Flazz", activity: "topup", amount: 200000 }, data, "BCA");
+  assert.equal(flazz.counterparty, "Flazz");
+  assert.equal(flazz.decision, "ready");
+  assert.equal(prepareBcaRow({ ...base, paymentMethod: "Flazz", activity: "topup", amount: 200000 }, ledger, "BCA").activity, "purchase");
+  const card = prepareBcaRow({ ...base, activity: "card_payment", amount: 990200 }, data, "BCA");
+  assert.equal(card.cardId, "visa");
+  assert.equal(card.decision, "ready");
+  const recorded = prepareBcaRow({ ...base, date: "2026-10-24", amount: 15000 }, data, "BCA");
+  assert.equal(recorded.alreadyInSaku, true);
+  assert.equal(recorded.decision, "skip");
+  assert.equal(prepareBcaRow({ ...base, direction: "income", activity: "income", amount: 55000 }, data, "BCA").decision, "later");
+  assert.equal(prepareBcaRow({ ...base, amount: 25000, check: "amount" }, data, "BCA").decision, "later");
+  assert.equal(prepareBcaRow({ ...base, amount: 25000 }, data, "BCA").decision, "ready");
+  assert.equal(prepareBcaRow({ ...base, amount: 2_000_000 }, data, "BCA").decision, "later");
+});

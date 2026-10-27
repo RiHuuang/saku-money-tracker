@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { bcaRow, looksLikeBcaStatement, mergeBcaReads, parseBcaAnswer } from "./import-bca.js";
+
+// Every synthetic myBCA row in the benchmark parses to the expected Saku row when the transcription is right.
+const { screens } = JSON.parse(readFileSync(new URL("../scripts/fixtures/bca/expected.json", import.meta.url), "utf8"));
+const read = (row) => ({ dateText: row.printedDate, ref: row.printedRef, type: row.printedType, amountText: `IDR ${row.amount.toLocaleString("en-US")}.00` });
+const kind = (row) => row.activity === "card_payment" ? "card_payment" : row.activity === "topup" ? "wallet_topup" : row.direction;
+for (const row of screens.flatMap((screen) => screen.rows)) {
+  const parsed = bcaRow(read(row), "2026-10-28");
+  assert.equal(parsed.amount, row.amount, row.printedRef);
+  assert.equal(parsed.direction, row.direction, row.printedRef);
+  assert.equal(parsed.date, row.expect.date === "TODAY" ? "2026-10-28" : row.expect.date, row.printedRef);
+  assert.equal(kind(parsed), row.expect.kind, row.printedRef);
+  assert.equal(parsed.cleanName, row.expect.name, row.printedRef);
+  assert.equal(parsed.note.replace(/\s/g, ""), row.expect.note.replace(/\s/g, ""), row.printedRef);
+  assert.equal(parsed.check, "", row.printedRef);
+}
+
+// The amount repeated inside a transfer reference must agree with the IDR line.
+assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "2710/FTSCY/WS95271 55000.00 BAGUS PRAKOSO", type: "TRSF E-BANKING CR", amountText: "IDR 85,000.00" }, "2026-10-28").check, "amount");
+// Unreadable amounts, unknown types and missing dates never go straight in.
+assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "X", type: "TRSF E-BANKING CR", amountText: "IDR 1,5" }, "2026-10-28").check, "amount");
+assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "BIAYA ADM", type: "SOMETHING NEW", amountText: "IDR 15,000.00" }, "2026-10-28").check, "type");
+assert.equal(bcaRow({ dateText: "October", ref: "X", type: "TRSF E-BANKING DB", amountText: "IDR 15,000.00" }, "2026-10-28").check, "date");
+
+// Two reads that disagree on a row send it to review; a row only one read saw is unconfirmed.
+const one = { bank: "BCA", rows: [read(screens[2].rows[0]), read(screens[2].rows[1])] };
+const misread = { bank: "BCA", rows: [{ ...read(screens[2].rows[0]), amountText: "IDR 2,535,050.00" }] };
+const merged = mergeBcaReads(one, misread, "2026-10-28");
+assert.deepEqual(merged.map((row) => row.check), ["amount", "unconfirmed"]);
+
+assert.deepEqual(parseBcaAnswer({ choices: [{ message: { content: JSON.stringify({ bank: "other", rows: [] }) } }] }), { bank: "other", rows: [] });
+assert.throws(() => parseBcaAnswer({ choices: [{ finish_reason: "length", message: { content: "{" } }] }), /cut off/);
+assert.equal(looksLikeBcaStatement("PT BANK CENTRAL ASIA Tbk\nREKENING TAHAPAN"), true);
+assert.equal(looksLikeBcaStatement("BANK MANDIRI rekening koran"), false);
+
+console.log("BCA reading: myBCA row formats, PEND dates, amount cross-checks, two-read review and BCA-only gate passed");

@@ -119,7 +119,7 @@ export function ChoiceField({
           <div><span>{translate("chooseOne")}</span><h2 id={titleId}>{label}</h2></div>
           <IconButton label={translate("closeChoices")} onClick={close}><X size={19} /></IconButton>
         </header>
-        {shouldSearch && <label className="choice-sheet-search"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${label.toLocaleLowerCase("en-US")}`} /></label>}
+        {shouldSearch && <label className="choice-sheet-search"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("searchIn", { label: label.toLocaleLowerCase(localeTag()) })} /></label>}
         <div className="choice-sheet-list" role="listbox" aria-label={label} tabIndex={-1} onKeyDown={(event) => {
           const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)')];
           const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
