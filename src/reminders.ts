@@ -56,6 +56,7 @@ export async function requestReminderPermission() {
   const current = await LocalNotifications.checkPermissions();
   return (current.display === "granted" ? current : await LocalNotifications.requestPermissions()).display === "granted";
 }
+const REMINDER_CHANNEL = "saku-reminders";
 export async function cancelReminders() {
   if (!remindersSupported()) return;
   const pending = (await LocalNotifications.getPending()).notifications.filter((item) => isOurs(item.id));
@@ -65,5 +66,15 @@ export async function scheduleReminders(data: Data, settings: ReminderSettings) 
   if (!remindersSupported()) return;
   await cancelReminders();
   const plan = reminderPlan(data, settings, new Date());
-  if (plan.length) await LocalNotifications.schedule({ notifications: plan.map((item) => ({ id: item.id, title: item.title, body: item.body, schedule: { at: item.at, allowWhileIdle: true }, isExactNotification: false, smallIcon: "ic_stat_saku", extra: item.extra })) });
+  if (!plan.length) return;
+  // A named channel lets people quiet reminders in Android settings without muting anything else.
+  await LocalNotifications.createChannel({ id: REMINDER_CHANNEL, name: t("reminderChannelName"), importance: 3 }).catch(() => undefined);
+  await LocalNotifications.schedule({ notifications: plan.map((item) => ({ id: item.id, title: item.title, body: item.body, channelId: REMINDER_CHANNEL, schedule: { at: item.at, allowWhileIdle: true }, isExactNotification: false, smallIcon: "ic_stat_saku", extra: item.extra })) });
+}
+// Schedules and cancellations run in order, so a schedule still in flight can't re-add
+// reminders after the user turned them off: the last requested state always wins.
+let pendingSync: Promise<void> = Promise.resolve();
+export function syncReminders(data: Data, settings: ReminderSettings) {
+  pendingSync = pendingSync.catch(() => undefined).then(() => settings.enabled ? scheduleReminders(data, settings) : cancelReminders());
+  return pendingSync;
 }

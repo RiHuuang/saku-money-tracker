@@ -77,7 +77,7 @@ import NotificationAccess from "./NotificationAccess";
 import { importRowsWaiting } from "./importTransactions";
 import { applyRecentsPrivacy, appLockStatus, appLockSupported, authenticate, defaultAppLock, loadAppLock, saveAppLock, shouldLock, type AppLockSettings, type LockAfter } from "./appLock";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { cancelReminders, defaultReminder, loadReminder, remindersSupported, requestReminderPermission, saveReminder, scheduleReminders, type ReminderSettings } from "./reminders";
+import { defaultReminder, loadReminder, remindersSupported, requestReminderPermission, saveReminder, syncReminders, type ReminderSettings } from "./reminders";
 import { MIN_PASSWORD_LENGTH, decryptBackup, encryptBackup, isEncryptedBackup, type EncryptedBackup } from "./backupCrypto";
 import { download, hasUserData, loadData, loadLegacyData, removeUserData, replaceData, saveData } from "./storage";
 import {
@@ -217,7 +217,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!remindersSupported() || !data) return;
-    void (reminder.enabled ? scheduleReminders(data, reminder) : cancelReminders()).catch(() => {});
+    void syncReminders(data, reminder).catch(() => {});
   }, [data, reminder]);
   useEffect(() => {
     if (!reminderTap || !data) return;

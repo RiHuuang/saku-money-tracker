@@ -54,4 +54,5 @@ export const id = {
   noIncomeRecordedThisMonth: "Belum ada pemasukan tercatat bulan ini",
   balanceAdjustmentRemoved: "Penyesuaian saldo dihapus", markedAsNothingSpent: "Ditandai tanpa pengeluaran", pocketBudgetMoved: "Anggaran kantong dipindahkan", pocketDeleted: "Kantong dihapus", profileUpdated: "Profil diperbarui", repaymentRecorded: "Pembayaran kembali dicatat", transferDeleted: "Transfer dihapus", yourOwnLittleFreshStart: "Awal baru versimu sendiri.", transactionDeleted: "Transaksi dihapus", accountRemoved: "Akun dihapus", pocketActivity: "Aktivitas kantong", closeChoices: "Tutup pilihan", statementChecked: "Sudah dicek dengan laporan",
   merchantNamesTidied: "Nama merchant dirapikan",
+  reminderChannelName: "Pengingat",
 } satisfies Record<keyof typeof en, string>;

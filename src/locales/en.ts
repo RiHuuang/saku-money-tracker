@@ -52,4 +52,5 @@ export const en = {
   noIncomeRecordedThisMonth: "No income recorded this month",
   balanceAdjustmentRemoved: "Balance adjustment removed", markedAsNothingSpent: "Marked as nothing spent", pocketBudgetMoved: "Pocket budget moved", pocketDeleted: "Pocket deleted", profileUpdated: "Profile updated", repaymentRecorded: "Repayment recorded", transferDeleted: "Transfer deleted", yourOwnLittleFreshStart: "Your own little fresh start.", transactionDeleted: "Transaction deleted", accountRemoved: "Account removed", pocketActivity: "Pocket activity", closeChoices: "Close choices", statementChecked: "Statement checked",
   merchantNamesTidied: "Merchant names tidied",
+  reminderChannelName: "Reminders",
 } as const;
