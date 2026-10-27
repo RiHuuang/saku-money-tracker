@@ -1,3 +1,4 @@
+import { localeTag, t as translate } from "./i18n";
 import { useState, type FormEvent } from "react";
 import { CalendarDays, CreditCard as CreditCardIcon, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
@@ -58,10 +59,10 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
     e.preventDefault();
     const next: CreditCard = { id: cardDraft?.id || uid(), name: cardName.trim(), limit: Number(limit), openingDebt: Number(openingDebt), dueDay: Number(dueDay) };
     if (!next.name || !validAmount(next.limit) || !Number.isSafeInteger(next.openingDebt) || next.openingDebt < 0 || next.dueDay < 1 || next.dueDay > 28) {
-      notify("Check the card name, limit, opening debt, and due day."); return;
+      notify(translate("checkTheCardNameLimit")); return;
     }
     if (data.accounts.some((a) => a.toLowerCase() === next.name.toLowerCase()) || data.creditCards.some((c) => c.id !== next.id && c.name.toLowerCase() === next.name.toLowerCase())) {
-      notify("Choose a card name that is not already used by an account or card."); return;
+      notify(translate("chooseACardNameThat")); return;
     }
     const previousName = data.creditCards.find((c) => c.id === next.id)?.name;
     if (await commit({ ...data,
@@ -69,24 +70,24 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
       transactions: previousName && previousName !== next.name ? data.transactions.map((t) => t.cardId === next.id && t.kind === "card_purchase" ? { ...t, account: next.name } : t) : data.transactions,
       recurring: previousName && previousName !== next.name ? data.recurring.map((r) => r.cardId === next.id ? { ...r, account: next.name } : r) : data.recurring,
       favorites: previousName && previousName !== next.name ? data.favorites.map((f) => f.cardId === next.id ? { ...f, account: next.name } : f) : data.favorites,
-    }, cardDraft?.id ? "Card updated" : "Card added")) setCardDraft(null);
+    }, cardDraft?.id ? translate("cardUpdated") : translate("cardAdded"))) setCardDraft(null);
   }
   async function deleteCard(card: CreditCard) {
     if (data.transactions.some((t) => t.cardId === card.id) || data.recurring.some((r) => r.cardId === card.id) || data.favorites.some((f) => f.cardId === card.id)) {
-      notify("Remove card transactions, bills, and quick entries before deleting this card."); return;
+      notify(translate("removeCardTransactionsBillsAnd")); return;
     }
-    if (await commit({ ...data, creditCards: data.creditCards.filter((c) => c.id !== card.id) }, "Card removed")) setDeleteId("");
+    if (await commit({ ...data, creditCards: data.creditCards.filter((c) => c.id !== card.id) }, translate("cardRemoved"))) setDeleteId("");
   }
   async function makePayment(e: FormEvent) {
     e.preventDefault();
     const amount = Number(payAmount);
     const card = data.creditCards.find((c) => c.id === payCard);
-    if (!card) { notify("Choose a card to pay."); return; }
-    if (!validAmount(amount)) { notify("Enter a payment amount in whole rupiah."); return; }
-    if (!data.accounts.includes(payAccount)) { notify("Choose a source account for this payment."); return; }
-    if (!validDate(payDate) || payDate > today()) { notify("Choose a valid payment date up to today."); return; }
+    if (!card) { notify(translate("chooseACardToPay")); return; }
+    if (!validAmount(amount)) { notify(translate("enterAPaymentAmountIn")); return; }
+    if (!data.accounts.includes(payAccount)) { notify(translate("chooseASourceAccountFor")); return; }
+    if (!validDate(payDate) || payDate > today()) { notify(translate("chooseAValidPaymentDate")); return; }
     const transaction: Transaction = { id: uid(), name: `Payment to ${card.name}`, amount, type: "expense", kind: "card_payment", cardId: card.id, date: payDate, pocketId: "", account: payAccount, note: "" };
-    if (await commit({ ...data, transactions: [...data.transactions, transaction] }, "Card payment recorded")) { setPayAmount(""); setPayCard(""); }
+    if (await commit({ ...data, transactions: [...data.transactions, transaction] }, translate("cardPaymentRecorded"))) { setPayAmount(""); setPayCard(""); }
   }
   function editRule(rule?: RecurringRule) {
     setRuleDraft(rule || { id: "", name: "", amount: 0, type: "expense", pocketId: data.pockets[0]?.id || "", account: data.accounts[0], day: Number(today().slice(-2)), startMonth: month, active: true });
@@ -108,88 +109,88 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
       day: Number(ruleDay), startMonth: ruleMonth, active: ruleDraft?.active ?? true,
     };
     if (!rule.name || !validAmount(rule.amount) || rule.day < 1 || rule.day > 31 || (cardId && (!Number.isInteger(rule.installments) || rule.installments! < 1 || rule.installments! > 60)) || (rule.type === "expense" && !data.pockets.some((p) => p.id === rule.pocketId)) || !/^\d{4}-\d{2}$/.test(rule.startMonth)) {
-      notify("Check the bill name, amount, pocket, day, and start month."); return;
+      notify(translate("checkTheBillNameAmount")); return;
     }
-    if (await commit({ ...data, recurring: ruleDraft?.id ? data.recurring.map((r) => r.id === rule.id ? rule : r) : [...data.recurring, rule] }, ruleDraft?.id ? "Bill updated" : "Bill added")) setRuleDraft(null);
+    if (await commit({ ...data, recurring: ruleDraft?.id ? data.recurring.map((r) => r.id === rule.id ? rule : r) : [...data.recurring, rule] }, ruleDraft?.id ? translate("billUpdated") : translate("billAdded"))) setRuleDraft(null);
   }
   async function postRule(rule: RecurringRule, scheduledDate: string) {
     const date = scheduledDate > today() ? scheduledDate : today();
     if (rule.type === "expense" && !data.pockets.some((p) => p.id === rule.pocketId && p.createdMonth <= date.slice(0, 7))) {
-      notify("This bill needs a pocket active for its transaction month."); return;
+      notify(translate("thisBillNeedsAPocket")); return;
     }
     const transaction: Transaction = {
       id: uid(), name: rule.name, amount: rule.amount, type: rule.type, pocketId: rule.type === "income" ? "" : rule.pocketId,
-      account: rule.account, date, note: "Recorded from recurring bill", recurringRuleId: rule.id,
+      account: rule.account, date, note: translate("recordedFromRecurringBill"), recurringRuleId: rule.id,
       occurrenceMonth: scheduledDate.slice(0, 7),
       ...(rule.cardId ? { kind: "card_purchase" as const, cardId: rule.cardId, installments: rule.installments || 1, firstDueMonth: shiftMonth(date.slice(0, 7), 1) } : {}),
     };
-    await commit({ ...data, transactions: [...data.transactions, transaction] }, rule.cardId ? "Card charge recorded" : "Bill recorded");
+    await commit({ ...data, transactions: [...data.transactions, transaction] }, rule.cardId ? translate("cardChargeRecorded") : translate("billRecorded"));
   }
   async function toggleRule(rule: RecurringRule) {
-    await commit({ ...data, recurring: data.recurring.map((r) => r.id === rule.id ? { ...r, active: !r.active } : r) }, rule.active ? "Bill paused" : "Bill resumed");
+    await commit({ ...data, recurring: data.recurring.map((r) => r.id === rule.id ? { ...r, active: !r.active } : r) }, rule.active ? translate("billPaused") : translate("billResumed"));
   }
   async function skipRule(rule: RecurringRule, date: string) {
-    await commit({ ...data, recurring: data.recurring.map((r) => r.id === rule.id ? { ...r, skippedMonths: [...(r.skippedMonths || []), date.slice(0, 7)] } : r) }, "This occurrence skipped");
+    await commit({ ...data, recurring: data.recurring.map((r) => r.id === rule.id ? { ...r, skippedMonths: [...(r.skippedMonths || []), date.slice(0, 7)] } : r) }, translate("thisOccurrenceSkipped"));
   }
   async function deleteRule(rule: RecurringRule) {
     if (await commit({ ...data,
       recurring: data.recurring.filter((r) => r.id !== rule.id),
       transactions: data.transactions.map((t) => t.recurringRuleId === rule.id ? { ...t, recurringRuleId: undefined, occurrenceMonth: undefined } : t),
-    }, "Recurring item removed")) { setRuleDraft(null); setDeleteId(""); }
+    }, translate("recurringItemRemoved"))) { setRuleDraft(null); setDeleteId(""); }
   }
 
   return <div className="plans-view">
-    <div className="segmented plans-tabs" role="tablist" aria-label="Cards and bills">
-      <button role="tab" aria-selected={tab === "cards"} className={tab === "cards" ? "selected" : ""} onClick={() => setTab("cards")}><CreditCardIcon size={16} /> Credit cards</button>
-      <button role="tab" aria-selected={tab === "bills"} className={tab === "bills" ? "selected" : ""} onClick={() => setTab("bills")}><RotateCcw size={16} /> Recurring</button>
+    <div className="segmented plans-tabs" role="tablist" aria-label={translate("cardsAndBills")}>
+      <button role="tab" aria-selected={tab === "cards"} className={tab === "cards" ? "selected" : ""} onClick={() => setTab("cards")}><CreditCardIcon size={16} /> {translate("creditCards")}</button>
+      <button role="tab" aria-selected={tab === "bills"} className={tab === "bills" ? "selected" : ""} onClick={() => setTab("bills")}><RotateCcw size={16} /> {translate("recurring")}</button>
     </div>
     {tab === "cards" ? <>
-      <div className="section-heading plans-heading"><div><h2>Your cards</h2><p>Purchases count against pockets when made. Payments restore available credit.</p></div><button className="button secondary" onClick={() => editCard()}><Plus size={16} /> Add card</button></div>
-      {!data.creditCards.length && <p className="plans-empty">Add a card to track purchases, installments, and payments.</p>}
+      <div className="section-heading plans-heading"><div><h2>{translate("yourCards")}</h2><p>{translate("purchasesCountAgainstPocketsWhen")}</p></div><button className="button secondary" onClick={() => editCard()}><Plus size={16} /> {translate("addCard")}</button></div>
+      {!data.creditCards.length && <p className="plans-empty">{translate("addACardToTrack")}</p>}
       <div className="card-list">{data.creditCards.map((card) => {
         const debt = cardBalance(data, card.id);
         const purchases = data.transactions.filter((t) => t.cardId === card.id && t.kind === "card_purchase");
         const payments = data.transactions.filter((t) => t.cardId === card.id && t.kind === "card_payment");
         const existing = data.existingInstallments.filter((item) => item.cardId === card.id);
         return <section className="credit-card-item" key={card.id}>
-          <div className="credit-card-top"><span className="credit-card-icon"><CreditCardIcon size={22} /></span><div><h3>{card.name}</h3><small>Payment day {card.dueDay} each month</small></div><button className="text-button" onClick={() => editCard(card)}>Edit</button></div>
-          <div className="credit-card-values"><div><span>Outstanding now</span><strong>{money(Math.max(0, debt))}</strong></div><div><span>Available credit now</span><strong>{money(Math.max(0, card.limit - debt))}</strong></div><div><span>Scheduled this month</span><strong>{money(cardDue(data, card.id, month))}</strong></div>{debt < 0 && <div><span>Credit from extra payments</span><strong>{money(-debt)}</strong></div>}</div>
-          <div className="credit-card-actions"><button className="button primary" onClick={() => onNewPurchase(card.id)}><Plus size={16} /> Purchase</button><button className="button secondary" onClick={() => openPayment(card.id)}>Record payment</button></div>
-          {!!purchases.length && <details className="card-purchases"><summary>{purchases.length} purchases · installment details</summary>{purchases.slice().sort((a,b) => b.date.localeCompare(a.date)).map((t) => <div key={t.id}><span>{t.date} · {t.name}{t.recurringRuleId ? " · recurring" : ""}<small>{installmentAmounts(t.amount, t.installments || 1).map((a, i) => `${shiftMonth(t.firstDueMonth || shiftMonth(t.date.slice(0, 7), 1), i)} ${money(a)}`).join(" · ")}</small></span><strong>{money(t.amount)} · {t.installments === 1 ? "one payment" : `${t.installments} payments`}</strong></div>)}</details>}
+          <div className="credit-card-top"><span className="credit-card-icon"><CreditCardIcon size={22} /></span><div><h3>{card.name}</h3><small>{translate("paymentDay")} {card.dueDay} each month</small></div><button className="text-button" onClick={() => editCard(card)}>{translate("edit")}</button></div>
+          <div className="credit-card-values"><div><span>{translate("outstandingNow")}</span><strong>{money(Math.max(0, debt))}</strong></div><div><span>{translate("availableCreditNow")}</span><strong>{money(Math.max(0, card.limit - debt))}</strong></div><div><span>{translate("scheduledThisMonth")}</span><strong>{money(cardDue(data, card.id, month))}</strong></div>{debt < 0 && <div><span>{translate("creditFromExtraPayments")}</span><strong>{money(-debt)}</strong></div>}</div>
+          <div className="credit-card-actions"><button className="button primary" onClick={() => onNewPurchase(card.id)}><Plus size={16} /> {translate("purchase")}</button><button className="button secondary" onClick={() => openPayment(card.id)}>{translate("recordPayment")}</button></div>
+          {!!purchases.length && <details className="card-purchases"><summary>{translate("purchasesInstallmentDetails", { count: purchases.length })}</summary>{purchases.slice().sort((a,b) => b.date.localeCompare(a.date)).map((t) => <div key={t.id}><span>{t.date} · {t.name}{t.recurringRuleId ? ` · ${translate("recurringLower")}` : ""}<small>{installmentAmounts(t.amount, t.installments || 1).map((a, i) => `${shiftMonth(t.firstDueMonth || shiftMonth(t.date.slice(0, 7), 1), i)} ${money(a)}`).join(" · ")}</small></span><strong>{money(t.amount)} · {t.installments === 1 ? translate("onePayment") : translate("paymentsCount", { count: t.installments ?? 1 })}</strong></div>)}</details>}
           {!!payments.length && <details className="card-purchases"><summary>{payments.length} payments recorded</summary>{payments.slice().sort((a,b) => b.date.localeCompare(a.date)).map((t) => <div key={t.id}><span>{t.date} · {t.account}</span><strong>{money(t.amount)}</strong></div>)}</details>}
           {!!existing.length && <details className="card-purchases"><summary>{existing.length} installments already underway</summary>{existing.map((item) => <div key={item.id}><span>{item.name}<small>Next due {item.nextDueMonth} · {item.paymentsLeft} payments left</small></span><strong>{money(item.monthlyAmount)} / month</strong></div>)}</details>}
-          {deleteId === card.id && <div className="inline-confirm"><span>Remove {card.name}?</span><button className="button danger" disabled={busy} onClick={() => void deleteCard(card)}>Remove</button><button className="text-button" onClick={() => setDeleteId("")}>Cancel</button></div>}
-          {deleteId !== card.id && <button className="text-button muted-action" onClick={() => setDeleteId(card.id)}><Trash2 size={14} /> Remove card</button>}
+          {deleteId === card.id && <div className="inline-confirm"><span>{translate("remove")} {card.name}?</span><button className="button danger" disabled={busy} onClick={() => void deleteCard(card)}>{translate("remove")}</button><button className="text-button" onClick={() => setDeleteId("")}>{translate("cancel")}</button></div>}
+          {deleteId !== card.id && <button className="text-button muted-action" onClick={() => setDeleteId(card.id)}><Trash2 size={14} /> {translate("removeCard")}</button>}
         </section>;
       })}</div>
-      {cardDraft && <Modal title={cardDraft.id ? "Edit card" : "Add a credit card"} subtitle="Keep the card name, limit, and payment schedule up to date." onClose={() => setCardDraft(null)}><form className="plans-form" onSubmit={(e) => void saveCard(e)}><div className="plans-fields">
-        <label className="field">Card name<input value={cardName} maxLength={50} required placeholder="e.g. CC BCA" onChange={(e) => setCardName(e.target.value)} /></label>
-        <label className="field">Credit limit (Rp)<MoneyInput min={1} required value={limit} onValueChange={setLimit} /></label>
-        <label className="field">Already owed (Rp)<MoneyInput min={0} required value={openingDebt} onValueChange={setOpeningDebt} /></label>
-        <label className="field">Payment day<input type="number" min={1} max={28} required value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></label>
-      </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>Save card</button><button type="button" className="button secondary" onClick={() => setCardDraft(null)}>Cancel</button></div></form></Modal>}
-      {paymentCard && <Modal title="Record card payment" subtitle="Pay down this card from one of your accounts." onClose={() => setPayCard("")}><form className="plans-form" onSubmit={(e) => void makePayment(e)}><div className="plans-payment-balance"><span>Outstanding now</span><strong>{money(Math.max(0, paymentBalance))}</strong><small>This payment moves cash to the card. It is not new spending.</small></div><div className="plans-fields">
-        <ChoiceField label="Card" value={payCard} onValueChange={setPayCard} options={data.creditCards.map((card) => ({ value: card.id, label: card.name, description: `${money(Math.max(0, cardBalance(data, card.id)))} outstanding` }))} />
-        <label className="field">Amount (Rp)<MoneyInput min={1} required value={payAmount} onValueChange={setPayAmount} /></label>
-        <ChoiceField label="Paid from" value={payAccount} onValueChange={setPayAccount} options={data.accounts.map((account) => ({ value: account, label: account, description: `Recorded balance ${money(accountBalance(data, account))}` }))} />
-        <label className="field">Date<input type="date" max={today()} required value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
-      </div>{paymentCreditAfter > 0 && <p className="plans-payment-credit">This payment will leave {money(paymentCreditAfter)} as card credit. Available credit will be {money(paymentCard.limit - paymentBalance + paymentAmount)}.</p>}<div className="plans-form-actions"><button className="button primary" disabled={busy}>Record payment</button><button type="button" className="button secondary" onClick={() => setPayCard("")}>Cancel</button></div></form></Modal>}
+      {cardDraft && <Modal title={cardDraft.id ? translate("editCard") : translate("addACreditCard")} subtitle={translate("keepTheCardNameLimit")} onClose={() => setCardDraft(null)}><form className="plans-form" onSubmit={(e) => void saveCard(e)}><div className="plans-fields">
+        <label className="field">{translate("cardName")}<input value={cardName} maxLength={50} required placeholder="e.g. CC BCA" onChange={(e) => setCardName(e.target.value)} /></label>
+        <label className="field">{translate("creditLimitRp")}<MoneyInput min={1} required value={limit} onValueChange={setLimit} /></label>
+        <label className="field">{translate("alreadyOwedRp")}<MoneyInput min={0} required value={openingDebt} onValueChange={setOpeningDebt} /></label>
+        <label className="field">{translate("paymentDay")}<input type="number" min={1} max={28} required value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></label>
+      </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>{translate("saveCard")}</button><button type="button" className="button secondary" onClick={() => setCardDraft(null)}>{translate("cancel")}</button></div></form></Modal>}
+      {paymentCard && <Modal title={translate("recordCardPayment")} subtitle={translate("payDownThisCardFrom")} onClose={() => setPayCard("")}><form className="plans-form" onSubmit={(e) => void makePayment(e)}><div className="plans-payment-balance"><span>{translate("outstandingNow")}</span><strong>{money(Math.max(0, paymentBalance))}</strong><small>{translate("thisPaymentMovesCashTo")}</small></div><div className="plans-fields">
+        <ChoiceField label={translate("card")} value={payCard} onValueChange={setPayCard} options={data.creditCards.map((card) => ({ value: card.id, label: card.name, description: translate("amountOutstanding", { amount: money(Math.max(0, cardBalance(data, card.id))) }) }))} />
+        <label className="field">{translate("amountRp")}<MoneyInput min={1} required value={payAmount} onValueChange={setPayAmount} /></label>
+        <ChoiceField label={translate("paidFrom")} value={payAccount} onValueChange={setPayAccount} options={data.accounts.map((account) => ({ value: account, label: account, description: translate("recordedBalanceAmount", { amount: money(accountBalance(data, account)) }) }))} />
+        <label className="field">{translate("date")}<input type="date" max={today()} required value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
+      </div>{paymentCreditAfter > 0 && <p className="plans-payment-credit">This payment will leave {money(paymentCreditAfter)} as card credit. Available credit will be {money(paymentCard.limit - paymentBalance + paymentAmount)}.</p>}<div className="plans-form-actions"><button className="button primary" disabled={busy}>{translate("recordPayment")}</button><button type="button" className="button secondary" onClick={() => setPayCard("")}>{translate("cancel")}</button></div></form></Modal>}
     </> : <>
-      <div className="section-heading plans-heading"><div><h2>Recurring bills</h2><p>{money(data.recurring.filter((r) => r.active && r.type === "expense").reduce((n, r) => n + r.amount * 12, 0))} planned per year · Record each charge only when it happens.</p></div><button className="button secondary" onClick={() => editRule()}><Plus size={16} /> Add bill</button></div>
-      {pending.length > 0 && <section className="due-list"><h3>Ready to record</h3>{pending.map(({ rule, date }) => <div key={`${rule.id}:${date}`} className="due-row"><CalendarDays size={17} /><div><strong>{rule.name}</strong><small>Due {date} · {rule.account}</small></div><strong>{money(rule.amount)}</strong><button className="button primary" disabled={busy} onClick={() => void postRule(rule, date)}>{rule.cardId ? "Mark charged" : rule.type === "income" ? "Record income" : "Mark paid"}</button><button className="text-button" disabled={busy} onClick={() => void skipRule(rule, date)}>Skip</button></div>)}</section>}
-      {!data.recurring.length && <p className="plans-empty">Add rent, subscriptions, salary, or another monthly item.</p>}
-      <div className="rule-list">{data.recurring.map((rule) => <article className="rule-row" key={rule.id}><span className="rule-symbol"><RotateCcw size={17} /></span><div className="rule-description"><strong>{rule.name}</strong><small>Day {rule.day} · {rule.account} · {rule.active ? "Active" : "Paused"}</small></div><div className="rule-money"><strong>{money(rule.amount)}</strong><small>{money(rule.amount * 12)} per year</small></div><div className="rule-actions"><button className="text-button" onClick={() => editRule(rule)}>Edit</button><button className="text-button" disabled={busy} onClick={() => void toggleRule(rule)}>{rule.active ? "Pause" : "Resume"}</button><button className="text-button" aria-label={`Remove ${rule.name}`} title={`Remove ${rule.name}`} onClick={() => setDeleteId(rule.id)}><Trash2 size={15} /></button></div></article>)}</div>
-      {deleteId && (() => { const rule = data.recurring.find((item) => item.id === deleteId); return rule && <Modal title={`Remove ${rule.name}?`} subtitle="Past transactions stay in your history." onClose={() => setDeleteId("")}><div className="plans-form-actions"><button className="button danger" disabled={busy} onClick={() => void deleteRule(rule)}>Remove recurring item</button><button className="button secondary" onClick={() => setDeleteId("")}>Cancel</button></div></Modal>; })()}
-      {ruleDraft && <Modal title={ruleDraft.id ? "Edit recurring item" : "Add recurring item"} subtitle="Review the amount, schedule, and payment source." onClose={() => setRuleDraft(null)}><form className="plans-form" onSubmit={(e) => void saveRule(e)}><div className="plans-fields">
-        <label className="field">Name<input value={ruleName} required maxLength={100} onChange={(e) => setRuleName(e.target.value)} /></label>
-        <label className="field">Amount (Rp)<MoneyInput min={1} value={ruleAmount} required onValueChange={setRuleAmount} /></label>
-        <SegmentedChoice label="Direction" value={ruleType} onValueChange={(value) => { const next = value as "income" | "expense"; setRuleType(next); if (next === "income") setRuleMethod(`bank:${data.accounts[0]}`); }} options={[{ value: "expense", label: "Money out" }, { value: "income", label: "Money in" }]} />
-        <ChoiceField label={ruleType === "income" ? "Received in" : "Paid with"} value={ruleMethod} onValueChange={setRuleMethod} options={[...data.accounts.map((account) => ({ value: `bank:${account}`, label: account, description: `Account · ${money(accountBalance(data, account))}` })), ...(ruleType === "expense" ? data.creditCards.map((card) => ({ value: `card:${card.id}`, label: card.name, description: `Credit available ${money(Math.max(0, card.limit - cardBalance(data, card.id)))}` })) : [])]} />
-        {ruleMethod.startsWith("card:") && ruleType === "expense" && <label className="field">Payments per charge<input type="number" min={1} max={60} step={1} value={ruleInstallments} onChange={(e) => setRuleInstallments(e.target.value)} /></label>}
-        {ruleType === "expense" && <ChoiceField label="Pocket" placeholder="Choose pocket" value={rulePocket} onValueChange={setRulePocket} options={data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))} />}
-        <label className="field">Day each month<input type="number" min={1} max={31} value={ruleDay} required onChange={(e) => setRuleDay(e.target.value)} /></label>
-        <label className="field">From month<input type="month" value={ruleMonth} required onChange={(e) => setRuleMonth(e.target.value)} /></label>
-      </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>Save recurring item</button><button type="button" className="button secondary" onClick={() => setRuleDraft(null)}>Cancel</button></div></form></Modal>}
+      <div className="section-heading plans-heading"><div><h2>{translate("recurringBills")}</h2><p>{money(data.recurring.filter((r) => r.active && r.type === "expense").reduce((n, r) => n + r.amount * 12, 0))} planned per year · Record each charge only when it happens.</p></div><button className="button secondary" onClick={() => editRule()}><Plus size={16} /> {translate("addBill")}</button></div>
+      {pending.length > 0 && <section className="due-list"><h3>{translate("readyToRecord")}</h3>{pending.map(({ rule, date }) => <div key={`${rule.id}:${date}`} className="due-row"><CalendarDays size={17} /><div><strong>{rule.name}</strong><small>Due {date} · {rule.account}</small></div><strong>{money(rule.amount)}</strong><button className="button primary" disabled={busy} onClick={() => void postRule(rule, date)}>{rule.cardId ? translate("markCharged") : rule.type === "income" ? translate("recordIncome") : translate("markPaid")}</button><button className="text-button" disabled={busy} onClick={() => void skipRule(rule, date)}>{translate("skip")}</button></div>)}</section>}
+      {!data.recurring.length && <p className="plans-empty">{translate("addRentSubscriptionsSalaryOr")}</p>}
+      <div className="rule-list">{data.recurring.map((rule) => <article className="rule-row" key={rule.id}><span className="rule-symbol"><RotateCcw size={17} /></span><div className="rule-description"><strong>{rule.name}</strong><small>{translate("dayNumber", { day: rule.day })} · {rule.account} · {rule.active ? translate("active") : translate("paused")}</small></div><div className="rule-money"><strong>{money(rule.amount)}</strong><small>{money(rule.amount * 12)} per year</small></div><div className="rule-actions"><button className="text-button" onClick={() => editRule(rule)}>{translate("edit")}</button><button className="text-button" disabled={busy} onClick={() => void toggleRule(rule)}>{rule.active ? translate("pause") : translate("resume")}</button><button className="text-button" aria-label={translate("removeNamed", { name: rule.name })} title={translate("removeNamed", { name: rule.name })} onClick={() => setDeleteId(rule.id)}><Trash2 size={15} /></button></div></article>)}</div>
+      {deleteId && (() => { const rule = data.recurring.find((item) => item.id === deleteId); return rule && <Modal title={translate("removeNamedQuestion", { name: rule.name })} subtitle={translate("pastTransactionsStayInYour")} onClose={() => setDeleteId("")}><div className="plans-form-actions"><button className="button danger" disabled={busy} onClick={() => void deleteRule(rule)}>{translate("removeRecurringItem")}</button><button className="button secondary" onClick={() => setDeleteId("")}>{translate("cancel")}</button></div></Modal>; })()}
+      {ruleDraft && <Modal title={ruleDraft.id ? translate("editRecurringItem") : translate("addRecurringItem")} subtitle={translate("reviewTheAmountScheduleAnd")} onClose={() => setRuleDraft(null)}><form className="plans-form" onSubmit={(e) => void saveRule(e)}><div className="plans-fields">
+        <label className="field">{translate("name")}<input value={ruleName} required maxLength={100} onChange={(e) => setRuleName(e.target.value)} /></label>
+        <label className="field">{translate("amountRp")}<MoneyInput min={1} value={ruleAmount} required onValueChange={setRuleAmount} /></label>
+        <SegmentedChoice label={translate("direction")} value={ruleType} onValueChange={(value) => { const next = value as "income" | "expense"; setRuleType(next); if (next === "income") setRuleMethod(`bank:${data.accounts[0]}`); }} options={[{ value: "expense", label: translate("moneyOut") }, { value: "income", label: translate("moneyIn") }]} />
+        <ChoiceField label={ruleType === "income" ? translate("receivedIn") : translate("paidWith")} value={ruleMethod} onValueChange={setRuleMethod} options={[...data.accounts.map((account) => ({ value: `bank:${account}`, label: account, description: translate("accountBalanceAmount", { amount: money(accountBalance(data, account)) }) })), ...(ruleType === "expense" ? data.creditCards.map((card) => ({ value: `card:${card.id}`, label: card.name, description: translate("creditAvailableAmount", { amount: money(Math.max(0, card.limit - cardBalance(data, card.id))) }) })) : [])]} />
+        {ruleMethod.startsWith("card:") && ruleType === "expense" && <label className="field">{translate("paymentsPerCharge")}<input type="number" min={1} max={60} step={1} value={ruleInstallments} onChange={(e) => setRuleInstallments(e.target.value)} /></label>}
+        {ruleType === "expense" && <ChoiceField label={translate("pocket")} placeholder={translate("choosePocket")} value={rulePocket} onValueChange={setRulePocket} options={data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))} />}
+        <label className="field">{translate("dayEachMonth")}<input type="number" min={1} max={31} value={ruleDay} required onChange={(e) => setRuleDay(e.target.value)} /></label>
+        <label className="field">{translate("fromMonth")}<input type="month" value={ruleMonth} required onChange={(e) => setRuleMonth(e.target.value)} /></label>
+      </div><div className="plans-form-actions"><button className="button primary" disabled={busy}>{translate("saveRecurringItem")}</button><button type="button" className="button secondary" onClick={() => setRuleDraft(null)}>{translate("cancel")}</button></div></form></Modal>}
     </>}
   </div>;
 }

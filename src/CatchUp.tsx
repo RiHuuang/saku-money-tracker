@@ -60,7 +60,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       setDrafts((items) => items.flatMap((item) => item.id === next.id && item === next ? previous ? [previous] : [] : [item]));
       if (draftRef.current === next) { draftRef.current = persisted.current.get(next.id) || null; setDraft(draftRef.current); }
       setInfo(t("draftSaveError"));
-      throw new LocalDraftWriteError("Local draft could not be saved");
+      throw new LocalDraftWriteError(t("localDraftNotSaved"));
     }
   };
   useEffect(() => {
@@ -114,7 +114,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     try { await save({ ...next, sources: [...next.sources, ...sources] }); }
     catch { setInfo(t("filesSaveError")); return; }
     setDrafts(await listImportDrafts(owner));
-    setInfo(`${sources.length} source${sources.length === 1 ? "" : "s"} added.${skipped ? ` ${skipped} skipped: this draft holds ten files, PDFs must be under 20 MB, and images under 12 MB.` : ""} You can choose their Saku accounts after extraction.`);
+    setInfo([t(sources.length === 1 ? "sourceAddedOne" : "sourcesAdded", { count: sources.length }), skipped ? t("sourcesSkipped", { count: skipped }) : "", t("chooseAccountsAfterExtraction")].filter(Boolean).join(" "));
   }
   async function extract(consentGiven = consented) {
     if (!draftRef.current || !userId || processingRef.current || savingRef.current) return;
@@ -126,13 +126,13 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       const failedSources = await runImportSources(sources, () => cancelled.current, async (source) => {
         const current = draftRef.current?.sources.find((item) => item.id === source.id);
         if (!current || current.processedPages >= current.pageCount && current.pageCount > 0) return;
-        setInfo(`Preparing ${current.name}…`);
+        setInfo(t("preparingSource", { name: current.name }));
         let documentPages;
         try { documentPages = await openImportPages(current.file); }
         catch (error) {
           if (error instanceof Error && /password/i.test(error.message)) {
-            const password = window.prompt(`Password for ${current.name} (used on this device only):`) || "";
-            if (!password) throw new Error("Password required to read this PDF");
+            const password = window.prompt(t("pdfPasswordPrompt", { name: current.name })) || "";
+            if (!password) throw new Error(t("pdfPasswordRequired"));
             documentPages = await openImportPages(current.file, password);
           } else throw error;
         }
@@ -141,7 +141,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           if (cancelled.current) break;
           if (draftRef.current?.id !== draftId || draftRef.current.owner !== owner) break;
           setActivePage({ sourceId: current.id, page: page.number, total: documentPages.count });
-          setInfo(`Extracting ${current.name} · page ${page.number} of ${documentPages.count}`);
+          setInfo(t("extractingSourcePage", { name: current.name, page: page.number, total: documentPages.count }));
           const answer = await extractImportPage(userId, { month: draftRef.current.month, ...page.content });
           // A pause requested during inference still keeps the completed page.
           if (draftRef.current?.id !== draftId || draftRef.current.owner !== owner) break;
@@ -168,9 +168,9 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
         if (latest?.id === draftId) await save({ ...latest, sources: latest.sources.map((item) => item.id === source.id ? { ...item, error: message.slice(0, 180) } : item) });
         return ![401, 403, 429, 503].includes(Number((error as { status?: number })?.status));
       });
-      setInfo(cancelled.current ? "Paused. Your progress is saved on this device." : failedSources ? `${failedSources} ${failedSources === 1 ? "source needs" : "sources need"} attention. Successful pages were kept; fix or remove the marked source, then retry.` : draftRef.current?.rows.length ? t("extractionFinished") : t("nothingFound"));
+      setInfo(cancelled.current ? t("extractionPaused") : failedSources ? t(failedSources === 1 ? "sourceNeedsAttentionOne" : "sourcesNeedAttention", { count: failedSources }) : draftRef.current?.rows.length ? t("extractionFinished") : t("nothingFound"));
     } catch (error) {
-      setInfo(error instanceof Error ? error.message : "Could not process this page. Your progress is saved.");
+      setInfo(error instanceof Error ? error.message : t("pageNotProcessed"));
     } finally { processingRef.current = false; setProcessing(false); setActivePage(null); }
   }
   async function updateRow(id: string, patch: Partial<ImportRow>) {
@@ -199,7 +199,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     try {
       await save({ ...draftRef.current, rows, sources: draftRef.current.sources.map((source) => source.id === sourceId ? { ...source, datesChecked: false } : source) });
       setSharedDates((current) => ({ ...current, [sourceId]: "" }));
-      setInfo(`Date set for ${changed} ${changed === 1 ? "row" : "rows"}. Compare them with the source before confirming its dates.`);
+      setInfo(t(changed === 1 ? "dateSetOne" : "dateSetMany", { count: changed }));
     } catch { /* save explains the local storage problem */ }
   }
   async function updateAccount(id: string, account: string) {
@@ -235,7 +235,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     if (draftRef.current?.id !== draftId) return;
     const saved = additions.map((transaction) => ({ id: transaction.id, fingerprint: JSON.stringify(transaction), pairedRowId: transaction.transferId ? pairedByTransfer.get(transaction.transferId) : undefined }));
     try { await save({ ...draftRef.current, rows: draftRef.current.rows.map((row) => paired.has(row.id) ? { ...row, decision: "skip" } : row), saved: [...draftRef.current.saved, ...saved] }); }
-    catch { setInfo("Transactions were saved to Activity, but the local draft update failed. Check Activity before trying again; batch undo may be unavailable after a reload."); }
+    catch { setInfo(t("savedButDraftFailed")); }
     } finally { savingRef.current = false; setSaving(false); }
   }
   async function undo() {
@@ -247,14 +247,14 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     const unchanged = data.transactions.filter((transaction) => saved.get(transaction.id) === JSON.stringify(transaction));
     const unchangedIds = new Set(unchanged.map((transaction) => transaction.id));
     const removable = unchanged.filter((transaction) => !transaction.transferId || data.transactions.filter((part) => part.transferId === transaction.transferId).every((part) => unchangedIds.has(part.id)));
-    if (!removable.length) { setInfo("Saved transactions have since changed; remove them individually from Activity."); return; }
+    if (!removable.length) { setInfo(t("savedTransactionsChanged")); return; }
     const ids = new Set(removable.map((t) => t.id));
-    if (!(await commit({ ...data, transactions: data.transactions.filter((transaction) => !ids.has(transaction.id)) }, `${ids.size} imported transactions undone`))) return;
+    if (!(await commit({ ...data, transactions: data.transactions.filter((transaction) => !ids.has(transaction.id)) }, t("importedUndone", { count: ids.size })))) return;
     if (draftRef.current?.id !== draftId) return;
     const transferIds = new Set(removable.map((transaction) => transaction.transferId).filter(Boolean));
     const pairedRowIds = new Set(draftRef.current.saved.filter((item) => ids.has(item.id)).map((item) => item.pairedRowId).filter(Boolean));
     try { await save({ ...draftRef.current, rows: draftRef.current.rows.map((row) => ids.has(row.id) || transferIds.has(row.id) || pairedRowIds.has(row.id) ? { ...row, decision: "later" } : row), saved: draftRef.current.saved.filter((item) => !ids.has(item.id)) }); }
-    catch { setInfo("Ledger entries were undone, but the local draft update failed. Check Activity before saving again."); }
+    catch { setInfo(t("undoneButDraftFailed")); }
     } finally { savingRef.current = false; setSaving(false); }
   }
   async function confirmExactMatches() {
@@ -262,7 +262,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     if (!ids.size || selectedMatchesNeedDateCheck || busy || processingRef.current || savingRef.current) return;
     savingRef.current = true; setSaving(true);
     try {
-      if (await commit({ ...data, transactions: data.transactions.map((transaction) => ids.has(transaction.id) ? { ...transaction, verified: true } : transaction) }, `${ids.size} statement matches checked`)) {
+      if (await commit({ ...data, transactions: data.transactions.map((transaction) => ids.has(transaction.id) ? { ...transaction, verified: true } : transaction) }, t("statementMatchesChecked", { count: ids.size }))) {
         setSelectedMatches((current) => current.filter((id) => !ids.has(id)));
       }
     }
@@ -271,7 +271,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   async function removeSource(id: string) {
     if (!draftRef.current || processingRef.current || savingRef.current) return;
     if (draftRef.current.rows.some((row) => row.sourceId === id && importRowAlreadySaved(row, draftRef.current, data))) {
-      setInfo("This source has transactions in Activity. Undo its unchanged entries before removing it from the draft.");
+      setInfo(t("sourceHasTransactions"));
       return;
     }
     try {

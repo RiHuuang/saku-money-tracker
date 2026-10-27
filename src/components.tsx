@@ -335,7 +335,7 @@ export function PocketCard({
       onPointerDown={(event) => { if (event.pointerType === "mouse" && event.button !== 0) return; cancelHold(); suppressClick.current = false; hold.current = setTimeout(() => { suppressClick.current = true; setMenuOpen(true); }, 500); }}
       onPointerUp={cancelHold} onPointerCancel={cancelHold} onPointerLeave={cancelHold}
       onContextMenu={(event) => { event.preventDefault(); cancelHold(); setMenuOpen(true); }}
-      aria-label={`View ${p.name} pocket activity`}>
+      aria-label={translate("viewPocketActivity", { name: p.name })}>
       <div className="pocket-card-top">
         <PocketIcon name={p.icon} color={p.color} />
         <ChevronRight size={17} className="muted" />
@@ -394,7 +394,7 @@ export function TransactionList({
           <button
             className="transaction-row"
             onClick={() => onEdit(t)}
-            aria-label={`Edit ${t.name}`}
+            aria-label={translate("editNamed", { name: t.name })}
           >
             <PocketIcon
               name={t.type === "income" ? "income" : p?.icon || "home"}
@@ -492,14 +492,14 @@ export function FlowChart({
                 <div
                   className="chart-bar income-bar"
                   style={{ height: `${(w.income / max) * 100}%` }}
-                  title={`Week ${i + 1} income: ${money(w.income)}`}
+                  title={translate("weekIncome", { week: i + 1, amount: money(w.income) })}
                 >
                   <span>{money(w.income)}</span>
                 </div>
                 <div
                   className="chart-bar expense-bar"
                   style={{ height: `${(w.expense / max) * 100}%` }}
-                  title={`Week ${i + 1} expenses: ${money(w.expense)}`}
+                  title={translate("weekExpenses", { week: i + 1, amount: money(w.expense) })}
                 >
                   <span>{money(w.expense)}</span>
                 </div>
@@ -532,7 +532,7 @@ export function SpendingRing({
         <svg
           viewBox="0 0 180 180"
           role="img"
-          aria-label={`Spending by pocket, ${money(total)} total`}
+          aria-label={translate("spendingByPocketTotal", { amount: money(total) })}
         >
           <circle
             cx="90"
@@ -565,7 +565,7 @@ export function SpendingRing({
         <div className="donut-center">
           <span>{translate("totalSpent")}</span>
           <strong>{compact(total)}</strong>
-          <small>IDR this month</small>
+          <small>{translate("idrThisMonth")}</small>
         </div>
       </div>
       <div className="ring-legend">
@@ -582,7 +582,7 @@ export function SpendingRing({
         )}
         {unassigned > 0 && <div><span className="legend-dot unassigned-dot" /><span>{translate("unassignedSpending")}</span><strong>{Math.round((unassigned / total) * 100)}%</strong></div>}
         {parts.length > 5 && (
-          <small className="muted">+ {parts.length - 5} other pockets</small>
+          <small className="muted">{translate("otherPockets", { count: parts.length - 5 })}</small>
         )}
       </div>
     </div>

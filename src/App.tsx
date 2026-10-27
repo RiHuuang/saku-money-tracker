@@ -106,7 +106,7 @@ const learnsMerchant = (t: Transaction) => t.type === "expense" && (!t.kind || t
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
-import { loadLanguage, saveLanguage, setActiveLanguage, t, t as translate, type LanguagePreference } from "./i18n";
+import { loadLanguage, localeTag, saveLanguage, setActiveLanguage, t, t as translate, type LanguagePreference } from "./i18n";
 import { backDestination, moreViews, type View } from "./navigation";
 import { AppUpdateSettings } from "./appUpdate";
 import { version as appVersion } from "../package.json";
@@ -242,7 +242,7 @@ export default function App() {
         const state = await loadCloudState();
         setCloud(state);
         if (state.signedIn && state.user?.id) await openWorkspace(state);
-      } catch { setLoadError("Saku could not open your protected workspace. Your saved data has been left untouched."); }
+      } catch { setLoadError(t("sakuCouldNotOpenYour")); }
     })();
   }, []);
   async function openWorkspace(state: CloudState) {
@@ -254,7 +254,7 @@ export default function App() {
     let remote: Data | null = null, remoteState: CloudState | undefined;
     try { const result = await pullCloud(); remote = result.data; remoteState = result.state; }
     catch {
-      if (!useful(local)) throw new Error("Could not reach Saku Cloud. Connect to the internet and retry before setting up a workspace. Your cloud data has not changed.");
+      if (!useful(local)) throw new Error(t("couldNotReachSakuCloud"));
       // A saved local ledger remains available offline.
     }
     const localNeedsReview = scoped && (remoteState?.dirty ?? state.dirty);
@@ -384,7 +384,7 @@ export default function App() {
   async function unlock() {
     if (authenticating.current) return;
     authenticating.current = true;
-    const unlocked = await authenticate("Unlock Saku");
+    const unlocked = await authenticate(t("unlockSaku"));
     authenticating.current = false;
     hiddenAt.current = null;
     setLockState(unlocked ? "open" : "locked");
@@ -392,7 +392,7 @@ export default function App() {
   async function changeAppLock(next: AppLockSettings, confirm: boolean) {
     if (confirm) {
       authenticating.current = true;
-      const confirmed = await authenticate(next.enabled ? "Turn on App lock" : "Turn off App lock");
+      const confirmed = await authenticate(next.enabled ? t("turnOnAppLock") : t("turnOffAppLock"));
       authenticating.current = false;
       if (!confirmed) return false;
     }
@@ -439,7 +439,7 @@ export default function App() {
       const dialogs = document.querySelectorAll<HTMLDialogElement>("dialog[open]");
       const dialog = dialogs[dialogs.length - 1];
       if (dialog) {
-        dialog.querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')?.click();
+        dialog.querySelector<HTMLButtonElement>('button[aria-label=t("closeDialog")]')?.click();
         return;
       }
       if (edit) setEdit(null);
@@ -478,7 +478,7 @@ export default function App() {
     } catch (e) {
       setToast(
         e instanceof Error
-          ? `Could not save: ${e.message}`
+          ? t("couldNotSaveDetail", { detail: e.message })
           : "Could not save. Please try again.",
       );
       return false;
@@ -622,7 +622,7 @@ export default function App() {
               Retry
             </button>
             <label className="button secondary">
-              Restore backup
+              {t("restoreBackup")}
               <input
                 type="file"
                 accept=".json"
@@ -689,7 +689,7 @@ export default function App() {
           </span>
         </a>
         <div className="workspace-label">{t("personalWorkspace")}</div>
-        <nav className="side-nav" aria-label="Main navigation">
+        <nav className="side-nav" aria-label={t("mainNavigation")}>
           {navigation.map((n) => (
             <button
               key={n.id}
@@ -769,7 +769,7 @@ export default function App() {
           <section className="page-heading">
             <div>
               {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={() => go("more")}><ChevronLeft size={17} /> {t("more")}</button>}
-              {selectedPocket && view === "pockets" && <button className="back-to-more" onClick={() => setSelectedPocketId(null)}><ChevronLeft size={17} /> All pockets</button>}
+              {selectedPocket && view === "pockets" && <button className="back-to-more" onClick={() => setSelectedPocketId(null)}><ChevronLeft size={17} /> {t("allPockets")}</button>}
               <p>{selectedPocket && view === "pockets" ? "Pocket activity" : titles[view][0]}</p>
               <h1>{selectedPocket && view === "pockets" ? selectedPocket.name : titles[view][1]}</h1>
             </div>
@@ -777,7 +777,7 @@ export default function App() {
               {view !== "settings" && view !== "more" && (
                 <div className="month-picker">
                   <IconButton
-                    label="Previous month"
+                    label={t("previousMonth")}
                     onClick={() => setMonth(shiftMonth(month, -1))}
                   >
                     <ChevronLeft size={16} />
@@ -786,7 +786,7 @@ export default function App() {
                     <CalendarDays size={16} />
                     <span>{monthLabel(month, true)}</span>
                     <input
-                      aria-label="Selected month"
+                      aria-label={t("selectedMonth")}
                       type="month"
                       value={month}
                       onChange={(e) => {
@@ -796,7 +796,7 @@ export default function App() {
                     />
                   </label>
                   <IconButton
-                    label="Next month"
+                    label={t("nextMonth")}
                     onClick={() => setMonth(shiftMonth(month, 1))}
                   >
                     <ChevronRight size={16} />
@@ -824,7 +824,7 @@ export default function App() {
               {view === "pockets" && selectedPocket && <button className="button primary" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket.id })}><Plus size={18} /> {t("addTransaction")}</button>}
             </div>
           </section>
-          {view === "more" && <section className="more-list" aria-label="More destinations">
+          {view === "more" && <section className="more-list" aria-label={t("moreDestinations")}>
             <button onClick={() => go("insights")}><BarChart3 /><span><strong>{t("insights")}</strong><small>{t("cashFlowTrends")}</small></span><ChevronRight /></button>
             <button onClick={() => go("plans")}><CreditCard /><span><strong>{t("plans")}</strong><small>{t("plansIntro")}</small></span><ChevronRight /></button>
             <button onClick={() => go("settings")}><Settings /><span><strong>{t("settings")}</strong><small>{t("settingsIntro")}</small></span><ChevronRight /></button>
@@ -877,7 +877,7 @@ export default function App() {
                       const amount = stats.transactions
                         .filter(t => isIncome(t) && Math.floor((Number(t.date.slice(-2)) - 1) / 7) === week)
                         .reduce((total, t) => total + t.amount, 0);
-                      return <i key={week} title={`Week ${week + 1}: ${money(amount)}`} style={{ height: `${stats.income ? amount / stats.income * 100 : 0}%` }} />;
+                      return <i key={week} title={t("weekAmount", { week: week + 1, amount: money(amount) })} style={{ height: `${stats.income ? amount / stats.income * 100 : 0}%` }} />;
                     })}
                   </div>
                 </div>
@@ -1018,25 +1018,25 @@ export default function App() {
             />
           )}
           {view === "pockets" && selectedPocket && <section className="pocket-activity">
-            <div className="pocket-activity-summary"><div><span>Funded this month</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0)}</strong></div><div><span>Spent this month</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)}</strong></div><div><span>Remaining</span><strong>{money((stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) - (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0))}</strong></div></div>
-            <p className="pocket-funding-note">Funding is your monthly budget and recorded moves between pockets. Cash income is recorded in accounts.</p>
-            <div className="section-heading"><h2>History</h2><button className="text-button" onClick={() => setPocketAllHistory((value) => !value)}>{pocketAllHistory ? "Selected month" : "All history"}</button></div>
-            {data.pocketTransfers.filter((move) => (move.fromPocketId === selectedPocket.id || move.toPocketId === selectedPocket.id) && (pocketAllHistory || move.month === month)).map((move) => <div className="pocket-move" key={move.id}><span>{move.toPocketId === selectedPocket.id ? "Budget moved in" : "Budget moved out"} · {monthLabel(move.month, true)}</span><strong>{move.toPocketId === selectedPocket.id ? "+" : "−"}{money(move.amount)}</strong></div>)}
+            <div className="pocket-activity-summary"><div><span>{t("fundedThisMonth")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0)}</strong></div><div><span>{t("spentThisMonth")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)}</strong></div><div><span>{t("remaining")}</span><strong>{money((stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) - (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0))}</strong></div></div>
+            <p className="pocket-funding-note">{t("fundingIsYourMonthlyBudget")}</p>
+            <div className="section-heading"><h2>{t("history")}</h2><button className="text-button" onClick={() => setPocketAllHistory((value) => !value)}>{pocketAllHistory ? t("selectedMonth") : t("allHistory")}</button></div>
+            {data.pocketTransfers.filter((move) => (move.fromPocketId === selectedPocket.id || move.toPocketId === selectedPocket.id) && (pocketAllHistory || move.month === month)).map((move) => <div className="pocket-move" key={move.id}><span>{move.toPocketId === selectedPocket.id ? t("budgetMovedIn") : t("budgetMovedOut")} · {monthLabel(move.month, true)}</span><strong>{move.toPocketId === selectedPocket.id ? "+" : "−"}{money(move.amount)}</strong></div>)}
             <TransactionList transactions={data.transactions.filter((t) => t.pocketId === selectedPocket.id && (pocketAllHistory || t.date.startsWith(month))).sort((a, b) => b.date.localeCompare(a.date))} pockets={data.pockets} onEdit={(value) => setEdit({ type: "transaction", value })} groupDates />
           </section>}
           {view === "pockets" && !selectedPocket && (
             <>
               <div className="budget-overview">
                 <div>
-                  <span>Monthly budget</span>
+                  <span>{t("monthlyBudget")}</span>
                   <strong>{money(stats.budget)}</strong>
                 </div>
                 <div>
-                  <span>Spent so far</span>
+                  <span>{t("spentSoFar")}</span>
                   <strong>{money(stats.expenses)}</strong>
                 </div>
                 <div>
-                  <span>Within budget & cash</span>
+                  <span>{t("withinBudgetCash")}</span>
                   <strong className="positive">{money(stats.available)}</strong>
                 </div>
               </div>
@@ -1054,7 +1054,7 @@ export default function App() {
                   budget. Review the highlighted balances below.
                 </div>
               )}
-              <div className="section-heading"><div><h2>Budget allocation</h2><p>{stats.unassigned ? `${money(stats.unassigned)} is waiting for a pocket.` : "Move this month's plan without moving cash."}</p></div><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />Move budget</button></div>
+              <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? `${money(stats.unassigned)} is waiting for a pocket.` : "Move this month's plan without moving cash."}</p></div><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div>
               <div className="pocket-grid all-pockets">
                 {stats.pockets.map((p) => (
                   <PocketCard
@@ -1070,15 +1070,14 @@ export default function App() {
                   onClick={() => setEdit({ type: "pocket" })}
                 >
                   <Plus size={25} />
-                  <strong>A new little plan</strong>
-                  <span>Create a pocket</span>
+                  <strong>{t("aNewLittlePlan")}</strong>
+                  <span>{t("createPocket")}</span>
                 </button>
               </div>
               <div className="inline-note">
                 <CalendarDays size={18} />
                 <span>
-                  Budgets renew each month. Editing a budget changes{" "}
-                  {monthLabel(month)} only.
+                  {t("budgetsRenewMonthly", { month: monthLabel(month) })}
                 </span>
               </div>
             </>
@@ -1104,13 +1103,13 @@ export default function App() {
               <div className="insight-stats">
                 <div>
                   <Target />
-                  <span>Available within your plan</span>
+                  <span>{t("availableWithinYourPlan")}</span>
                   <strong>{money(stats.available)}</strong>
-                  <small>Capped by your recorded cash balance</small>
+                  <small>{t("cappedByYourRecordedCash")}</small>
                 </div>
                 <div>
                   <Wallet />
-                  <span>Income minus expenses</span>
+                  <span>{t("incomeMinusExpenses")}</span>
                   <strong
                     className={
                       stats.income - stats.expenses < 0
@@ -1122,25 +1121,25 @@ export default function App() {
                   </strong>
                   <small>
                     {stats.income
-                      ? `${Math.round(((stats.income - stats.expenses) / stats.income) * 100)}% of this month's income`
+                      ? t("percentOfIncome", { percent: Math.round(((stats.income - stats.expenses) / stats.income) * 100) })
                       : "No income recorded this month"}
                   </small>
                 </div>
                 <div>
                   <CalendarDays />
-                  <span>Average daily spending</span>
+                  <span>{t("averageDailySpending")}</span>
                   <strong>{money(averageDailySpending(data, month))}</strong>
-                  <small>Per day since your first entry this month</small>
+                  <small>{t("perDaySinceYourFirst")}</small>
                 </div>
               </div>
               <section className="charts-grid">
                 <div className="chart-panel">
                   <div className="section-heading">
-                    <h2>Your cash flow</h2>
+                    <h2>{t("yourCashFlow")}</h2>
                     <div className="chart-legend">
                       <span>
                         <i className="income-dot" />
-                        Income
+                        {t("income")}
                       </span>
                       <span>
                         <i className="out-dot" />
@@ -1151,7 +1150,7 @@ export default function App() {
                   <FlowChart transactions={stats.transactions} month={month} />
                 </div>
                 <div className="chart-panel">
-                  <h2>Spending breakdown</h2>
+                  <h2>{t("spendingBreakdown")}</h2>
                   <SpendingRing
                     pockets={stats.pockets}
                     total={stats.expenses}
@@ -1159,12 +1158,12 @@ export default function App() {
                 </div>
               </section>
               <section className="budget-breakdown">
-                <h2>Every pocket, at a glance</h2>
+                <h2>{t("everyPocketAtAGlance")}</h2>
                 <div className="breakdown-header">
-                  <span>Pocket</span>
-                  <span>Budget</span>
-                  <span>Spent</span>
-                  <span>Remaining</span>
+                  <span>{t("pocket")}</span>
+                  <span>{t("budget")}</span>
+                  <span>{t("spent2")}</span>
+                  <span>{t("remaining")}</span>
                 </div>
                 {[...stats.pockets]
                   .sort((a, b) => b.spent - a.spent)
@@ -1191,13 +1190,13 @@ export default function App() {
             </div>
           )}
           {view === "check" && (
-            <Suspense fallback={<p className="loading-view">Loading monthly check...</p>}>
-              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label="Import mode"><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>}
-              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">Loading captured notifications...</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
+            <Suspense fallback={<p className="loading-view">{t("loadingMonthlyCheck")}</p>}>
+              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label={t("importMode")}><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>}
+              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">{t("loadingNotifications")}</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
               {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
           )}
-          {view === "plans" && <Suspense fallback={<p className="loading-view">Loading plans...</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} /></Suspense>}
+          {view === "plans" && <Suspense fallback={<p className="loading-view">{t("loadingPlans")}</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} /></Suspense>}
           {view === "settings" && (
             <SettingsView
               data={data}
@@ -1211,7 +1210,7 @@ export default function App() {
               onSignedIn={async (state) => { setData(null); setCloud(state); await openWorkspace(state); }}
               syncNow={() => cloud?.dirty || (cloud?.sheetPending && cloud.revision === 0) ? queueSync(data, true) : attemptMirror(true)}
               themePreference={themePreference}
-              onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast("Appearance could not be saved.")); }}
+              onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast(t("appearanceCouldNotBeSaved"))); }}
               languagePreference={languagePreference}
               onLanguageChange={(preference) => { setLanguagePreference(preference); void saveLanguage(preference).catch(() => setToast(t("languageSaveError"))); }}
               onAdjustBalance={(account) => setEdit({ type: "balance_adjustment", account })}
@@ -1224,7 +1223,7 @@ export default function App() {
         </main>
       </div>
       {(view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket)) && <button className="mobile-add-action" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket?.id })}><Plus size={20} /> {t("addTransaction")}</button>}
-      <nav className="bottom-nav" aria-label="Mobile navigation">
+      <nav className="bottom-nav" aria-label={t("mobileNavigation")}>
         {mobileNavigation.map((n) => (
           <button
             key={n.id}
@@ -1242,7 +1241,7 @@ export default function App() {
       </nav>
       {edit?.type === "account_transfer" && <TransactionEditor data={data} transaction={edit.value} initialTransfer month={month} busy={busy} onClose={() => setEdit(null)} onSave={async () => false} onDelete={async () => {}} onRepay={async () => {}} onTransfer={async (rows, oldTransferId) => {
         const kept = data.transactions.filter((t) => !oldTransferId || t.transferId !== oldTransferId);
-        if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? "Transfer updated" : "Transfer recorded")) setEdit(null);
+        if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? t("transferUpdated") : t("transferRecorded"))) setEdit(null);
       }} onDeleteTransfer={async (transferId) => { if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, "Transfer deleted")) setEdit(null); }} />}
       {edit?.type === "balance_adjustment" && <BalanceAdjustmentEditor
         key={edit.value?.id || edit.account}
@@ -1255,7 +1254,7 @@ export default function App() {
           const transactions = edit.value
             ? data.transactions.map((item) => item.id === transaction.id ? transaction : item)
             : [...data.transactions, transaction];
-          if (await commit({ ...data, transactions }, edit.value ? "Balance adjustment updated" : "Account balance adjusted")) setEdit(null);
+          if (await commit({ ...data, transactions }, edit.value ? t("balanceAdjustmentUpdated") : t("accountBalanceAdjusted"))) setEdit(null);
         }}
         onDelete={async (id) => {
           if (await commit({ ...data, transactions: data.transactions.filter((item) => item.id !== id) }, "Balance adjustment removed")) setEdit(null);
@@ -1322,7 +1321,7 @@ export default function App() {
             const source = data.transactions.find((t) => t.id === sourceId);
             const paid = data.transactions.filter((t) => t.forTransactionId === sourceId).reduce((n, t) => n + t.amount, 0);
             if (!source?.split || !validAmount(amount) || paid + amount > source.amount - source.split.ownAmount || date < source.date || date > today()) {
-              setToast("Check the repayment amount and date.");
+              setToast(t("checkTheRepaymentAmountAnd"));
               return;
             }
             await commit({ ...data, transactions: [...data.transactions, {
@@ -1332,7 +1331,7 @@ export default function App() {
           }}
           onTransfer={async (rows, oldTransferId) => {
             const kept = data.transactions.filter((t) => !oldTransferId || t.transferId !== oldTransferId);
-            if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? "Transfer updated" : "Transfer recorded")) setEdit(null);
+            if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? t("transferUpdated") : t("transferRecorded"))) setEdit(null);
           }}
           onDeleteTransfer={async (transferId) => {
             if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, "Transfer deleted")) setEdit(null);
@@ -1357,7 +1356,7 @@ export default function App() {
                     ? data.pockets.map((x) => (x.id === p.id ? p : x))
                     : [...data.pockets, p],
                 },
-                edit.value ? "Pocket updated" : "Pocket created",
+                edit.value ? t("pocketUpdated") : t("pocketCreated"),
               )
             )
               setEdit(null);
@@ -1373,9 +1372,9 @@ export default function App() {
           }}
         />
       )}
-      {edit?.type === "pocket_delete" && <Modal title={`Delete ${edit.value.name}?`} subtitle="This pocket will be removed from future plans." onClose={() => setEdit(null)}>
-        {pocketHasReferences(data, edit.value.id) ? <p className="editor-help">This pocket has transactions, recurring items, shortcuts, or budget moves. Move or remove them before deleting it.</p> : <p>Delete this pocket and its monthly budgets?</p>}
-        <div className="form-footer"><button className="button secondary" onClick={() => setEdit(null)}>Cancel</button>{!pocketHasReferences(data, edit.value.id) && <button className="button danger" disabled={busy} onClick={() => void commit({ ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) }, "Pocket deleted").then((saved) => { if (saved) setEdit(null); })}>Delete pocket</button>}</div>
+      {edit?.type === "pocket_delete" && <Modal title={t("deleteNamed", { name: edit.value.name })} subtitle={t("thisPocketWillBeRemoved")} onClose={() => setEdit(null)}>
+        {pocketHasReferences(data, edit.value.id) ? <p className="editor-help">{t("thisPocketHasTransactionsRecurring")}</p> : <p>{t("deleteThisPocketAndIts")}</p>}
+        <div className="form-footer"><button className="button secondary" onClick={() => setEdit(null)}>{t("cancel")}</button>{!pocketHasReferences(data, edit.value.id) && <button className="button danger" disabled={busy} onClick={() => void commit({ ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) }, "Pocket deleted").then((saved) => { if (saved) setEdit(null); })}>{t("deletePocket")}</button>}</div>
       </Modal>}
       {edit?.type === "start" && (
         <StartProfile
@@ -1399,7 +1398,7 @@ export default function App() {
           <Check size={17} />
           {typeof toast === "string" ? toast : toast.message}
           {typeof toast !== "string" && <button type="button" className="toast-action" onClick={toast.action.run}>{toast.action.label}</button>}
-          <button aria-label="Dismiss message" onClick={() => setToast("")}>
+          <button aria-label={t("dismissMessage")} onClick={() => setToast("")}>
             <X size={16} />
           </button>
         </div>
@@ -1453,26 +1452,26 @@ function Transactions({
         <label className="search-field">
           <Search size={18} />
           <input
-            placeholder="Search transactions..."
-            aria-label="Search transactions"
+            placeholder={t("searchTransactions")}
+            aria-label={t("searchTransactions2")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
         <div className="segmented">
-          {["all", "expense", "income"].map((t) => (
+          {["all", "expense", "income"].map((option) => (
             <button
-              key={t}
-              className={type === t ? "selected" : ""}
-              onClick={() => setType(t)}
+              key={option}
+              className={type === option ? "selected" : ""}
+              onClick={() => setType(option)}
             >
-              {t === "all" ? "All" : t === "expense" ? "Money out" : "Money in"}
+              {option === "all" ? t("all") : option === "expense" ? t("moneyOut") : t("moneyIn")}
             </button>
           ))}
         </div>
-        <details ref={exportMenu} className="export-menu" onKeyDown={(event) => { if (event.key === "Escape") { exportMenu.current?.removeAttribute("open"); event.stopPropagation(); } }}><summary className="button secondary"><Download size={16} /> Export CSV</summary><div>
-          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download(`saku-${month}.csv`, exportCSV(rows, data.pockets), "text/csv").catch(() => notify("Export could not be saved.")); }}>Current results ({rows.length})</button>
-          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download("saku-all-transactions.csv", exportCSV(data.transactions, data.pockets), "text/csv").catch(() => notify("Export could not be saved.")); }}>All history</button>
+        <details ref={exportMenu} className="export-menu" onKeyDown={(event) => { if (event.key === "Escape") { exportMenu.current?.removeAttribute("open"); event.stopPropagation(); } }}><summary className="button secondary"><Download size={16} /> {t("exportCsv")}</summary><div>
+          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download(`saku-${month}.csv`, exportCSV(rows, data.pockets), "text/csv").catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("currentResults", { count: rows.length })}</button>
+          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download("saku-all-transactions.csv", exportCSV(data.transactions, data.pockets), "text/csv").catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("allHistory")}</button>
         </div></details>
       </div>
       <div className="transaction-filters">
@@ -1493,7 +1492,7 @@ function Transactions({
         />
       </div>
       <div className="ledger-total">
-        <span>Net change in this view</span>
+        <span>{t("netChangeInThisView")}</span>
         <strong>
           {money(
             rows.reduce(
@@ -1543,30 +1542,30 @@ function BalanceAdjustmentEditor({
     catch (caught) { setError(caught instanceof Error ? caught.message : "Could not adjust this balance."); }
   }
   return <Modal
-    title={`Adjust ${account} balance`}
-    subtitle="Match the amount shown by your bank, wallet, or cash count. Saku keeps the difference in Activity."
+    title={t("adjustAccountBalance", { account })}
+    subtitle={t("matchTheAmountShownBy")}
     onClose={onClose}
   >
     <form onSubmit={(event) => void submit(event)} className="balance-adjustment-form">
       <fieldset disabled={busy}>
-        <div className="balance-adjustment-overview" aria-label={`Recorded balance ${money(currentBalance)}. New balance ${validTarget ? money(targetBalance) : "not entered"}.`}>
-          <div><span>Recorded now</span><strong>{money(currentBalance)}</strong></div>
+        <div className="balance-adjustment-overview" aria-label={t("balanceOverviewLabel", { recorded: money(currentBalance), target: validTarget ? money(targetBalance) : t("notEntered") })}>
+          <div><span>{t("recordedNow")}</span><strong>{money(currentBalance)}</strong></div>
           <ArrowRight size={20} aria-hidden="true" />
-          <div><span>After adjustment</span><strong>{validTarget ? money(targetBalance) : "Not set"}</strong></div>
+          <div><span>{t("afterAdjustment")}</span><strong>{validTarget ? money(targetBalance) : "Not set"}</strong></div>
         </div>
-        <label className="field">New balance<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="0" max="1000000000000" value={target} onValueChange={setTarget} placeholder="0" required aria-label={`New balance for ${account} in rupiah`} /></div></label>
+        <label className="field">{t("newBalance")}<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="0" max="1000000000000" value={target} onValueChange={setTarget} placeholder="0" required aria-label={`New balance for ${account} in rupiah`} /></div></label>
         <div className={`balance-adjustment-effect ${difference < 0 ? "negative" : difference > 0 ? "positive" : ""}`}>
-          <span>{difference > 0 ? "Saku will add" : difference < 0 ? "Saku will subtract" : "No adjustment needed"}</span>
+          <span>{difference > 0 ? "Saku will add" : difference < 0 ? t("sakuWillSubtract") : t("noAdjustmentNeeded")}</span>
           {difference !== 0 && <strong>{difference > 0 ? "+" : "−"}{money(Math.abs(difference))}</strong>}
         </div>
-        <label className="field">Reason<textarea rows={2} value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder="e.g. Matched the balance in my bank app" required /></label>
-        <label className="field">Adjustment date<input type="date" value={date} max={today()} onChange={(event) => setDate(event.target.value)} required /></label>
-        <p className="editor-help">This changes the recorded account balance without counting as spending or income.</p>
+        <label className="field">{t("reason")}<textarea rows={2} value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder={t("eGMatchedTheBalance")} required /></label>
+        <label className="field">{t("adjustmentDate")}<input type="date" value={date} max={today()} onChange={(event) => setDate(event.target.value)} required /></label>
+        <p className="editor-help">{t("thisChangesTheRecordedAccount")}</p>
         {error && <p className="form-error" role="alert">{error}</p>}
-        {deleting && transaction ? <div className="delete-confirm"><p>Remove this balance adjustment? The account returns to the balance calculated without it.</p><button type="button" className="button danger" onClick={() => void onDelete(transaction.id)}>Remove adjustment</button><button type="button" className="button secondary" onClick={() => setDeleting(false)}>Keep it</button></div> : <div className="form-footer">
-          {transaction && <IconButton label="Remove balance adjustment" onClick={() => setDeleting(true)}><Trash2 size={18} /></IconButton>}
-          <button type="button" className="button secondary" onClick={onClose}>Cancel</button>
-          <button className="button primary" disabled={!validTarget || !validAmount(Math.abs(difference)) || !reason.trim() || date > today()}>{busy ? "Saving..." : transaction ? "Save adjustment" : "Adjust balance"}<Check size={16} /></button>
+        {deleting && transaction ? <div className="delete-confirm"><p>{t("removeThisBalanceAdjustmentThe")}</p><button type="button" className="button danger" onClick={() => void onDelete(transaction.id)}>{t("removeAdjustment")}</button><button type="button" className="button secondary" onClick={() => setDeleting(false)}>{t("keepIt")}</button></div> : <div className="form-footer">
+          {transaction && <IconButton label={t("removeBalanceAdjustment")} onClick={() => setDeleting(true)}><Trash2 size={18} /></IconButton>}
+          <button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button>
+          <button className="button primary" disabled={!validTarget || !validAmount(Math.abs(difference)) || !reason.trim() || date > today()}>{busy ? "Saving..." : transaction ? t("saveAdjustment") : t("adjustBalance")}<Check size={16} /></button>
         </div>}
       </fieldset>
     </form>
@@ -1958,7 +1957,7 @@ function PocketEditor({
       Number(budget) < 0 ||
       Number(budget) > 1e12
     ) {
-      setError("Enter a whole rupiah budget, zero or greater.");
+      setError(t("enterAWholeRupiahBudget"));
       return;
     }
     if (
@@ -1968,7 +1967,7 @@ function PocketEditor({
           p.name.toLowerCase() === name.trim().toLowerCase(),
       )
     ) {
-      setError("A pocket with this name already exists.");
+      setError(t("aPocketWithThisName"));
       return;
     }
     await onSave({
@@ -1983,8 +1982,8 @@ function PocketEditor({
   }
   return (
     <Modal
-      title={pocket ? "Make it your own" : "A pocket for your plans"}
-      subtitle={`Monthly budget for ${monthLabel(month)}.`}
+      title={pocket ? t("makeItYourOwn") : t("aPocketForYourPlans")}
+      subtitle={t("monthlyBudgetFor", { month: monthLabel(month) })}
       onClose={onClose}
     >
       <form onSubmit={(e) => void submit(e)}>
@@ -1998,14 +1997,14 @@ function PocketEditor({
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Weekend adventures"
+              placeholder={t("eGWeekendAdventures")}
               maxLength={40}
               required
               pattern=".*\S.*"
             />
           </label>
           <label className="field">
-            {pocket ? "Budget for this month" : "Monthly budget"}
+            {pocket ? t("budgetForThisMonth") : t("monthlyBudget")}
             <div className="amount-input">
               <span>Rp</span>
               <MoneyInput
@@ -2016,7 +2015,7 @@ function PocketEditor({
                 onValueChange={setBudget}
                 placeholder={groupDigits(100000)}
                 required
-                aria-label="Pocket budget in rupiah"
+                aria-label={t("pocketBudgetInRupiah")}
               />
             </div>
             {!pocket && (
@@ -2025,14 +2024,14 @@ function PocketEditor({
               </small>
             )}
           </label>
-          <span className="field-label">Color</span>
+          <span className="field-label">{t("color")}</span>
           <div className="color-swatches">
             {COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
                 style={{ background: c }}
-                aria-label={`Color ${c}`}
+                aria-label={t("colorNamed", { color: c })}
                 aria-pressed={c === color}
                 className={c === color ? "chosen" : ""}
                 onClick={() => setColor(c)}
@@ -2041,7 +2040,7 @@ function PocketEditor({
               </button>
             ))}
           </div>
-          <span className="field-label">Icon</span>
+          <span className="field-label">{t("icon")}</span>
           <div className="icon-choices">
             {ICONS.map((i) => (
               <button
@@ -2075,7 +2074,7 @@ function PocketEditor({
                   className="button danger"
                   onClick={() => void onDelete(pocket!.id)}
                 >
-                  Delete pocket
+                  {t("deletePocket")}
                 </button>
               )}
               <button
@@ -2083,14 +2082,14 @@ function PocketEditor({
                 className="button secondary"
                 onClick={() => setDeleting(false)}
               >
-                Keep it
+                {t("keepIt")}
               </button>
             </div>
           ) : (
             <div className="form-footer">
               {pocket && (
                 <IconButton
-                  label="Delete pocket"
+                  label={t("deletePocket")}
                   onClick={() => setDeleting(true)}
                 >
                   <Trash2 size={18} />
@@ -2101,10 +2100,10 @@ function PocketEditor({
                 type="button"
                 onClick={onClose}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button className="button primary" type="submit">
-                {busy ? "Saving..." : pocket ? "Save changes" : "Create pocket"}
+                {busy ? "Saving..." : pocket ? t("saveChanges") : t("createPocket2")}
                 <Check size={16} />
               </button>
             </div>
@@ -2118,7 +2117,7 @@ function PocketEditor({
 function PocketTransferEditor({ data, month, busy, onClose, onSave }: { data: Data; month: string; busy: boolean; onClose: () => void; onSave: (move: Data["pocketTransfers"][number]) => Promise<void> }) {
   const stats = summary(data, month), [from, setFrom] = useState(data.pockets[0]?.id || ""), [to, setTo] = useState(data.pockets[1]?.id || ""), [amount, setAmount] = useState(""), [error, setError] = useState("");
   const choices = stats.pockets.map((p) => ({ value: p.id, label: p.name, description: `${money(Math.max(0, p.limit - p.spent))} remaining` }));
-  return <Modal title="Move pocket budget" subtitle={`Adjust ${monthLabel(month)} only. No cash moves.`} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError("Choose two different pockets and an amount still available in the source pocket."); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">From<ChoiceField hideLabel label="Pocket to move from" value={from} onValueChange={setFrom} options={choices} /></label><label className="field">To<ChoiceField hideLabel label="Pocket to move to" value={to} onValueChange={setTo} options={choices} /></label><label className="field">Amount<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">Move budget</button></div></fieldset></form></Modal>;
+  return <Modal title={t("movePocketBudget")} subtitle={t("adjustMonthOnly", { month: monthLabel(month) })} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError(t("chooseTwoDifferentPocketsAnd")); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">{t("from")}<ChoiceField hideLabel label={t("pocketToMoveFrom")} value={from} onValueChange={setFrom} options={choices} /></label><label className="field">To<ChoiceField hideLabel label={t("pocketToMoveTo")} value={to} onValueChange={setTo} options={choices} /></label><label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">{t("moveBudget")}</button></div></fieldset></form></Modal>;
 }
 
 function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean; busy: boolean; error: string; onLogin: () => Promise<void> }) {
@@ -2205,7 +2204,7 @@ function StartProfile({
           </div>
           <div className="setup-account-list">{accounts.map((item, index) => {
             const balanceHelpId = `opening-balance-help-${index}`;
-            return <section className="setup-account-card" key={index} aria-label={item.name ? `${item.name} account` : `Account ${index + 1}`}>
+            return <section className="setup-account-card" key={index} aria-label={item.name ? t("namedAccount", { name: item.name }) : t("accountNumber", { number: index + 1 })}>
               <span className="setup-account-icon" aria-hidden="true"><Wallet size={18} /></span>
               <label className="field setup-account-name">{t("accountName")}<input aria-label={`${t("account")} ${index + 1}`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /></label>
               <label className="field setup-opening-balance">{t("openingBalance")}<div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || t("account")} ${t("openingBalance")}`} aria-describedby={balanceHelpId} placeholder={index === 0 ? groupDigits(2450000) : index === 1 ? groupDigits(875000) : "0"} value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div><small id={balanceHelpId}>{item.balance ? t("startingBalance") : t("exampleOnly")}</small></label>
@@ -2300,7 +2299,7 @@ function SettingsView({
     }
     setCloud(await loadCloudState());
     setSignOutConfirm(false);
-    notify("Signed out on this device");
+    notify(t("signedOutOnThisDevice"));
   }
   async function backup() {
     try {
@@ -2310,16 +2309,16 @@ function SettingsView({
         "application/json",
       );
     } catch {
-      notify("Backup could not be saved.");
+      notify(t("backupCouldNotBeSaved"));
     }
   }
   async function protectedBackup() {
-    if (backupPassword !== backupConfirm) { setBackupError("The passwords don't match."); return; }
+    if (backupPassword !== backupConfirm) { setBackupError(t("thePasswordsDonTMatch")); return; }
     setBackupBusy(true); setBackupError("");
     try {
       await download(`saku-backup-${today()}.saku.json`, await encryptBackup(JSON.stringify(data), backupPassword), "application/json");
       closeBackupDialog();
-    } catch (e) { setBackupError(e instanceof Error ? e.message : "Backup could not be saved."); }
+    } catch (e) { setBackupError(e instanceof Error ? e.message : t("backupCouldNotBeSaved")); }
     finally { setBackupBusy(false); }
   }
   async function unlockBackup() {
@@ -2328,7 +2327,7 @@ function SettingsView({
     try {
       setRestore(validateData(JSON.parse(await decryptBackup(lockedBackup, backupPassword))));
       closeBackupDialog();
-    } catch (e) { setBackupError(e instanceof Error ? e.message : "Invalid backup."); }
+    } catch (e) { setBackupError(e instanceof Error ? e.message : t("invalidBackup")); }
     finally { setBackupBusy(false); }
   }
   function closeBackupDialog() { setProtectOpen(false); setLockedBackup(null); setBackupPassword(""); setBackupConfirm(""); setBackupError(""); }
@@ -2340,11 +2339,11 @@ function SettingsView({
       if (isEncryptedBackup(parsed)) { setLockedBackup(parsed); return; }
       setRestore(validateData(parsed));
     } catch (e) {
-      notify(e instanceof Error ? e.message : "Invalid backup.");
+      notify(e instanceof Error ? e.message : t("invalidBackup"));
     }
   }
   async function readProfileImage(file?: File) {
-    if (!file || !file.type.startsWith("image/") || file.size > 8_000_000) { notify("Choose an image smaller than 8 MB."); return; }
+    if (!file || !file.type.startsWith("image/") || file.size > 8_000_000) { notify(t("chooseAnImageSmallerThan")); return; }
     const image = await createImageBitmap(file), canvas = document.createElement("canvas"), size = 512;
     canvas.width = size; canvas.height = size;
     const scale = Math.max(size / image.width, size / image.height), width = image.width * scale, height = image.height * scale;
@@ -2354,10 +2353,10 @@ function SettingsView({
   return (
     <div className="settings-content">
       <section className="appearance-section">
-        <h2>Appearance</h2>
-        <p>Choose how Saku looks on this device and its widgets.</p>
-        <div className="appearance-options" role="group" aria-label="Appearance">
-          {(["system", "light", "dark"] as const).map((option) => <button key={option} type="button" aria-pressed={themePreference === option} className={themePreference === option ? "selected" : ""} onClick={() => onThemeChange(option)}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</button>)}
+        <h2>{t("appearance")}</h2>
+        <p>{t("chooseHowSakuLooksOn")}</p>
+        <div className="appearance-options" role="group" aria-label={t("appearance")}>
+          {(["system", "light", "dark"] as const).map((option) => <button key={option} type="button" aria-pressed={themePreference === option} className={themePreference === option ? "selected" : ""} onClick={() => onThemeChange(option)}>{option === "system" ? t("themeSystem") : option === "light" ? t("light") : t("dark")}</button>)}
         </div>
       </section>
       <section className="appearance-section">
@@ -2373,7 +2372,7 @@ function SettingsView({
       {remindersSupported() && <ReminderSection settings={reminder} onChange={onReminderChange} notify={notify} />}
       <section>
         <h2>{t("localProfile")}</h2>
-        <p>Your workspace on this device.</p>
+        <p>{t("yourWorkspaceOnThisDevice")}</p>
         <form
           className="settings-form"
           onSubmit={(e) => {
@@ -2395,28 +2394,28 @@ function SettingsView({
               pattern=".*\S.*"
             />
           </label>
-          <div className="profile-photo-field"><span>Profile photo <span className="optional">optional</span></span><button type="button" className="profile-photo-button" aria-label="Choose profile photo" onClick={() => profileFile.current?.click()}>{profileImage || avatarUrl ? <img src={profileImage || avatarUrl} alt="" /> : <span>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}<span className="profile-photo-edit"><Camera size={15} /></span></button><small>Tap the photo to choose one. Stored as a private compressed WebP image.</small><input ref={profileFile} type="file" accept="image/*" hidden onChange={(e) => { void readProfileImage(e.target.files?.[0]); e.target.value = ""; }} /></div>
+          <div className="profile-photo-field"><span>{t("profilePhoto")} <span className="optional">optional</span></span><button type="button" className="profile-photo-button" aria-label={t("chooseProfilePhoto")} onClick={() => profileFile.current?.click()}>{profileImage || avatarUrl ? <img src={profileImage || avatarUrl} alt="" /> : <span>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}<span className="profile-photo-edit"><Camera size={15} /></span></button><small>{t("tapThePhotoToChoose")}</small><input ref={profileFile} type="file" accept="image/*" hidden onChange={(e) => { void readProfileImage(e.target.files?.[0]); e.target.value = ""; }} /></div>
           <button className="button primary" disabled={busy}>
             Save profile
           </button>
         </form>
       </section>
       <section>
-        <h2>Your accounts</h2>
-        <p>Keep cash, banks, and e-wallets in one place.</p>
+        <h2>{t("yourAccounts")}</h2>
+        <p>{t("keepCashBanksAndE")}</p>
         <div className="account-list">
           {data.accounts.map((a) => (
             <div className="account-row" key={a}>
-              <button type="button" className="account-adjust-button" disabled={busy} onClick={() => onAdjustBalance(a)} aria-label={`Adjust ${a} balance, currently ${money(accountBalance(data, a))}`}>
+              <button type="button" className="account-adjust-button" disabled={busy} onClick={() => onAdjustBalance(a)} aria-label={t("adjustBalanceCurrently", { account: a, amount: money(accountBalance(data, a)) })}>
                 <span className="account-list-icon"><Wallet size={19} /></span>
-                <span className="account-list-name"><strong>{a}</strong><small>Tap to adjust balance</small></span>
+                <span className="account-list-name"><strong>{a}</strong><small>{t("tapToAdjustBalance")}</small></span>
                 <strong className="account-list-balance">{money(accountBalance(data, a))}</strong>
                 <PencilLine size={16} aria-hidden="true" />
               </button>
               {!data.transactions.some((t) => t.account === a) &&
                 data.accounts.length > 1 && (
                   <IconButton
-                    label={`Delete account ${a}`}
+                    label={t("deleteAccountNamed", { account: a })}
                     disabled={busy}
                     onClick={() =>
                       void commit(
@@ -2443,7 +2442,7 @@ function SettingsView({
             if (
               data.accounts.some((x) => x.toLowerCase() === a.toLowerCase())
             ) {
-              notify("This account already exists.");
+              notify(t("thisAccountAlreadyExists"));
               return;
             }
             void commit(
@@ -2455,8 +2454,8 @@ function SettingsView({
           }}
         >
           <input
-            aria-label="New account name"
-            placeholder="New account name"
+            aria-label={t("newAccountName")}
+            placeholder={t("newAccountName")}
             maxLength={50}
             value={account}
             onChange={(e) => setAccount(e.target.value)}
@@ -2464,7 +2463,7 @@ function SettingsView({
           />
           <button className="button secondary" disabled={busy}>
             <Plus size={16} />
-            Add account
+            {t("addAccount2")}
           </button>
         </form>
       </section>
@@ -2472,45 +2471,45 @@ function SettingsView({
         <div className="cloud-heading">
           <span className="connection-icon"><ShieldCheck size={24} /></span>
           <div>
-            <h2>Google backup</h2>
-            <p>Keep a private backup in Saku Cloud and, with your permission, a readable copy in your own Google Drive.</p>
+            <h2>{t("googleBackup")}</h2>
+            <p>{t("keepAPrivateBackupIn")}</p>
           </div>
         </div>
         {!cloud?.signedIn ? (
           <div className="cloud-signed-out">
-            <p>Signing in also creates your Saku account. Saku never receives or stores your Google password.</p>
+            <p>{t("signingInAlsoCreatesYour")}</p>
             <button className="button primary" disabled={cloudBusy || !cloud?.configured} onClick={() => void cloudAction(async () => {
               const next = await signInGoogle();
               await onSignedIn(next);
               setName(next.user?.name || name);
-              notify("Google account connected");
+              notify(t("googleAccountConnected"));
             })}>
               <CircleUserRound size={18} />
               {cloudBusy ? "Connecting..." : "Continue with Google"}
             </button>
-            {!cloud?.configured && <small className="cloud-note">Google sign-in is available in a production-configured Android build.</small>}
+            {!cloud?.configured && <small className="cloud-note">{t("googleSignInIsAvailable")}</small>}
           </div>
         ) : (
           <div className="cloud-account">
             <div className="cloud-user">
               <CircleUserRound size={21} />
               <span><strong>{cloud.user?.name}</strong><small>{cloud.user?.email}</small></span>
-              <span className={`sync-state ${cloud.dirty || cloud.sheetPending ? "pending" : ""}`}>{cloud.dirty ? "Changes waiting" : cloud.sheetPending ? "Sheet pending" : "Up to date"}</span>
+              <span className={`sync-state ${cloud.dirty || cloud.sheetPending ? "pending" : ""}`}>{cloud.dirty ? "Changes waiting" : cloud.sheetPending ? t("sheetPending") : t("upToDate")}</span>
             </div>
             <div className="settings-actions">
-              {(cloud.dirty || cloud.sheetPending) && <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(syncNow)}><Upload size={17} />Retry sync</button>}
-              {cloud.sheetPending && <button className="button secondary" disabled={cloudBusy} onClick={() => void cloudAction(async () => { setCloud(await connectGoogleDrive()); notify("Google Drive connected"); })}><ExternalLink size={17} />{cloud.spreadsheetUrl ? "Reconnect Google Drive" : "Connect Google Drive"}</button>}
-              <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(true)}><Download size={17} />Restore cloud copy</button>
-              {cloud.spreadsheetUrl && <a className="button secondary" href={cloud.spreadsheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} />Open Sheet</a>}
-              <button className="button text-button" disabled={cloudBusy} onClick={() => { if (!Capacitor.isNativePlatform() && cloud.dirty) setSignOutConfirm(true); else void cloudAction(() => signOut()); }}><LogOut size={16} />Sign out</button>
+              {(cloud.dirty || cloud.sheetPending) && <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(syncNow)}><Upload size={17} />{t("retrySync")}</button>}
+              {cloud.sheetPending && <button className="button secondary" disabled={cloudBusy} onClick={() => void cloudAction(async () => { setCloud(await connectGoogleDrive()); notify(t("googleDriveConnected")); })}><ExternalLink size={17} />{cloud.spreadsheetUrl ? t("reconnectGoogleDrive") : t("connectGoogleDrive")}</button>}
+              <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(true)}><Download size={17} />{t("restoreCloud")}</button>
+              {cloud.spreadsheetUrl && <a className="button secondary" href={cloud.spreadsheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} />{t("openSheet")}</a>}
+              <button className="button text-button" disabled={cloudBusy} onClick={() => { if (!Capacitor.isNativePlatform() && cloud.dirty) setSignOutConfirm(true); else void cloudAction(() => signOut()); }}><LogOut size={16} />{t("signOut")}</button>
             </div>
-            <small className="cloud-note">Changes sync automatically, including widget entries while Saku is closed. {cloud.lastSyncedAt ? `Last synced ${new Date(cloud.lastSyncedAt).toLocaleString()}` : "Not backed up yet."}</small>
-            {cloud.sheetPending && <p className="inline-warning">Your cloud snapshot is saved, but Google Sheets mirroring is still pending.</p>}
+            <small className="cloud-note">{t("changesSyncAutomaticallyIncludingWidget")} {cloud.lastSyncedAt ? t("lastSynced", { time: new Date(cloud.lastSyncedAt).toLocaleString(localeTag()) }) : t("notBackedUpYet")}</small>
+            {cloud.sheetPending && <p className="inline-warning">{t("yourCloudSnapshotIsSaved")}</p>}
             <SignedInDevices notify={notify} onSignedOutHere={async (id) => {
               // Revoking this session first would strand any changes still waiting to sync.
               if (cloud.dirty) await syncNow();
               const latest = await loadCloudState();
-              if (!latest.signedIn || latest.user?.id !== cloud.user?.id || latest.dirty) throw new Error("Sync your changes before signing out this device.");
+              if (!latest.signedIn || latest.user?.id !== cloud.user?.id || latest.dirty) throw new Error(t("syncYourChangesBeforeSigning"));
               await signOutDevice(id);
               await signOutGoogle();
               setCloud(await loadCloudState());
@@ -2519,23 +2518,20 @@ function SettingsView({
         )}
       </section>
       <section>
-        <h2>Your data stays with you</h2>
-        <p>
-          Keep a backup before switching devices or uninstalling Saku. Backups
-          contain your transaction details.
-        </p>
+        <h2>{t("yourDataStaysWithYou")}</h2>
+        <p>{t("keepABackupBeforeSwitching")}</p>
         <div className="settings-actions">
           <button className="button secondary" onClick={() => void backup()}>
             <Download size={17} />
-            Back up data
+            {t("backUpData")}
           </button>
           <button className="button secondary" onClick={() => setProtectOpen(true)}>
             <LockKeyhole size={17} />
-            Back up with password
+            {t("backUpWithPassword")}
           </button>
           <label className="button secondary">
             <Upload size={17} />
-            Restore backup
+            {t("restoreBackup")}
             <input
               type="file"
               accept="application/json,.json"
@@ -2547,20 +2543,20 @@ function SettingsView({
             />
           </label>
         </div>
-        <p className="legal-links"><a href={legalUrl("privacy")} target="_blank" rel="noreferrer">Privacy Notice</a><span>·</span><a href={legalUrl("terms")} target="_blank" rel="noreferrer">User Agreement</a><span>·</span><a href={legalUrl("account-deletion")} target="_blank" rel="noreferrer">Account deletion</a></p>
-        {cloud?.signedIn && <div className="danger-zone"><div><strong>Delete Saku account</strong><p>Permanently remove Saku Cloud data and this phone's local workspace, revoke access, and ask Drive to trash the Saku-created folder.</p></div><button className="button danger-button" disabled={cloudBusy} onClick={() => setDeleteConfirm(true)}><Trash2 size={16} />Delete account</button></div>}
+        <p className="legal-links"><a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a><span>·</span><a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a><span>·</span><a href={legalUrl("account-deletion")} target="_blank" rel="noreferrer">{t("accountDeletion")}</a></p>
+        {cloud?.signedIn && <div className="danger-zone"><div><strong>{t("deleteSakuAccount")}</strong><p>{t("permanentlyRemoveSakuCloudData")}</p></div><button className="button danger-button" disabled={cloudBusy} onClick={() => setDeleteConfirm(true)}><Trash2 size={16} />{t("deleteAccount")}</button></div>}
       </section>
       <section className="connection-section">
         <span className="connection-icon"><CheckCheck size={25} /></span>
-        <div><h2>Offline first</h2><p>{cloudImportEnabled ? "Your ledger works without internet. AI import sends selected statement text or images to Cloudflare for processing. Original files and review drafts stay on this device; accepted transactions follow your existing cloud and Sheet sync." : nativeAIAvailable ? "Your ledger works without internet. CSV and PDF statement checking stay on this device while cloud catch-up is being tested." : "Your ledger works without internet. CSV checking stays on this device; PDF checking is available in the Android app while cloud catch-up is being tested."}</p></div>
+        <div><h2>{t("offlineFirst")}</h2><p>{cloudImportEnabled ? t("yourLedgerWorksWithoutInternet") : nativeAIAvailable ? t("yourLedgerWorksWithoutInternet2") : t("yourLedgerWorksWithoutInternet3")}</p></div>
       </section>
       <footer className="settings-footer">
-        Saku {appVersion} <span>·</span> Made for a more mindful month.
+        Saku {appVersion} <span>·</span> {t("madeForMindfulMonth")}
       </footer>
       {restore && (
         <Modal
-          title="Restore this backup?"
-          subtitle="Your current workspace will be replaced. Export a backup first if you want to keep it."
+          title={t("restoreThisBackup")}
+          subtitle={t("yourCurrentWorkspaceWillBe")}
           onClose={() => setRestore(null)}
         >
           <div className="restore-summary">
@@ -2576,7 +2572,7 @@ function SettingsView({
               disabled={busy}
               onClick={() => setRestore(null)}
             >
-              Cancel
+              {t("cancel")}
             </button>
             <button
               className="button primary"
@@ -2590,56 +2586,56 @@ function SettingsView({
                 })
               }
             >
-              Restore backup
+              {t("restoreBackup")}
             </button>
           </div>
         </Modal>
       )}
       {(protectOpen || lockedBackup) && (
-        <Modal title={lockedBackup ? "Open protected backup" : "Back up with password"} subtitle={lockedBackup ? "Enter the password used when this backup was made." : "The file is encrypted on this device. Saku can't recover a forgotten password."} onClose={() => { if (!backupBusy) closeBackupDialog(); }}>
+        <Modal title={lockedBackup ? t("openProtectedBackup") : t("backUpWithPassword")} subtitle={lockedBackup ? t("enterThePasswordUsedWhen") : t("theFileIsEncryptedOn")} onClose={() => { if (!backupBusy) closeBackupDialog(); }}>
           <form onSubmit={(e) => { e.preventDefault(); void (lockedBackup ? unlockBackup() : protectedBackup()); }}>
-            <label className="field">Password<input type="password" autoComplete={lockedBackup ? "current-password" : "new-password"} minLength={lockedBackup ? 1 : MIN_PASSWORD_LENGTH} value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} required autoFocus /></label>
-            {!lockedBackup && <label className="field">Confirm password<input type="password" autoComplete="new-password" value={backupConfirm} onChange={(e) => setBackupConfirm(e.target.value)} required /></label>}
+            <label className="field">{t("password")}<input type="password" autoComplete={lockedBackup ? "current-password" : "new-password"} minLength={lockedBackup ? 1 : MIN_PASSWORD_LENGTH} value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} required autoFocus /></label>
+            {!lockedBackup && <label className="field">{t("confirmPassword")}<input type="password" autoComplete="new-password" value={backupConfirm} onChange={(e) => setBackupConfirm(e.target.value)} required /></label>}
             {backupError && <p className="form-error" role="alert">{backupError}</p>}
-            <div className="form-footer"><button type="button" className="button secondary" disabled={backupBusy} onClick={closeBackupDialog}>Cancel</button><button className="button primary" disabled={backupBusy}>{backupBusy ? "Working..." : lockedBackup ? "Open backup" : "Save protected backup"}</button></div>
+            <div className="form-footer"><button type="button" className="button secondary" disabled={backupBusy} onClick={closeBackupDialog}>{t("cancel")}</button><button className="button primary" disabled={backupBusy}>{backupBusy ? t("working") : lockedBackup ? t("openBackup") : t("saveProtectedBackup")}</button></div>
           </form>
         </Modal>
       )}
       {pullConfirm && (
-        <Modal title="Restore the cloud copy?" subtitle="This replaces the workspace on this device. Back it up first if you need to keep local-only changes." onClose={() => setPullConfirm(false)}>
+        <Modal title={t("restoreTheCloudCopy")} subtitle={t("thisReplacesTheWorkspaceOn")} onClose={() => setPullConfirm(false)}>
           <div className="form-footer">
-            <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(false)}>Cancel</button>
+            <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(false)}>{t("cancel")}</button>
             <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(async () => {
               const result = await pullCloud();
-              if (!result.data) { notify("There is no cloud backup yet."); setPullConfirm(false); return; }
+              if (!result.data) { notify(t("thereIsNoCloudBackup")); setPullConfirm(false); return; }
               await replaceData(result.data);
               setCloud(await adoptCloudSnapshot(result.state, true, result.data));
               setData(result.data);
               setName(result.data.name);
               setPullConfirm(false);
-              notify("Cloud backup restored");
-            })}>Restore cloud copy</button>
+              notify(t("cloudBackupRestored"));
+            })}>{t("restoreCloud")}</button>
           </div>
         </Modal>
       )}
       {signOutConfirm && (
-        <Modal title="You have unsynced changes" subtitle="Signing out removes this workspace from this browser. Sync first to keep your latest changes in Saku Cloud." onClose={() => setSignOutConfirm(false)}>
+        <Modal title={t("youHaveUnsyncedChanges")} subtitle={t("signingOutRemovesThisWorkspace")} onClose={() => setSignOutConfirm(false)}>
           <div className="form-footer">
-            <button className="button secondary" disabled={cloudBusy} onClick={() => setSignOutConfirm(false)}>Cancel</button>
-            <button className="button danger-button" disabled={cloudBusy} onClick={() => void cloudAction(() => signOut())}><LogOut size={16} />Sign out and discard</button>
+            <button className="button secondary" disabled={cloudBusy} onClick={() => setSignOutConfirm(false)}>{t("cancel")}</button>
+            <button className="button danger-button" disabled={cloudBusy} onClick={() => void cloudAction(() => signOut())}><LogOut size={16} />{t("signOutAndDiscard")}</button>
             <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(async () => {
               await syncNow();
-              if ((await loadCloudState()).dirty) { notify("Sync did not finish. Your changes are still on this device."); return; }
+              if ((await loadCloudState()).dirty) { notify(t("syncDidNotFinishYour")); return; }
               await signOut();
-            })}><Upload size={17} />Sync and sign out</button>
+            })}><Upload size={17} />{t("syncAndSignOut")}</button>
           </div>
         </Modal>
       )}
       {deleteConfirm && (
-        <Modal title="Delete your Saku account?" subtitle="This permanently deletes your Saku Cloud data and local workspace. Export a backup first if you need one." onClose={() => { setDeleteConfirm(false); setDeleteText(""); }}>
-          <label className="field">Type DELETE to confirm<input autoCapitalize="characters" autoComplete="off" value={deleteText} onChange={(e) => setDeleteText(e.target.value)} /></label>
+        <Modal title={t("deleteYourSakuAccount")} subtitle={t("thisPermanentlyDeletesYourSaku")} onClose={() => { setDeleteConfirm(false); setDeleteText(""); }}>
+          <label className="field">{t("typeDeleteToConfirm")}<input autoCapitalize="characters" autoComplete="off" value={deleteText} onChange={(e) => setDeleteText(e.target.value)} /></label>
           <div className="form-footer">
-            <button className="button secondary" disabled={cloudBusy} onClick={() => { setDeleteConfirm(false); setDeleteText(""); }}>Cancel</button>
+            <button className="button secondary" disabled={cloudBusy} onClick={() => { setDeleteConfirm(false); setDeleteText(""); }}>{t("cancel")}</button>
             <button className="button danger-button" disabled={cloudBusy || deleteText !== "DELETE"} onClick={() => void cloudAction(async () => {
               const userId = cloud?.user?.id;
               if (!userId) return;
@@ -2649,8 +2645,8 @@ function SettingsView({
               setCloud(await loadCloudState());
               setDeleteConfirm(false);
               setDeleteText("");
-              notify(deletion.driveCleanupFailed ? "Saku account deleted. Remove its Sheet from Google Drive manually." : "Saku account deleted");
-            })}><Trash2 size={16} />Delete permanently</button>
+              notify(deletion.driveCleanupFailed ? t("sakuAccountDeletedRemoveIts") : t("sakuAccountDeleted"));
+            })}><Trash2 size={16} />{t("deletePermanently")}</button>
           </div>
         </Modal>
       )}
@@ -2662,13 +2658,13 @@ function AppLockSection({ settings, onChange }: { settings: AppLockSettings; onC
   useEffect(() => { void appLockStatus().then((status) => setAvailable(status.available)).catch(() => setAvailable(false)); }, []);
   const change = (next: AppLockSettings, confirm = false) => { setBusy(true); void onChange(next, confirm).finally(() => setBusy(false)); };
   return <section className="app-lock-section">
-    <h2>App lock</h2>
-    <p>Ask for your fingerprint, face or screen lock before Saku shows any amounts.</p>
-    {available === false && <p className="inline-warning">Set up a screen lock in Android settings to use App lock.</p>}
-    <label className="checkbox-label"><input type="checkbox" checked={settings.enabled} disabled={busy || (!available && !settings.enabled)} onChange={(event) => change({ ...settings, enabled: event.target.checked }, true)} /> Lock Saku</label>
+    <h2>{t("appLock")}</h2>
+    <p>{t("askForYourFingerprintFace")}</p>
+    {available === false && <p className="inline-warning">{t("setUpAScreenLock")}</p>}
+    <label className="checkbox-label"><input type="checkbox" checked={settings.enabled} disabled={busy || (!available && !settings.enabled)} onChange={(event) => change({ ...settings, enabled: event.target.checked }, true)} /> {t("lockSaku")}</label>
     {settings.enabled && <>
-      <SegmentedChoice compact label="Lock after" value={String(settings.after)} disabled={busy} onValueChange={(value) => change({ ...settings, after: Number(value) as LockAfter })} options={[{ value: "0", label: "Immediately" }, { value: "60", label: "1 min" }, { value: "300", label: "5 min" }]} />
-      <label className="checkbox-label"><input type="checkbox" checked={settings.hideInRecents} disabled={busy} onChange={(event) => change({ ...settings, hideInRecents: event.target.checked })} /> Hide Saku in Recents (also blocks screenshots)</label>
+      <SegmentedChoice compact label={t("lockAfter")} value={String(settings.after)} disabled={busy} onValueChange={(value) => change({ ...settings, after: Number(value) as LockAfter })} options={[{ value: "0", label: t("immediately") }, { value: "60", label: t("n1Min") }, { value: "300", label: t("n5Min") }]} />
+      <label className="checkbox-label"><input type="checkbox" checked={settings.hideInRecents} disabled={busy} onChange={(event) => change({ ...settings, hideInRecents: event.target.checked })} /> {t("hideSakuInRecentsAlso")}</label>
     </>}
   </section>;
 }
@@ -2678,19 +2674,27 @@ function ReminderSection({ settings, onChange, notify }: { settings: ReminderSet
   async function toggle(enabled: boolean) {
     setBusy(true);
     try {
-      if (enabled && !(await requestReminderPermission())) { notify("Allow notifications for Saku in Android settings to get reminders."); return; }
+      if (enabled && !(await requestReminderPermission())) { notify(t("allowNotificationsForSakuIn")); return; }
       await onChange({ ...settings, enabled });
-    } catch { notify("The reminder setting could not be saved."); }
+    } catch { notify(t("theReminderSettingCouldNot")); }
     finally { setBusy(false); }
   }
   return <section className="reminder-section">
-    <h2>Daily reminder</h2>
-    <p>A quiet nudge in the evening to note what you spent. Card reminders arrive 3 days before a payment is due.</p>
-    <label className="checkbox-label"><input type="checkbox" checked={settings.enabled} disabled={busy} onChange={(event) => void toggle(event.target.checked)} /> Remind me each day</label>
-    {settings.enabled && <label className="field reminder-time">Time<input type="time" value={settings.time} disabled={busy} onChange={(event) => { if (/^\d{2}:\d{2}$/.test(event.target.value)) void onChange({ ...settings, time: event.target.value }); }} /></label>}
+    <h2>{t("dailyReminder")}</h2>
+    <p>{t("aQuietNudgeInThe")}</p>
+    <label className="checkbox-label"><input type="checkbox" checked={settings.enabled} disabled={busy} onChange={(event) => void toggle(event.target.checked)} /> {t("remindMeEachDay")}</label>
+    {settings.enabled && <label className="field reminder-time">{t("time")}<input type="time" value={settings.time} disabled={busy} onChange={(event) => { if (/^\d{2}:\d{2}$/.test(event.target.value)) void onChange({ ...settings, time: event.target.value }); }} /></label>}
   </section>;
 }
 
+// The Worker labels sessions in English ("Chrome on Windows", "Android app", "Earlier sign-in").
+function deviceLabelText(label: string) {
+  if (label === "Android app") return t("deviceAndroidApp");
+  if (label === "Earlier sign-in") return t("deviceEarlierSignIn");
+  if (label === "A browser") return t("deviceBrowser");
+  const [browser, system] = label.split(" on ");
+  return system ? t("deviceBrowserOn", { browser: browser === "A browser" ? t("deviceBrowser") : browser, system }) : label;
+}
 function SignedInDevices({ notify, onSignedOutHere }: { notify: (message: string) => void; onSignedOutHere: (id: string) => Promise<void> }) {
   const [devices, setDevices] = useState<SignedInDevice[] | null>(null), [busy, setBusy] = useState("");
   const load = () => listDevices().then(setDevices).catch(() => setDevices([]));
@@ -2700,14 +2704,14 @@ function SignedInDevices({ notify, onSignedOutHere }: { notify: (message: string
     try {
       if (device.current) { await onSignedOutHere(device.id); return; }
       await signOutDevice(device.id);
-      notify(`${device.label} signed out`);
+      notify(t("deviceSignedOut", { device: deviceLabelText(device.label) }));
       await load();
-    } catch (error) { notify(error instanceof Error ? error.message : "That device could not be signed out. Try again."); }
+    } catch (error) { notify(error instanceof Error ? error.message : t("thatDeviceCouldNotBe")); }
     finally { setBusy(""); }
   }
   if (!devices?.length) return null;
   return <div className="signed-in-devices">
-    <strong>Signed-in devices</strong>
-    <ul>{devices.map((device) => <li key={device.id}><span><b>{device.label}{device.current ? " · this device" : ""}</b><small>Last active {new Date(device.lastActiveAt).toLocaleString()}</small></span><button className="button text-button" disabled={!!busy} onClick={() => void signOut(device)}><LogOut size={15} />{busy === device.id ? "Signing out..." : "Sign out"}</button></li>)}</ul>
+    <strong>{t("signedInDevices")}</strong>
+    <ul>{devices.map((device) => <li key={device.id}><span><b>{deviceLabelText(device.label)}{device.current ? ` · ${t("thisDevice")}` : ""}</b><small>{t("lastActive", { time: new Date(device.lastActiveAt).toLocaleString(localeTag()) })}</small></span><button className="button text-button" disabled={!!busy} onClick={() => void signOut(device)}><LogOut size={15} />{busy === device.id ? t("signingOut") : t("signOut")}</button></li>)}</ul>
   </div>;
 }
