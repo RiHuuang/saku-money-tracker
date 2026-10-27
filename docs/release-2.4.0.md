@@ -11,7 +11,7 @@ The release candidate is PR #65 (`codex/release-candidate`). It contains all 43 
   - Release unit tests pass.
   - The Play APK has no `REQUEST_INSTALL_PACKAGES` and the direct APK keeps it.
 - **Isolated stage build:** 11/11 instrumented tests on the `Saku_Stage_SQLite_API33` emulator.
-- **Stage** (`saku-stage` version `d068e8d0-b0c4-4e42-8755-0425bc114b9a` runs this branch): the Worker regression passes 17/17. It covers device sessions, refresh-token reuse, landing CORS, the agreement version and the auth rate limit.
+- **Stage** (`saku-stage` version `6e263149-d7e4-47d3-a3a3-50cd2e8d7f2f` runs this branch): the Worker regression passes 17/17. It covers device sessions, refresh-token reuse, landing CORS, the agreement version and the auth rate limit.
 - **Sync merge and SQLite storage (#62/#63):**
   - Checked on the owner's Xiaomi 15 and on the web against stage.
   - Covers the closed-app widget job, its 409 path, an edit made during upload and account isolation.
@@ -66,7 +66,7 @@ The release candidate is PR #65 (`codex/release-candidate`). It contains all 43 
 | --- | --- | --- |
 | App Worker | `89e0c347-ffc3-49a0-80fa-f6c5cda3d11c` | `npx wrangler rollback --config wrangler.jsonc 89e0c347-ffc3-49a0-80fa-f6c5cda3d11c` |
 | Landing Worker | `d53b9304-57fc-4f1b-8e02-bfecf99e4b7e` | `npx wrangler rollback --config wrangler.landing.jsonc d53b9304-57fc-4f1b-8e02-bfecf99e4b7e` |
-| Stage Worker | `d068e8d0-…` (candidate); before it `5f09bf2d-3f10-48e3-8d72-e455d2925468` | `npx wrangler rollback --config wrangler.stage.jsonc 5f09bf2d-3f10-48e3-8d72-e455d2925468` |
+| Stage Worker | `6e263149-…` (candidate); before the candidate `5f09bf2d-3f10-48e3-8d72-e455d2925468` | `npx wrangler rollback --config wrangler.stage.jsonc 5f09bf2d-3f10-48e3-8d72-e455d2925468` |
 | Website APK | 2.3.4 / build 14 (`98f67811…` SHA-256) | Republish build 14's APK with the publish script; `latest.json` is written last |
 
 An installed 2.4.0 has already moved its ledger to SQLite and keeps the Preferences copy, so a downgraded 2.3.4 would read the older Preferences copy. **Don't roll an installed app back.** Fix forward with build 16 instead.
