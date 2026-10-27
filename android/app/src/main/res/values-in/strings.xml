@@ -27,4 +27,8 @@
     <string name="widget_hide_amounts">Sembunyikan jumlah uang</string>
     <string name="widget_choose_favorites">Pilih hingga empat favorit</string>
     <string name="widget_save">Simpan widget</string>
+    <string name="notification_review_channel">Transaksi untuk ditinjau</string>
+    <plurals name="notification_rows_to_review">
+        <item quantity="other">%d transaksi untuk ditinjau</item>
+    </plurals>
 </resources>

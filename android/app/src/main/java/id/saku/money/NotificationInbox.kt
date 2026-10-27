@@ -1,15 +1,19 @@
 package id.saku.money
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.KeyStore
@@ -138,14 +142,16 @@ object NotificationInbox {
         val manager = NotificationManagerCompat.from(context)
         if (count <= 0) { manager.cancel(SUMMARY_ID); return }
         if (!manager.areNotificationsEnabled()) return
+        // Android 13+ users can refuse notifications; a quiet no-op is right here.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Transactions to review", NotificationManager.IMPORTANCE_LOW))
+            NotificationChannel(CHANNEL, context.getString(R.string.notification_review_channel), NotificationManager.IMPORTANCE_LOW))
         // Explicit and in-app only: the activity reports saku://review to the web layer, which opens the Notifications tab.
         val open = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("saku://review")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_saku)
             .setContentTitle("Saku")
-            .setContentText("$count ${if (count == 1) "transaction" else "transactions"} to review")
+            .setContentText(context.resources.getQuantityString(R.plurals.notification_rows_to_review, count, count))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
             .setGroup("saku_inbox")

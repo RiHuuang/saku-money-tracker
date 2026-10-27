@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Saku</string>
-    <string name="title_activity_main">Saku</string>
-    <string name="package_name">id.saku.money</string>
-    <string name="custom_url_scheme">id.saku.money</string>
+    <string name="app_name" translatable="false">Saku</string>
+    <string name="title_activity_main" translatable="false">Saku</string>
+    <string name="package_name" translatable="false">id.saku.money</string>
+    <string name="custom_url_scheme" translatable="false">id.saku.money</string>
     <string name="shortcut_quick_add">Quick add</string>
     <string name="shortcut_quick_add_long">Add a Saku transaction</string>
     <string name="widget_favorites_name">Saku Quick Favorites</string>
@@ -31,4 +31,9 @@
     <string name="widget_hide_amounts">Hide money amounts</string>
     <string name="widget_choose_favorites">Choose up to four favorites</string>
     <string name="widget_save">Save widget</string>
+    <string name="notification_review_channel">Transactions to review</string>
+    <plurals name="notification_rows_to_review">
+        <item quantity="one">%d transaction to review</item>
+        <item quantity="other">%d transactions to review</item>
+    </plurals>
 </resources>
