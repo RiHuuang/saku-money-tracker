@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Status-bar icon: Android draws only its alpha, so it holds the wallet strokes alone. -->
+<!-- Status-bar icon: Android draws only its alpha, so it holds the Lipat coin and pocket front with a gap between them. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
-    android:viewportWidth="48" android:viewportHeight="48">
-    <group android:translateX="-30" android:translateY="-30">
-        <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="3.5"
-            android:strokeLineCap="round" android:strokeLineJoin="round"
-            android:pathData="M70,44L41,44Q36,44 36,39Q36,34 41,34L67,34L67,44M36,39L36,69Q36,74 41,74L70,74Q74,74 74,70L74,49Q74,44 70,44M74,53L63,53Q59,53 59,57L59,61Q59,65 63,65L74,65M65,59L66,59" />
+    android:viewportWidth="24" android:viewportHeight="24">
+    <group android:translateX="3.16" android:translateY="2" android:scaleX="0.13" android:scaleY="0.13">
+        <group>
+            <clip-path android:pathData="M-10,-10H146V36.4L-10,61.6Z" />
+            <path android:fillColor="#FFFFFF" android:pathData="M54,32A32,32 0 1 1 118,32A32,32 0 1 1 54,32Z" />
+        </group>
+        <path android:fillColor="#FFFFFF" android:pathData="M0,72L136,50V134A20,20 0 0 1 116,154H20A20,20 0 0 1 0,134Z" />
     </group>
 </vector>

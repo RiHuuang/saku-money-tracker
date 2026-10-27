@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties, type InputHTMLAttributes } from "react";
-import { markDot, markGlyph } from "./brandMark";
+import { markBack, markCoin, markFront } from "./brandMark";
 import { createPortal } from "react-dom";
 import { localeTag, t as translate } from "./i18n";
 import {
@@ -596,7 +596,7 @@ export function DirectionIcon({ income }: { income: boolean }) {
   );
 }
 
-// The "s." brand mark; the dot keeps the landing page's accent while the letter follows currentColor.
+// The Lipat brand mark; the coin keeps the landing page's accent while the pocket follows currentColor.
 export function SakuMark({ size = 24 }: { size?: number }) {
-  return <svg className="saku-mark" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><path d={markGlyph} fill="currentColor" /><path d={markDot} fill="var(--mark-dot, #A8E6C1)" /></svg>;
+  return <svg className="saku-mark" width={size} height={size} viewBox="-12 -6 160 166" aria-hidden="true"><path d={markBack} fill="var(--mark-pocket, #24604D)" /><path d={markCoin} fill="var(--mark-dot, #A8E6C1)" /><path d={markFront} fill="currentColor" /></svg>;
 }
