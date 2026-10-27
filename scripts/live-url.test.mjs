@@ -10,7 +10,7 @@ const bundle = await build({
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ contents: path === "@capacitor/core"
       ? "export const Capacitor={isNativePlatform:()=>false}; export const registerPlugin=()=>({});"
       : path === "@capacitor/preferences" ? "export const Preferences={};"
-      : path === "./nativeLedger" ? "export const acknowledgeNativeLedger=async()=>true;"
+      : path === "./nativeLedger" ? "export const acknowledgeNativeLedger=async()=>true; export const loadNativeSyncBase=async()=>null; export const saveNativeSyncBase=async()=>{};"
       : "export const refreshHomeWidgets=async()=>{};" }));
   } }],
 });
