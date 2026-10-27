@@ -5,7 +5,7 @@ const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => (
 
 export const LEGAL_EFFECTIVE = "2026-10-26";
 // The operator's legal identity must be filled in during legal review.
-const OPERATOR = { id: "[Nama dan alamat penyelenggara Saku: diisi saat tinjauan hukum]", en: "[Saku operator's legal name and address: to be completed during legal review]" };
+const OPERATOR = { id: "Richard Huang", en: "Richard Huang" };
 
 const copy = {
   id: {
