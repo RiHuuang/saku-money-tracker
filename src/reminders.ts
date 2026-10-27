@@ -67,6 +67,8 @@ export async function scheduleReminders(data: Data, settings: ReminderSettings) 
   await cancelReminders();
   const plan = reminderPlan(data, settings, new Date());
   if (!plan.length) return;
+  // Without notification permission (it can be revoked in Android settings) schedule() never settles.
+  if ((await LocalNotifications.checkPermissions()).display !== "granted") return;
   // A named channel lets people quiet reminders in Android settings without muting anything else.
   await LocalNotifications.createChannel({ id: REMINDER_CHANNEL, name: t("reminderChannelName"), importance: 3 }).catch(() => undefined);
   await LocalNotifications.schedule({ notifications: plan.map((item) => ({ id: item.id, title: item.title, body: item.body, channelId: REMINDER_CHANNEL, schedule: { at: item.at, allowWhileIdle: true }, isExactNotification: false, smallIcon: "ic_stat_saku", extra: item.extra })) });
@@ -75,6 +77,9 @@ export async function scheduleReminders(data: Data, settings: ReminderSettings) 
 // reminders after the user turned them off: the last requested state always wins.
 let pendingSync: Promise<void> = Promise.resolve();
 export function syncReminders(data: Data, settings: ReminderSettings) {
-  pendingSync = pendingSync.catch(() => undefined).then(() => settings.enabled ? scheduleReminders(data, settings) : cancelReminders());
+  const run = () => settings.enabled ? scheduleReminders(data, settings) : cancelReminders();
+  // A stuck native call must not hold up every later change, including turning reminders off.
+  const bounded = () => Promise.race([run(), new Promise<void>((_, reject) => setTimeout(() => reject(new Error("Reminder update timed out")), 10_000))]);
+  pendingSync = pendingSync.catch(() => undefined).then(bounded);
   return pendingSync;
 }
