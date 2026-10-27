@@ -1,6 +1,6 @@
 # Saku 2.4.0 release runbook
 
-The release candidate is PR #65 (`codex/release-candidate`). It contains all 43 checklist PRs and the fixes that only showed up once they were combined. The steps below are in order and each one says how to check it. Merging, the production deploy and the store upload are owner decisions.
+The release candidate is PR #65 (`codex/release-candidate`). It contains all 43 checklist PRs, the fixes that only showed up once they were combined, and the Lipat logo with the animated splash (#68). The steps below are in order and each one says how to check it. Merging, the production deploy and the store upload are owner decisions.
 
 ## What is already verified
 
@@ -11,24 +11,28 @@ The release candidate is PR #65 (`codex/release-candidate`). It contains all 43 
   - Release unit tests pass.
   - The Play APK has no `REQUEST_INSTALL_PACKAGES` and the direct APK keeps it.
 - **Isolated stage build:** 11/11 instrumented tests on the `Saku_Stage_SQLite_API33` emulator.
-- **Stage** (`saku-stage` version `3bdb3701-166b-4167-94c3-9b28d6caac7c` runs this branch): the Worker regression passes 17/17. It covers device sessions, refresh-token reuse, landing CORS, the agreement version and the auth rate limit.
+- **Stage** (`saku-stage` version `c2d6049a-584b-4532-a1e0-29cf07832418` runs this branch): the Worker regression passes 17/17. It covers device sessions, refresh-token reuse, landing CORS, the agreement version and the auth rate limit.
 - **Sync merge and SQLite storage (#62/#63):**
   - Checked on the owner's Xiaomi 15 and on the web against stage.
   - Covers the closed-app widget job, its 409 path, an edit made during upload and account isolation.
   - Covers an interrupted 3,000-row migration and its retry.
 - **Indonesian:** a CDP scan of every tab and the main dialogs finds no English text.
+- **Owner's Xiaomi 15** (isolated stage build of this branch, disposable stage account):
+  - installs over the stage 2.3.4 with data kept;
+  - the animated splash;
+  - the Indonesian UI and Undo;
+  - the daily reminder posts on time with the new status-bar icon.
 
 ## Before merging
 
 1. **Legal (#58):** have the Indonesian Privacy Notice and User Agreement reviewed, and fill in the operator's legal name and address. Don't publish the legal pages before this.
-2. **Store art (#56):** review `docs/brand/play-icon-512.png` and `feature-graphic-1024x500.png`.
-3. **Phone pass on this build:** install the isolated stage APK on the phone, then check:
-   - app lock;
-   - the daily reminder at a set time;
-   - the launcher, themed and splash icons;
-   - Undo after adding a transaction;
-   - the Indonesian UI on the device.
-4. **Not in this release:** P3-8.1 savings goals and P3-8.2 debts with friends are specs waiting for approval. P4-4 (on-device LiteRT) is owner-locked. P4-3 (retiring the old server) waits on telemetry.
+2. **Store art (#56):** the owner chose the Lipat logo (#68). Do a final look at `docs/brand/play-icon-512.png` and `feature-graphic-1024x500.png` before uploading them.
+3. **Phone pass:** done on the Xiaomi apart from two checks that need the owner:
+   - app lock (the fingerprint prompt);
+   - the launcher's themed-icon toggle, if HyperOS offers one.
+
+   Both passed on the emulator.
+4. **Not in this release:** P3-8.1 savings goals (#66) and P3-8.2 debts with friends (#67) are draft PRs for a later release. P4-4 (on-device LiteRT) is owner-locked. P4-3 (retiring the old server) waits on telemetry.
 
 ## Release
 
@@ -66,7 +70,7 @@ The release candidate is PR #65 (`codex/release-candidate`). It contains all 43 
 | --- | --- | --- |
 | App Worker | `89e0c347-ffc3-49a0-80fa-f6c5cda3d11c` | `npx wrangler rollback --config wrangler.jsonc 89e0c347-ffc3-49a0-80fa-f6c5cda3d11c` |
 | Landing Worker | `d53b9304-57fc-4f1b-8e02-bfecf99e4b7e` | `npx wrangler rollback --config wrangler.landing.jsonc d53b9304-57fc-4f1b-8e02-bfecf99e4b7e` |
-| Stage Worker | `3bdb3701-…` (candidate); before the candidate `5f09bf2d-3f10-48e3-8d72-e455d2925468` | `npx wrangler rollback --config wrangler.stage.jsonc 5f09bf2d-3f10-48e3-8d72-e455d2925468` |
+| Stage Worker | `c2d6049a-…` (candidate); before the candidate `5f09bf2d-3f10-48e3-8d72-e455d2925468` | `npx wrangler rollback --config wrangler.stage.jsonc 5f09bf2d-3f10-48e3-8d72-e455d2925468` |
 | Website APK | 2.3.4 / build 14 (`98f67811…` SHA-256) | Republish build 14's APK with the publish script; `latest.json` is written last |
 
 An installed 2.4.0 has already moved its ledger to SQLite and keeps the Preferences copy, so a downgraded 2.3.4 would read the older Preferences copy. **Don't roll an installed app back.** Fix forward with build 16 instead.
