@@ -33,6 +33,13 @@ assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "X", type: "TRSF E-BANKING C
 assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "BIAYA ADM", type: "SOMETHING NEW", amountText: "IDR 15,000.00" }, "2026-10-28").check, "type");
 assert.equal(bcaRow({ dateText: "October", ref: "X", type: "TRSF E-BANKING DB", amountText: "IDR 15,000.00" }, "2026-10-28").check, "date");
 
+// The owner's PEND rows: when one read drops the type line, the other read's type decides the direction.
+const pendIn = { dateText: "PEND", ref: "2810/FTSCY/WS95031 24449.00 ADVENIA TRICAHYA W", type: "TRSF E-BANKING CR", amountText: "IDR 24,449.00" };
+const booked = { dateText: "27 Oct 2026", ref: "2710/FTSCY/WS95271 55000.00 BAGUS PRAKOSO", type: "TRSF E-BANKING CR", amountText: "IDR 55,000.00" };
+const recovered = mergeBcaReads({ bank: "BCA", rows: [{ ...pendIn, type: "" }, booked] }, { bank: "BCA", rows: [pendIn, booked] }, "2026-10-28");
+assert.deepEqual([recovered[0].direction, recovered[0].cleanName, recovered[0].amount, recovered[0].date, recovered[0].check], ["income", "Transfer dari Advenia Tricahya W", 24449, "2026-10-28", "unconfirmed"]);
+assert.equal(bcaRow({ ...pendIn, type: "TRSF E-BANKING CR." }).direction, "income");
+assert.equal(bcaRow({ ...pendIn, type: "" }).check, "type");
 // Two reads that disagree on a row send it to review; a row only one read saw is unconfirmed.
 const one = { bank: "BCA", rows: [read(screens[2].rows[0]), read(screens[2].rows[1])] };
 const misread = { bank: "BCA", rows: [{ ...read(screens[2].rows[0]), amountText: "IDR 2,535,050.00" }] };

@@ -6,7 +6,7 @@ Return one JSON object: {"bank": "BCA" or "other", "rows": [...]}. Set bank to "
 Each transaction row on screen becomes one item, top to bottom, with four strings copied exactly as printed:
 - dateText: the date block at the left of the row, joined on one line (for example "27 Oct 2026"), or "PEND" when the row shows PEND instead of a date. Never use a section heading such as "October".
 - ref: the first bold line(s) of the row exactly as printed, joined with single spaces when it wraps (for example "2710/FTSCY/WS95271 55000.00 ADITYA PRATOMO").
-- type: the line that names the transaction type (for example "TRSF E-BANKING CR", "KARTU KREDIT/PL", "FLAZZ BCA", "TRANSAKSI DEBIT", "SETORAN PEMINDAHAN").
+- type: the line that names the transaction type (for example "TRSF E-BANKING CR", "KARTU KREDIT/PL", "FLAZZ BCA", "TRANSAKSI DEBIT", "SETORAN PEMINDAHAN"). Every row has one, PEND rows too: it is the line right under the reference, above the amount. Never leave it empty.
 - amountText: the amount line exactly as printed, for example "IDR 315,229.00". Copy every digit; do not round or reformat.
 Include every row, also rows cut off at the top or bottom if their amount is visible. Do not add rows that are not on screen.`;
 
@@ -70,7 +70,8 @@ function splitPerson(text) {
 export function bcaRow(read) {
   const date = bcaDate(read.dateText);
   const amount = bcaAmount(read.amountText);
-  const type = read.type.toUpperCase();
+  // Tolerate punctuation the model sometimes adds around the type ("TRSF E-BANKING CR.").
+  const type = read.type.toUpperCase().replace(/[^A-Z0-9/ -]+/g, " ").replace(/\s+/g, " ").trim();
   const base = { date, dateEvidence: read.dateText, name: `${read.ref} ${read.type}`.trim().slice(0, 100), paymentMethod: "", amount, note: "", check: "" };
   const transfer = read.ref.match(/^\d{4}\/FT([A-Z]{2,4})\/\S+\s+(.*)$/);
   let row;
@@ -80,21 +81,21 @@ export function bcaRow(read) {
   else if (/TRANSAKSI DEBIT/.test(type)) {
     const merchant = read.ref.replace(/^TGL:\s*\d{4}\s+QRP?\s+\d+\s+[\d.,]*\s*/i, "").trim();
     row = { ...base, cleanName: merchant || "Pembayaran QRIS", direction: "expense", activity: "purchase" };
-  } else if (transfer && /\bCR$/.test(type)) {
+  } else if (transfer && /\bCR\b/.test(type)) {
     const [, , rest] = transfer;
     const { person, note } = splitPerson(rest.replace(/^[\d.,]+\s*/, ""));
     const embedded = Number((rest.match(/^([\d,]+)\.\d{2}\b/)?.[1] || "").replace(/,/g, ""));
     row = { ...base, cleanName: person ? `Transfer dari ${person}` : "Transfer masuk", note, direction: "income", activity: "income", check: embedded && embedded !== amount ? "amount" : "" };
-  } else if (transfer && transfer[1].endsWith("VA") && /\bDB$/.test(type)) {
+  } else if (transfer && transfer[1].endsWith("VA") && /\bDB\b/.test(type)) {
     const wallet = transfer[2].match(/\/\s*([A-Za-z][A-Za-z ]*?)\s*(?:-|$)/)?.[1]?.trim().toUpperCase() || "";
     row = { ...base, cleanName: wallet ? `Isi saldo ${wallet}` : "Pembayaran virtual account", paymentMethod: wallet, direction: "expense", activity: wallet ? "topup" : "purchase" };
-  } else if (transfer && /\bDB$/.test(type)) {
+  } else if (transfer && /\bDB\b/.test(type)) {
     const rest = transfer[2];
     const { person, note } = splitPerson(rest.replace(/^[\d.,]+\s*/, ""));
     const embedded = Number((rest.match(/^([\d,]+)\.\d{2}\b/)?.[1] || "").replace(/,/g, ""));
     row = { ...base, cleanName: person ? `Transfer ke ${person}` : "Transfer keluar", note, direction: "expense", activity: "purchase", check: embedded && embedded !== amount ? "amount" : "" };
-  } else if (/\bCR$/.test(type)) row = { ...base, cleanName: title(read.ref).slice(0, 60) || "Uang masuk", direction: "income", activity: "income" };
-  else if (/\bDB$/.test(type)) row = { ...base, cleanName: title(read.ref).slice(0, 60) || "Uang keluar", direction: "expense", activity: "purchase" };
+  } else if (/\bCR\b/.test(type)) row = { ...base, cleanName: title(read.ref).slice(0, 60) || "Uang masuk", direction: "income", activity: "income" };
+  else if (/\bDB\b/.test(type)) row = { ...base, cleanName: title(read.ref).slice(0, 60) || "Uang keluar", direction: "expense", activity: "purchase" };
   else row = { ...base, cleanName: read.ref.slice(0, 60), direction: "unknown", activity: "unknown", check: "type" };
   if (!amount) row.check = "amount";
   else if (!date) row.check ||= "date";
@@ -118,7 +119,10 @@ export function settlePending(rows, today) {
 export function mergeBcaReads(first, second, today) {
   return settlePending(first.rows.map((read, index) => {
     const other = second.rows[index];
-    const row = bcaRow(read);
+    // When one read missed the type line (seen on PEND rows) and the other has it, use the read Saku can understand.
+    const fromOther = other && bcaRow(read).check === "type" && bcaRow(other).check !== "type";
+    const row = fromOther ? bcaRow({ ...read, type: other.type }) : bcaRow(read);
+    if (fromOther) return { ...row, check: row.check && row.check !== "date" ? row.check : "unconfirmed" };
     if (!other) return { ...row, check: row.check || "unconfirmed" };
     if (other.amountText.replace(/\s/g, "") !== read.amountText.replace(/\s/g, "")) return { ...row, check: "amount" };
     if (other.type.toUpperCase() !== read.type.toUpperCase() || other.dateText !== read.dateText) return { ...row, check: row.check || "unconfirmed" };
