@@ -60,6 +60,8 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   const ready = rows.filter((row) => importRowReady(row, accountFor(row), data) && (!duplicates.has(row.id) || row.confirmedSeparate));
   // Rows the user chose to leave out stay visible as skipped (and can be changed back) until the list is saved.
   const skipped = rows.filter((row) => edits[row.id]?.decision === "skip");
+  // Leaving out one half of a paired transfer leaves out its twin too, so nothing is stranded on the phone.
+  const skippedIds = [...new Set(skipped.flatMap((row) => row.pairedWith ? [row.id, row.pairedWith] : [row.id]))];
   const edit = (id: string, patch: Partial<ImportRow>) => setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
   const decide = (id: string, decision: ImportRow["decision"]) => {
     setEditingRow("");
@@ -82,7 +84,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   }
   async function save() {
     if ((!ready.length && !skipped.length) || busy || saving) return;
-    if (!ready.length) { setSaving(true); try { await remove(skipped.map((row) => row.id)); } catch { notify(t("notificationAddError")); } finally { setSaving(false); } return; }
+    if (!ready.length) { setSaving(true); try { await remove(skippedIds); } catch { notify(t("notificationAddError")); } finally { setSaving(false); } return; }
     setSaving(true);
     try {
       const additions: Transaction[] = [];
@@ -100,7 +102,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
       // A balance printed in a saved notification can be checked once its payment is in the ledger.
       const reported = ready.filter((row) => row.balance !== null && data.accounts.includes(accountFor(row))).map((row) => ({ id: row.id, account: accountFor(row), appName: row.appName, reported: row.balance!, occurredAt: row.occurredAt }));
       if (reported.length) await updateCheckins(mergeCheckins(checkins, reported));
-      await remove([...done, ...skipped.map((row) => row.id)]);
+      await remove([...done, ...skippedIds.filter((id) => !done.has(id))]);
     } catch { notify(t("notificationAddError")); }
     finally { setSaving(false); }
   }
