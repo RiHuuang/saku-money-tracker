@@ -1,5 +1,28 @@
 # Saku 2.4.0 release runbook
 
+## Recheck on 2026-10-28 (before merging #70)
+
+#65, #68 and #69 are already on `main`. The last open piece is **#70** (`codex/catchup-bca-plan`): the BCA-only Catch up reader, swipe and hold review, myBCA notification fixes, Money by account and the Android back fix. Everything below was rechecked at `6ed9377`.
+
+- **Checks:**
+  - #70 is mergeable and CI passes.
+  - `npm test` (111 suites), `tsc` and the production `npm run build` pass.
+  - Android unit tests pass for both flavours.
+  - `lintPlayRelease` reports 0 errors.
+- **Stage** (`saku-stage` `4135b5fa-7526-4d8a-a154-4ef7626c476d`):
+  - The Worker regression passes 17/17.
+  - The BCA bench scores 12/12 on amounts, directions, dates, kinds and names, and 11/12 on notes (an extra letter in "makaaaaasi"). It invents no rows.
+  - The disposable accounts are deleted.
+- **Owner's Xiaomi** (stage build of `6ed9377`):
+  - The notification listener stays live after an update.
+  - The cash card opens Money by account. Holding an account card opens its editor. Back closes both.
+  - The Catch up, Notifications and CSV tabs load with no console errors.
+  - The compact save bar and Add all / Skip all show on the owner's real draft.
+- **Review fixes in this pass:** "Add all" no longer re-adds rows that are already in Saku. Skipping one half of a paired notification transfer now clears its twin too.
+- **Order matters:** the 2.4.0 app sends `source: "bca"` and needs the new Worker. Deploy the production Worker (step 3) **before** publishing the APK (step 6). The 2.3.4 app keeps the general reader on the new Worker.
+- **Xiaomi users:** notification reading survives memory cleanups only with Autostart on. Settings → Read bank notifications shows the prompt and opens the Autostart list.
+- **Still owner-only:** the legal review (#58), the final look at the store art (#56), merging #70, the production deploy, signing, the website APK and the Play upload.
+
 The release candidate is PR #65 (`codex/release-candidate`). It contains all 43 checklist PRs, the fixes that only showed up once they were combined, and the Lipat logo with the animated splash (#68). The steps below are in order and each one says how to check it. Merging, the production deploy and the store upload are owner decisions.
 
 ## What is already verified

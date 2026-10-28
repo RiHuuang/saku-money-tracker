@@ -15,10 +15,10 @@ export function validateImportInput(input) {
   if (typeof input.month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month)) throw new Error("Choose a valid month");
   if (input.kind === "text") {
     if (typeof input.text !== "string" || !input.text.trim() || input.text.length > 24000) throw new Error("Statement page is too large");
-    return { kind: "text", month: input.month, text: input.text };
+    return { kind: "text", month: input.month, text: input.text, ...(input.source === "bca" ? { source: "bca" } : {}) };
   }
   if (typeof input.image !== "string" || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(input.image) || input.image.length > 3_000_000) throw new Error("Choose a JPG, PNG, or WebP image under 2 MB");
-  return { kind: "image", month: input.month, image: input.image };
+  return { kind: "image", month: input.month, image: input.image, ...(input.source === "bca" ? { source: "bca" } : {}) };
 }
 
 export function importMessages(input) {

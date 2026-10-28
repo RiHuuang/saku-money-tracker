@@ -22,6 +22,7 @@ import {
   parseMoney,
   readCSV,
   reconcile,
+  renameAccount,
   shiftMonth,
   summary,
   validDate,
@@ -431,4 +432,21 @@ test("frequentExpenses suggests the most used recent expenses that aren't quick 
   const suggested = frequentExpenses(data, "2026-10-25");
   assert.deepEqual(suggested.map((f) => [f.name, f.amount]), [["kopi ", 28000], ["Grab", 18000], ["Bakso", 20000]]);
   assert.equal(frequentExpenses(data, "2026-10-25", 1).length, 1);
+});
+
+test("renaming an account moves its history, recurring rules and shortcuts with it", () => {
+  const data = { ...emptyData(), accounts: ["BCA", "Cash"], creditCards: [{ id: "c1", name: "BCA Visa", limit: 1, openingDebt: 0, dueDay: 1 }],
+    transactions: [{ id: "t1", name: "Kopi", amount: 25000, type: "expense" as const, date: "2026-10-28", pocketId: "", account: "BCA", note: "" }],
+    recurring: [{ id: "r1", name: "Gaji", amount: 1, type: "income" as const, pocketId: "", account: "BCA", day: 1, startMonth: "2026-10", active: true }],
+    favorites: [{ id: "f1", name: "Kopi", amount: 25000, type: "expense" as const, pocketId: "", account: "BCA" }] };
+  const renamed = renameAccount(data, "BCA", "  BCA Tahapan ")!;
+  assert.deepEqual(renamed.accounts, ["BCA Tahapan", "Cash"]);
+  assert.equal(renamed.transactions[0].account, "BCA Tahapan");
+  assert.equal(renamed.recurring[0].account, "BCA Tahapan");
+  assert.equal(renamed.favorites[0].account, "BCA Tahapan");
+  assert.equal(accountBalance(renamed, "BCA Tahapan"), -25000);
+  assert.equal(renameAccount(data, "BCA", "cash"), null);
+  assert.equal(renameAccount(data, "BCA", "BCA Visa"), null);
+  assert.equal(renameAccount(data, "BCA", "   "), null);
+  assert.equal(renameAccount(data, "BCA", "BCA"), data);
 });

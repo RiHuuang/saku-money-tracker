@@ -68,6 +68,81 @@
    }
   },
   {
+   "title": "Financial Diary",
+   "text": "You received IDR 5,000.00 from ****ANA PUT**I S at Account Transfer category.",
+   "expected": {
+    "amount": 5000,
+    "direction": "income",
+    "rawMerchant": "****ANA PUT**I S",
+    "balance": null
+   }
+  },
+  {
+   "title": "Financial Diary",
+   "text": "You sent IDR 40,000.00 to DIMAS ARYA at Account Transfer category.",
+   "expected": {
+    "amount": 40000,
+    "direction": "expense",
+    "rawMerchant": "DIMAS ARYA",
+    "balance": null
+   }
+  },
+  {
+   "title": "Financial Diary",
+   "text": "You made a transaction of IDR 25,000.00 at KOPI KENANGAN at Food & Beverages category.",
+   "expected": {
+    "amount": 25000,
+    "direction": "expense",
+    "rawMerchant": "KOPI KENANGAN",
+    "balance": null
+   }
+  },
+  {
+   "title": "Financial Diary",
+   "text": "You spent IDR 1.00 at Account Transfer.",
+   "expected": {
+    "amount": 1,
+    "direction": "expense",
+    "rawMerchant": "Account Transfer",
+    "balance": null
+   }
+  },
+  {
+   "title": "Financial Diary",
+   "text": "You spent IDR 3,000.00 at Transportation.",
+   "expected": {
+    "amount": 3000,
+    "direction": "expense",
+    "rawMerchant": "Transportation",
+    "balance": null
+   }
+  },
+  {
+   "title": "Financial Diary",
+   "text": "RDN spending of IDR 10,351,117.99 at Account Transfer category.",
+   "expected": {
+    "amount": 10351118,
+    "direction": "expense",
+    "rawMerchant": "Account Transfer",
+    "balance": null
+   }
+  },
+  {
+   "title": "Financial Diary",
+   "text": "You received IDR 110,309.00 from ***RTA at Account Transfer category.",
+   "expected": {
+    "amount": 110309,
+    "direction": "income",
+    "rawMerchant": "***RTA",
+    "balance": null
+   }
+  },
+  {
+   "title": "Financial Diary",
+   "text": "Spending of IDR 61,160.00 in Transportation category in 28 October 2026 was cancelled.",
+   "expected": null
+  },
+  {
    "title": "BCA mobile",
    "text": "Dapatkan cashback hingga Rp50.000 dengan QRIS BCA!",
    "expected": null

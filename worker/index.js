@@ -6,6 +6,7 @@ import { decrypt, encrypt, encryptionKey, hashToken, pkceChallenge, timingSafeEq
 import { avatarAfterSignIn, isGoogleAvatarUrl, sessionToken, splitSessionToken } from "../server/src/identity.js";
 import { CLEAN_RESERVATION, cleanMessages, parseCleanAnswer, validateCleanInput } from "./merchant-clean.js";
 import { aiImportAvailable, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
+import { bcaCheckMessages, bcaMessages, jakartaToday, looksLikeBcaStatement, mergeBcaReads, parseBcaAnswer } from "./import-bca.js";
 import { withSecurityHeaders } from "./security-headers.js";
 export { UserLiveUpdates } from "./live.js";
 
@@ -660,6 +661,16 @@ async function route(request, env) {
       await settleImport(env.DB, day, auth.uid, answer);
       return answer;
     };
+    // 2.4.0 reads BCA only: screenshots are copied field by field and parsed here; statements must be BCA.
+    if (input.source === "bca" && input.kind === "text" && !looksLikeBcaStatement(input.text)) throw fault(422, "not_bca");
+    if (input.source === "bca" && input.kind === "image") {
+      let first;
+      try { first = parseBcaAnswer(await runPass(bcaMessages(input))); }
+      catch (error) { if (error?.status === 429) throw error; throw fault(502, "Could not extract this page. It remains in your local draft for retry."); }
+      if (first.bank !== "BCA") throw fault(422, "not_bca");
+      try { return reply({ rows: mergeBcaReads(first, parseBcaAnswer(await runPass(bcaCheckMessages(input))), jakartaToday()) }, 200, cors); }
+      catch (error) { if (error?.status === 429) throw error; throw fault(502, "Could not extract this page. It remains in your local draft for retry."); }
+    }
     try {
       const firstRows = parseImportAnswer(await runPass(importMessages(input)), input.kind, input.month, input.kind === "text" ? input.text : "");
       const verifiedRows = parseImportAnswer(await runPass(importVerificationMessages(input, firstRows)), input.kind, input.month, input.kind === "text" ? input.text : "");

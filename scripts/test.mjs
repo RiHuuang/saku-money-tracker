@@ -15,6 +15,7 @@ try {
   if (process.exitCode === 0) {
     await import("../worker/import-ai.test.mjs");
     await import("../worker/import-ai-route.test.mjs");
+    await import("../worker/import-bca.test.mjs");
     await import("./cloud-refresh.test.mjs");
     await import("./cloud-merge.test.mjs");
     await import("./live-url.test.mjs");

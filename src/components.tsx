@@ -119,7 +119,7 @@ export function ChoiceField({
           <div><span>{translate("chooseOne")}</span><h2 id={titleId}>{label}</h2></div>
           <IconButton label={translate("closeChoices")} onClick={close}><X size={19} /></IconButton>
         </header>
-        {shouldSearch && <label className="choice-sheet-search"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${label.toLocaleLowerCase("en-US")}`} /></label>}
+        {shouldSearch && <label className="choice-sheet-search"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("searchIn", { label: label.toLocaleLowerCase(localeTag()) })} /></label>}
         <div className="choice-sheet-list" role="listbox" aria-label={label} tabIndex={-1} onKeyDown={(event) => {
           const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)')];
           const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -514,6 +514,46 @@ export function FlowChart({
     </div>
   );
 }
+// The ring used for pockets and for accounts: each part is an arc sized by its share of the total, with a summary in the middle.
+export function DonutRing({ parts, total, label, center }: {
+  parts: { id: string; color: string; value: number }[];
+  total: number;
+  label: string;
+  center: { title: string; value: string; unit: string };
+}) {
+  let offset = 0;
+  return (
+    <div className="donut">
+      <svg viewBox="0 0 180 180" role="img" aria-label={label}>
+        <circle cx="90" cy="90" r="72" fill="none" stroke="#eef1f3" strokeWidth="21" />
+        {parts.map((p) => {
+          const size = (p.value / Math.max(1, total)) * 452.39;
+          const start = offset;
+          offset += size;
+          return (
+            <circle
+              key={p.id}
+              cx="90"
+              cy="90"
+              r="72"
+              fill="none"
+              style={{ stroke: p.color }}
+              strokeWidth="21"
+              strokeDasharray={`${Math.max(0, size - 4)} ${452.39 - Math.max(0, size - 4)}`}
+              strokeDashoffset={-start}
+              transform="rotate(-90 90 90)"
+            />
+          );
+        })}
+      </svg>
+      <div className="donut-center">
+        <span>{center.title}</span>
+        <strong>{center.value}</strong>
+        <small>{center.unit}</small>
+      </div>
+    </div>
+  );
+}
 export function SpendingRing({
   pockets,
   total,
@@ -521,53 +561,18 @@ export function SpendingRing({
   pockets: (Pocket & { spent: number })[];
   total: number;
 }) {
-  let offset = 0;
   const parts = pockets
     .filter((p) => p.spent > 0)
     .sort((a, b) => b.spent - a.spent);
   const unassigned = Math.max(0, total - parts.reduce((sum, pocket) => sum + pocket.spent, 0));
   return (
     <div className="spending-content">
-      <div className="donut">
-        <svg
-          viewBox="0 0 180 180"
-          role="img"
-          aria-label={translate("spendingByPocketTotal", { amount: money(total) })}
-        >
-          <circle
-            cx="90"
-            cy="90"
-            r="72"
-            fill="none"
-            stroke="#eef1f3"
-            strokeWidth="21"
-          />
-          {parts.map((p) => {
-            const size = (p.spent / Math.max(1, total)) * 452.39;
-            const start = offset;
-            offset += size;
-            return (
-              <circle
-                key={p.id}
-                cx="90"
-                cy="90"
-                r="72"
-                fill="none"
-                stroke={p.color}
-                strokeWidth="21"
-                strokeDasharray={`${Math.max(0, size - 4)} ${452.39 - Math.max(0, size - 4)}`}
-                strokeDashoffset={-start}
-                transform="rotate(-90 90 90)"
-              />
-            );
-          })}
-        </svg>
-        <div className="donut-center">
-          <span>{translate("totalSpent")}</span>
-          <strong>{compact(total)}</strong>
-          <small>{translate("idrThisMonth")}</small>
-        </div>
-      </div>
+      <DonutRing
+        parts={parts.map((p) => ({ id: p.id, color: p.color, value: p.spent }))}
+        total={total}
+        label={translate("spendingByPocketTotal", { amount: money(total) })}
+        center={{ title: translate("totalSpent"), value: compact(total), unit: translate("idrThisMonth") }}
+      />
       <div className="ring-legend">
         {parts.length ? (
           parts.slice(0, 5).map((p) => (

@@ -91,6 +91,8 @@ export function importMatchesNeedSourceDateCheck(draft: ImportDraft | null, matc
 }
 
 export function importRowReviewIssue(row: ImportRow, account: string, data: Data, duplicate: boolean, currentDay = today()): string {
+  if (row.check === "amount") return t("reviewBcaAmount");
+  if (row.check) return t("reviewBcaRecheck");
   if (row.activity === "pending") return t("reviewPending");
   if (row.activity === "failed") return t("reviewFailed");
   if (row.activity === "reward") return t("reviewReward");
@@ -144,7 +146,7 @@ export function importRowReady(row: ImportRow, account: string, data: Data, curr
 export function importedTransactions(row: ImportRow, account: string, sourceName: string, data: Data, pairedRowId?: string): Transaction[] {
   if (!importRowReady(row, account, data)) throw new Error("Review this row before saving");
   const name = importRowName(row);
-  const note = `${name !== row.name.trim() ? `${row.name.trim()} · ` : ""}Imported from ${/\.pdf$/i.test(sourceName) ? "PDF statement" : "screenshot"}, page ${row.page}`;
+  const note = `${row.note ? `${row.note} · ` : ""}${name !== row.name.trim() ? `${row.name.trim()} · ` : ""}Imported from ${/\.pdf$/i.test(sourceName) ? "PDF statement" : "screenshot"}, page ${row.page}`;
   if (row.activity === "transfer" || row.activity === "topup") {
     const from = row.direction === "expense" ? account : row.counterparty!;
     const to = row.direction === "expense" ? row.counterparty! : account;
@@ -159,4 +161,45 @@ export function importedTransactions(row: ImportRow, account: string, sourceName
   if (card) return [{ ...base, kind: "card_purchase", cardId: card.id, installments: 1, firstDueMonth: row.firstDueMonth }];
   if (row.activity === "card_payment") return [{ ...base, kind: "card_payment", cardId: row.cardId, pocketId: "" }];
   return [base];
+}
+
+const walletPatterns: Record<string, RegExp> = {
+  flazz: /flazz|e-?money|kartu elektronik|uang elektronik/i,
+  dana: /\bdana\b/i, gopay: /\bgo-?pay\b/i, ovo: /\bovo\b/i, shopeepay: /shopee\s?pay/i,
+};
+export const bcaAccount = (data: Data) => {
+  const matches = data.accounts.filter((name) => /\bbca\b/i.test(name));
+  return matches.length === 1 ? matches[0] : "";
+};
+
+// BCA rows (2.4.0): fill in what the reading already implies, and skip rows the ledger already has.
+export function prepareBcaRow(row: ImportRow, data: Data, account: string): ImportRow {
+  let next = { ...row };
+  if (next.activity === "topup") {
+    const pattern = walletPatterns[(next.paymentMethod || "").toLocaleLowerCase("id-ID").replace(/\s/g, "")];
+    const wallets = pattern ? data.accounts.filter((name) => name !== account && pattern.test(name)) : [];
+    next = wallets.length === 1 ? { ...next, counterparty: wallets[0] } : { ...next, activity: "purchase" };
+  }
+  if (next.activity === "card_payment") {
+    const cards = data.creditCards.filter((card) => /\bbca\b/i.test(card.name));
+    const card = cards.length === 1 ? cards[0] : data.creditCards.length === 1 ? data.creditCards[0] : undefined;
+    if (card) next = { ...next, cardId: card.id };
+  }
+  const day = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86_400_000;
+  const recorded = validDate(next.date) && data.transactions.some((transaction) => transaction.account === account && transaction.amount === next.amount &&
+    transaction.type === next.direction && Math.abs(day(transaction.date) - day(next.date)) <= 1);
+  if (recorded) return { ...next, alreadyInSaku: true, decision: "skip" };
+  const confident = !next.check && validDate(next.date) && validAmount(next.amount) && next.direction !== "unknown" && next.activity !== "unknown";
+  // Money from someone else always gets a look; spending, card payments and own top-ups can go straight in.
+  const ready = confident && next.direction === "expense" && (next.activity !== "purchase" || next.amount < 1_000_000);
+  return { ...next, decision: ready ? "ready" : "later" };
+}
+
+// Overlapping screenshots repeat rows; a row another source in the draft already has is left out.
+const overlapKey = (row: Pick<ImportRow, "date" | "amount" | "direction" | "name">) =>
+  [row.date, row.amount, row.direction, row.name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim()].join("|");
+export function withoutOverlap<T extends Pick<ImportRow, "date" | "amount" | "direction" | "name">>(rows: readonly T[], otherSources: readonly ImportRow[]): { rows: T[]; dropped: number } {
+  const seen = new Set(otherSources.map(overlapKey));
+  const kept = rows.filter((row) => !seen.has(overlapKey(row)));
+  return { rows: kept, dropped: rows.length - kept.length };
 }

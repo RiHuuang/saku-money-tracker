@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, bcaAccount, prepareBcaRow, withoutOverlap, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -133,12 +133,12 @@ test("statement matches cannot be marked checked before their own source dates a
 
 test("review explains non-rupiah and unsettled rows before asking for missing amounts", () => {
   const incomplete = { ...base, date: "", amount: 0, account: "" };
-  assert.match(importRowReviewIssue({ ...incomplete, activity: "reward" }, "", ledger, false), /Points or rewards/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "reward" }, "", ledger, false), /Points, not rupiah/);
   assert.match(importRowReviewIssue({ ...incomplete, activity: "pending" }, "", ledger, false), /pending/);
-  assert.match(importRowReviewIssue({ ...incomplete, activity: "failed" }, "", ledger, false), /failed or expired/);
-  assert.match(importRowReviewIssue({ ...incomplete, activity: "pay_later" }, "", ledger, false), /PayLater or credit account/);
-  assert.match(importRowReviewIssue({ ...base, amount: 0 }, "BCA", ledger, false, "2026-10-15"), /whole-rupiah amount/);
-  assert.match(importRowReviewIssue({ ...base, date: "" }, "BCA", ledger, false, "2026-10-15"), /transaction date/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "failed" }, "", ledger, false), /Looks failed/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "pay_later" }, "", ledger, false), /PayLater account/);
+  assert.match(importRowReviewIssue({ ...base, amount: 0 }, "BCA", ledger, false, "2026-10-15"), /Check the amount/);
+  assert.match(importRowReviewIssue({ ...base, date: "" }, "BCA", ledger, false, "2026-10-15"), /Check the date/);
 });
 
 test("thirty clear purchases can be committed together without duplicating IDs", () => {
@@ -220,8 +220,8 @@ test("PayLater funding waits until a matching card account is chosen", () => {
   assert.equal(importRowReady({ ...approved, firstDueMonth: "2026-09" }, "BCA Visa", ledger), false);
   assert.equal(importRowReady(approved, "BCA Visa", ledger), true);
   assert.match(importRowReviewIssue({ ...approved, firstDueMonth: "" }, "BCA Visa", ledger, false), /first due month/);
-  assert.match(importRowReviewIssue({ ...approved, direction: "income" }, "BCA Visa", ledger, false), /marked Money in, but its activity is a payment/);
-  assert.match(importRowReviewIssue({ ...base, activity: "income", direction: "expense" }, "BCA", ledger, false), /marked Money out, but its activity is money received/);
+  assert.match(importRowReviewIssue({ ...approved, direction: "income" }, "BCA Visa", ledger, false), /Check money in or out/);
+  assert.match(importRowReviewIssue({ ...base, activity: "income", direction: "expense" }, "BCA", ledger, false), /Check money in or out/);
   const transaction = importedTransactions(approved, "BCA Visa", "wallet.png", ledger)[0];
   assert.equal(transaction.kind, "card_purchase");
   assert.equal(transaction.cardId, "visa");
@@ -290,3 +290,33 @@ test("counts draft rows still waiting for a decision", () => {
   assert.equal(importRowsWaiting([], data), 0);
 });
 
+
+test("BCA rows fill in the card and wallet they imply and skip what the ledger has", () => {
+  const data = { ...ledger, accounts: ["BCA", "GoPay", "Flazz"], transactions: [{ id: "t1", name: "Kopi", amount: 15000, type: "expense" as const, date: "2026-10-23", account: "BCA", pocketId: "", note: "" }] };
+  assert.equal(bcaAccount(data), "BCA");
+  const flazz = prepareBcaRow({ ...base, name: "TOPUP FLAZZ BCA", paymentMethod: "Flazz", activity: "topup", amount: 200000 }, data, "BCA");
+  assert.equal(flazz.counterparty, "Flazz");
+  assert.equal(flazz.decision, "ready");
+  assert.equal(prepareBcaRow({ ...base, paymentMethod: "Flazz", activity: "topup", amount: 200000 }, ledger, "BCA").activity, "purchase");
+  const card = prepareBcaRow({ ...base, activity: "card_payment", amount: 990200 }, data, "BCA");
+  assert.equal(card.cardId, "visa");
+  assert.equal(card.decision, "ready");
+  const recorded = prepareBcaRow({ ...base, date: "2026-10-24", amount: 15000 }, data, "BCA");
+  assert.equal(recorded.alreadyInSaku, true);
+  assert.equal(recorded.decision, "skip");
+  assert.equal(prepareBcaRow({ ...base, direction: "income", activity: "income", amount: 55000 }, data, "BCA").decision, "later");
+  assert.equal(prepareBcaRow({ ...base, amount: 25000, check: "amount" }, data, "BCA").decision, "later");
+  assert.equal(prepareBcaRow({ ...base, amount: 25000 }, data, "BCA").decision, "ready");
+  assert.equal(prepareBcaRow({ ...base, amount: 2_000_000 }, data, "BCA").decision, "later");
+});
+
+test("rows another screenshot in the draft already has are left out", () => {
+  const earlier: ImportRow[] = [{ ...base, sourceId: "screen-1", name: "2310/FTSCY/WS95031 25000.00 makaaaaasi AGNES", amount: 25000, direction: "income", date: "2026-10-23" }];
+  const page = [
+    { ...base, id: "a", sourceId: "screen-2", name: "2310/FTSCY/WS95031 25000.00 makaaaaasi  AGNES", amount: 25000, direction: "income" as const, date: "2026-10-23" },
+    { ...base, id: "b", sourceId: "screen-2", name: "QR jajanan ah", amount: 15000, date: "2026-10-23" },
+  ];
+  const result = withoutOverlap(page, earlier);
+  assert.deepEqual(result.rows.map((row) => row.id), ["b"]);
+  assert.equal(result.dropped, 1);
+});

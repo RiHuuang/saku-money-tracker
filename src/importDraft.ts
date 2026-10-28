@@ -17,6 +17,10 @@ export type ImportRow = {
   cardId?: string;
   firstDueMonth?: string;
   confirmedSeparate?: boolean;
+  // BCA reading: the transfer note, a field the two reads disagreed on, and a match already in the ledger.
+  note?: string;
+  check?: string;
+  alreadyInSaku?: boolean;
 };
 export type ImportSource = {
   id: string;
@@ -24,6 +28,8 @@ export type ImportSource = {
   account: string;
   accountConfirmed?: boolean;
   accountDetected?: boolean;
+  // SHA-256 of the file, so the same screenshot can't be added to a draft twice.
+  hash?: string;
   mixedAccounts?: boolean;
   datesChecked?: boolean;
   file: File;
