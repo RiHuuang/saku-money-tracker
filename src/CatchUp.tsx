@@ -8,6 +8,7 @@ import { learnMerchant, suggestMerchant } from "./merchants";
 import { openImportPages } from "./importPages";
 import { ChoiceField, Modal } from "./components";
 import { useRowGestures } from "./rowGestures";
+import { RowStatus, type RowState } from "./RowStatus";
 import { localeTag, t } from "./i18n";
 import { applySharedSourceDate, withoutOverlap, bcaAccount, confirmedImportAccount, detectImportAccount, prepareBcaRow, importRowName, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
 
@@ -41,7 +42,12 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const [previewUrl, setPreviewUrl] = useState("");
   const [deleteConfirmationId, setDeleteConfirmationId] = useState("");
   const [editingRow, setEditingRow] = useState("");
-  const decide = (id: string, decision: ImportRow["decision"]) => { setEditingRow(""); void updateRow(id, { decision }); };
+  const decide = (id: string, decision: ImportRow["decision"]) => {
+    setEditingRow("");
+    const name = draft?.rows.find((row) => row.id === id);
+    gestures.announce(t(decision === "ready" ? "rowWillAdd" : decision === "skip" ? "rowSkipped" : "rowLater", { name: name ? importRowName(name) || t("unnamedTransaction") : "" }));
+    void updateRow(id, { decision });
+  };
   const gestures = useRowGestures({ onAdd: (id) => decide(id, "ready"), onSkip: (id) => decide(id, "skip"), onOpen: setEditingRow });
   // Rows keep the place they first appeared in, so choosing one never makes the list jump.
   const rowOrder = useRef(new Map<string, number>());
@@ -327,7 +333,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       {!unverifiedMatches.length && !!exactMatches.length && <p className="catchup-match-done"><Check size={16} /> {t("allExactChecked")}</p>}
       <p className="import-note">{t("incompleteSourceNote")}</p></section>}
     {!!draft?.rows.length && <section className="catchup-panel catchup-review"><div className="catchup-panel-head"><div><h3>{t("reviewTitle")}</h3><p>{t("reviewHelp")}</p></div><span className="catchup-private"><LockKeyhole size={13} /> {t("savedDevice")}</span></div>
-      <div className="catchup-review-overview"><div><strong>{ready.length}</strong><span>{t("toAdd")}</span></div><div><strong>{needsReview.length}</strong><span>{t("needLook")}</span></div><div><strong>{setAside.length}</strong><span>{t("notImported")}</span></div></div><p className="catchup-swipe-hint">{t("swipeHint")}</p>
+      <div className="catchup-review-overview"><div><strong>{ready.length}</strong><span>{t("toAdd")}</span></div><div><strong>{needsReview.length}</strong><span>{t("needLook")}</span></div><div><strong>{setAside.length}</strong><span>{t("notImported")}</span></div></div><p className="catchup-swipe-hint">{t("swipeHint")}</p><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
       {!!undatedSources.length && <div className="catchup-missing-dates"><strong>{t("someDatesMissing")}</strong><p>{t("sharedDateHelp")}</p>{undatedSources.map((source) => { const count = draft.rows.filter((row) => row.sourceId === source.id && !row.date && row.decision !== "skip" && !rowSaved(row)).length; return <div key={source.id}><b>{source.name} · {count} {count === 1 ? t("row") : t("rows")}</b><div><label>{t("sharedDate")}<input type="date" value={sharedDates[source.id] || ""} max={today()} disabled={processing || saving} onChange={(event) => setSharedDates((current) => ({ ...current, [source.id]: event.target.value }))} /></label><button type="button" className="button secondary" disabled={!validDate(sharedDates[source.id] || "") || (sharedDates[source.id] || "") > today() || processing || saving} onClick={() => void applySharedDate(source.id)}>{t("setDateFor", { count, unit: count === 1 ? t("row") : t("rows") })}</button></div></div>; })}</div>}
       {draft.sources.map((source) => {
         const order = (row: ImportRow) => needsReview.includes(row) ? 0 : ready.includes(row) ? 1 : 2;
@@ -345,13 +351,14 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
             const rowReady = ready.includes(row);
             const editing = editingRow === row.id;
             const offset = gestures.offset(row.id);
-            const status = alreadySaved ? t("inActivity") : row.alreadyInSaku && row.decision === "skip" ? t("alreadyInSaku") : row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : t("openReview");
+            const state: RowState = alreadySaved ? "saved" : row.decision === "skip" ? "skip" : rowReady ? "ready" : row.decision === "later" ? "later" : "review";
+            const status = alreadySaved ? t("inActivity") : row.alreadyInSaku && row.decision === "skip" ? t("alreadyInSaku") : row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : row.decision === "later" ? t("reviewLater") : t("openReview");
             const hint = !alreadySaved && !rowReady && row.decision !== "skip" ? importRowReviewIssue(row, account, data, duplicate) : "";
-            return <div className="catchup-row" key={row.id} data-swipe={offset > 40 ? "add" : offset < -40 ? "skip" : undefined}>
+            return <div className="catchup-row" key={row.id} data-state={state} data-swipe={offset > 40 ? "add" : offset < -40 ? "skip" : undefined} data-add-label={t("swipeAdd")} data-skip-label={t("swipeSkip")}>
               <button type="button" className="catchup-row-summary" aria-haspopup="dialog" style={offset ? { transform: `translateX(${offset}px)` } : undefined}
                 {...gestures.handlers(row.id, alreadySaved || saving)}>
                 <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date || undefined}>{validDate(row.date) ? friendlyDate(row.date) : t("checkDate")}</time>{accountHint && <small className="catchup-row-account">{accountHint}</small>}<small>{activityOptions().find((item) => item.value === row.activity)?.label}</small></span><strong>{importRowName(row) || t("unnamedTransaction")}</strong>{row.note && <small className="catchup-row-note-text">{row.note}</small>}{hint && <small className="catchup-row-hint">{hint}</small>}</span>
-                <span className="catchup-row-figure"><strong>{row.activity === "reward" ? `${row.amount || 0} ${t("pointsCoinsShort")}` : `${row.direction === "expense" ? "−" : row.direction === "income" ? "+" : "?"}${money(row.amount || 0)}`}</strong><small className={rowReady ? "is-ready" : alreadySaved ? "is-saved" : ""}>{status}</small></span>
+                <span className="catchup-row-figure"><strong>{row.activity === "reward" ? `${row.amount || 0} ${t("pointsCoinsShort")}` : `${row.direction === "expense" ? "−" : row.direction === "income" ? "+" : "?"}${money(row.amount || 0)}`}</strong><RowStatus state={state} label={status} /></span>
                 
               </button>
               {editing && <Modal title={importRowName(row) || t("unnamedTransaction")} subtitle={`${validDate(row.date) ? friendlyDate(row.date) : t("checkDate")} · ${row.direction === "expense" ? "−" : row.direction === "income" ? "+" : "?"}${money(row.amount || 0)}`} onClose={() => setEditingRow("")}><div className="catchup-row-details">

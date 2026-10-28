@@ -4212,3 +4212,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .catchup-swipe-hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
 /* A closed picker shows only its value, so side-by-side fields (account, pocket) line up at the same height. */
 .catchup-field .choice-trigger small { display: none; }
+
+/* Decided rows read at a glance: a tinted card with an edge bar and an icon badge, not only a word. */
+.catchup-row { position: relative; transition: background-color .2s ease, border-color .2s ease; }
+.catchup-row[data-state="ready"] { border-color: color-mix(in srgb, var(--teal) 45%, var(--line)); background: var(--accent-soft); box-shadow: inset 4px 0 0 var(--teal); }
+.catchup-row[data-state="skip"] { background: var(--surface-muted); box-shadow: inset 4px 0 0 var(--muted); }
+.catchup-row[data-state="skip"] .catchup-row-identity strong, .catchup-row[data-state="skip"] .catchup-row-figure strong { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.catchup-row-status { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.catchup-row-figure .catchup-row-status { font-size: 11px; }
+.catchup-row-status[data-state="ready"], .catchup-row-status[data-state="saved"] { background: var(--teal); color: var(--surface); }
+.catchup-row-status[data-state="skip"] { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.catchup-row-status[data-state="review"] { background: color-mix(in srgb, var(--warning) 14%, var(--surface)); color: var(--ink); }
+/* While dragging, the action that a release would take shows behind the row. */
+.catchup-row[data-swipe]::before { content: attr(data-add-label); position: absolute; inset: 0 auto 0 18px; display: flex; align-items: center; color: var(--teal); font-size: 13px; font-weight: 700; }
+.catchup-row[data-swipe="skip"]::before { content: attr(data-skip-label); inset: 0 18px 0 auto; color: var(--danger); }
+.catchup-row-summary { position: relative; z-index: 1; }
+.catchup-row[data-swipe] .catchup-row-summary { background: var(--surface); border-radius: 13px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) { .catchup-row { transition: none; } }

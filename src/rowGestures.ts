@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
 import type React from "react";
 
-// Swipe right to add, left to leave out; hold (or click with a mouse) to open the row for editing.
-// Shared by the screenshot and notification lists in Catch up so both behave the same.
+// Swipe right to add, left to leave out; tap or hold to open the row for editing. Every decision is also
+// announced, since a swipe changes the row without moving focus.
+// Shared by every Catch up list (screenshots, statements, notifications, CSV) so they all behave the same.
 export function useRowGestures({ onAdd, onSkip, onOpen }: { onAdd: (id: string) => void; onSkip: (id: string) => void; onOpen: (id: string) => void }) {
+  const [announcement, announce] = useState("");
   const [swipe, setSwipe] = useState<{ id: string; dx: number } | null>(null);
   const gesture = useRef<{ id: string; x: number; y: number; moved: boolean; held: boolean; touch: boolean; timer: number } | null>(null);
   const offset = (id: string) => swipe?.id === id ? swipe.dx : 0;
@@ -27,7 +29,7 @@ export function useRowGestures({ onAdd, onSkip, onOpen }: { onAdd: (id: string) 
     onPointerUp: () => end(id),
     onPointerCancel: () => end(id),
     onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
-    onClick: () => { const current = gesture.current; if (disabled || current?.moved || current?.held || current?.touch) return; onOpen(id); },
+    onClick: () => { const current = gesture.current; if (disabled || current?.moved || current?.held) return; onOpen(id); },
   });
   function end(id: string) {
     const current = gesture.current;
@@ -39,5 +41,5 @@ export function useRowGestures({ onAdd, onSkip, onOpen }: { onAdd: (id: string) 
     setSwipe(null);
     window.setTimeout(() => { if (gesture.current === current) gesture.current = null; }, 0);
   }
-  return { offset, handlers };
+  return { offset, handlers, announcement, announce };
 }

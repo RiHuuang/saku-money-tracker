@@ -10,6 +10,7 @@ import { notificationCapture, type InboxItem } from "./notificationCapture";
 import { inboxRows, type NotificationRow } from "./notificationRows";
 import { ChoiceField, Modal } from "./components";
 import { useRowGestures } from "./rowGestures";
+import { RowStatus, type RowState } from "./RowStatus";
 import { checkinAdjustment, checkinGap, loadCheckins, mergeCheckins, saveCheckins, type BalanceCheckin } from "./balanceCheckins";
 import { localeTag, t } from "./i18n";
 
@@ -56,17 +57,24 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   // Statement-style matching: same account, day, amount and direction counts as a possible duplicate whatever it was named.
   const duplicates = useMemo(() => importRowsNeedingDuplicateConfirmation(rows, data.transactions, accountFor, () => false, true), [rows, data]);
   const ready = rows.filter((row) => importRowReady(row, accountFor(row), data) && (!duplicates.has(row.id) || row.confirmedSeparate));
+  // Rows the user chose to leave out stay visible as skipped (and can be changed back) until the list is saved.
+  const skipped = rows.filter((row) => edits[row.id]?.decision === "skip");
   const edit = (id: string, patch: Partial<ImportRow>) => setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
-  const decide = (id: string, decision: ImportRow["decision"]) => { setEditingRow(""); edit(id, { decision }); };
-  // Swiping left removes the row from the phone, like "Don't import".
-  const gestures = useRowGestures({ onAdd: (id) => decide(id, "ready"), onSkip: (id) => { setEditingRow(""); void remove([id]); }, onOpen: setEditingRow });
+  const decide = (id: string, decision: ImportRow["decision"]) => {
+    setEditingRow("");
+    const row = rows.find((item) => item.id === id);
+    gestures.announce(t(decision === "ready" ? "rowWillAdd" : decision === "skip" ? "rowSkipped" : "rowLater", { name: row ? importRowName(row) : "" }));
+    edit(id, { decision });
+  };
+  const gestures = useRowGestures({ onAdd: (id) => decide(id, "ready"), onSkip: (id) => decide(id, "skip"), onOpen: setEditingRow });
   async function remove(ids: string[]) {
     await notificationCapture.removeInbox({ ids });
     setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !ids.includes(id))));
     await load();
   }
   async function save() {
-    if (!ready.length || busy || saving) return;
+    if ((!ready.length && !skipped.length) || busy || saving) return;
+    if (!ready.length) { setSaving(true); try { await remove(skipped.map((row) => row.id)); } catch { notify(t("notificationAddError")); } finally { setSaving(false); } return; }
     setSaving(true);
     try {
       const additions: Transaction[] = [];
@@ -84,7 +92,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
       // A balance printed in a saved notification can be checked once its payment is in the ledger.
       const reported = ready.filter((row) => row.balance !== null && data.accounts.includes(accountFor(row))).map((row) => ({ id: row.id, account: accountFor(row), appName: row.appName, reported: row.balance!, occurredAt: row.occurredAt }));
       if (reported.length) await updateCheckins(mergeCheckins(checkins, reported));
-      await remove([...done]);
+      await remove([...done, ...skipped.map((row) => row.id)]);
     } catch { notify(t("notificationAddError")); }
     finally { setSaving(false); }
   }
@@ -96,14 +104,15 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   });
   if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> {t("notificationsEmpty")}</p></section></>;
   return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
-    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div><p className="catchup-swipe-hint">{t("swipeHint")}</p>
+    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div><p className="catchup-swipe-hint">{t("swipeHint")}</p><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), offset = gestures.offset(row.id);
+      const state: RowState = row.decision === "skip" ? "skip" : rowReady ? "ready" : row.decision === "later" ? "later" : "review";
       const hint = rowReady || row.decision === "skip" ? "" : importRowReviewIssue(row, account, data, duplicate);
-      return <div className="catchup-row" key={row.id} data-swipe={offset > 40 ? "add" : offset < -40 ? "skip" : undefined}>
+      return <div className="catchup-row" key={row.id} data-state={state} data-swipe={offset > 40 ? "add" : offset < -40 ? "skip" : undefined} data-add-label={t("swipeAdd")} data-skip-label={t("swipeSkip")}>
         <button type="button" className="catchup-row-summary" aria-haspopup="dialog" style={offset ? { transform: `translateX(${offset}px)` } : undefined} {...gestures.handlers(row.id, busy || saving)}>
           <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date}>{friendlyDate(row.date)}</time><small className="catchup-row-account">{account || t("chooseAccount")} · {row.appName}</small></span><strong>{importRowName(row)}</strong>{importRowName(row) !== row.name.trim() && <small className="catchup-row-raw">{row.name}</small>}{row.pairedWith && row.decision === "skip" ? <small className="catchup-row-hint">{t("recordedWithTransfer")}</small> : hint && <small className="catchup-row-hint">{hint}</small>}</span>
-          <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : "+"}{money(row.amount)}</strong><small className={rowReady ? "is-ready" : ""}>{row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : t("openReview")}</small></span>
+          <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : "+"}{money(row.amount)}</strong><RowStatus state={state} label={row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : row.decision === "later" ? t("reviewLater") : t("openReview")} /></span>
         </button>
         {editingRow === row.id && <Modal title={importRowName(row)} subtitle={`${friendlyDate(row.date)} · ${row.direction === "expense" ? "−" : "+"}${money(row.amount)}`} onClose={() => setEditingRow("")}><div className="catchup-row-details">
           <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={importRowName(row)} maxLength={100} onChange={(event) => edit(row.id, { cleanName: event.target.value })} /></label></div>
@@ -114,12 +123,12 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
             <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: importRowName(row) })}>
               <button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} onClick={() => decide(row.id, "ready")}>{t("addToSaku")}</button>
               <button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} onClick={() => decide(row.id, "later")}>{t("reviewLater")}</button>
-              <button type="button" onClick={() => { setEditingRow(""); void remove([row.id]); }}>{t("dontImport")}</button>
+              <button type="button" className={row.decision === "skip" ? "selected" : ""} aria-pressed={row.decision === "skip"} onClick={() => decide(row.id, "skip")}>{t("dontImport")}</button>
             </div></div>
           </div>
         </div></Modal>}
       </div>;
     })}
-    <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? t("row") : t("rows")} {t("canAddNow")}</strong><span>{t("keptOnPhone", { count: rows.length - ready.length })}</span></div><button className="button primary" disabled={!ready.length || busy || saving} onClick={() => void save()}><Check size={16} /> {t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") })} <ArrowRight size={16} /></button></div>
+    <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? t("row") : t("rows")} {t("canAddNow")}</strong><span>{t("keptOnPhone", { count: rows.length - ready.length - skipped.length })}{skipped.length ? ` · ${t("skippedRemoved", { count: skipped.length })}` : ""}</span></div><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}><Check size={16} /> {ready.length ? t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
   </section></>;
 }
