@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, BellRing, Check, ChevronDown } from "lucide-react";
+import { ArrowRight, BellRing, Check } from "lucide-react";
 import { money, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
@@ -8,7 +8,8 @@ import { cleanMerchantNames } from "./cloud";
 import { loadCleaningOptIn, namesToClean } from "./merchantCleaning";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
 import { inboxRows, type NotificationRow } from "./notificationRows";
-import { ChoiceField } from "./components";
+import { ChoiceField, Modal } from "./components";
+import { useRowGestures } from "./rowGestures";
 import { checkinAdjustment, checkinGap, loadCheckins, mergeCheckins, saveCheckins, type BalanceCheckin } from "./balanceCheckins";
 import { localeTag, t } from "./i18n";
 
@@ -20,7 +21,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
 }) {
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [edits, setEdits] = useState<Record<string, Partial<ImportRow>>>({});
-  const [expanded, setExpanded] = useState("");
+  const [editingRow, setEditingRow] = useState("");
   const [saving, setSaving] = useState(false);
   const [checkins, setCheckins] = useState<BalanceCheckin[]>([]);
   useEffect(() => { void loadCheckins().then(setCheckins); }, []);
@@ -56,6 +57,9 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   const duplicates = useMemo(() => importRowsNeedingDuplicateConfirmation(rows, data.transactions, accountFor, () => false, true), [rows, data]);
   const ready = rows.filter((row) => importRowReady(row, accountFor(row), data) && (!duplicates.has(row.id) || row.confirmedSeparate));
   const edit = (id: string, patch: Partial<ImportRow>) => setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
+  const decide = (id: string, decision: ImportRow["decision"]) => { setEditingRow(""); edit(id, { decision }); };
+  // Swiping left removes the row from the phone, like "Don't import".
+  const gestures = useRowGestures({ onAdd: (id) => decide(id, "ready"), onSkip: (id) => { setEditingRow(""); void remove([id]); }, onOpen: setEditingRow });
   async function remove(ids: string[]) {
     await notificationCapture.removeInbox({ ids });
     setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !ids.includes(id))));
@@ -92,29 +96,28 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   });
   if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> {t("notificationsEmpty")}</p></section></>;
   return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
-    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div>
+    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div><p className="catchup-swipe-hint">{t("swipeHint")}</p>
     {rows.map((row) => {
-      const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), open = expanded === row.id;
+      const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), offset = gestures.offset(row.id);
       const hint = rowReady || row.decision === "skip" ? "" : importRowReviewIssue(row, account, data, duplicate);
-      return <div className="catchup-row" key={row.id}>
-        <button type="button" className="catchup-row-summary" aria-expanded={open} onClick={() => setExpanded(open ? "" : row.id)}>
+      return <div className="catchup-row" key={row.id} data-swipe={offset > 40 ? "add" : offset < -40 ? "skip" : undefined}>
+        <button type="button" className="catchup-row-summary" aria-haspopup="dialog" style={offset ? { transform: `translateX(${offset}px)` } : undefined} {...gestures.handlers(row.id, busy || saving)}>
           <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date}>{friendlyDate(row.date)}</time><small className="catchup-row-account">{account || t("chooseAccount")} · {row.appName}</small></span><strong>{importRowName(row)}</strong>{importRowName(row) !== row.name.trim() && <small className="catchup-row-raw">{row.name}</small>}{row.pairedWith && row.decision === "skip" ? <small className="catchup-row-hint">{t("recordedWithTransfer")}</small> : hint && <small className="catchup-row-hint">{hint}</small>}</span>
           <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : "+"}{money(row.amount)}</strong><small className={rowReady ? "is-ready" : ""}>{row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : t("openReview")}</small></span>
-          <ChevronDown size={16} aria-hidden="true" />
         </button>
-        {open && <div className="catchup-row-details">
+        {editingRow === row.id && <Modal title={importRowName(row)} subtitle={`${friendlyDate(row.date)} · ${row.direction === "expense" ? "−" : "+"}${money(row.amount)}`} onClose={() => setEditingRow("")}><div className="catchup-row-details">
           <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={importRowName(row)} maxLength={100} onChange={(event) => edit(row.id, { cleanName: event.target.value })} /></label></div>
           <div className="catchup-row-meta">
             <ChoiceField className="catchup-field" label={t("sakuAccount")} value={account} onValueChange={(value) => edit(row.id, { account: value, confirmedSeparate: false })} placeholder={t("chooseUsedAccount")} options={[...data.accounts.map((item) => ({ value: item, label: item })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: t("creditCard") }))]} />
             {row.direction === "expense" && row.activity === "purchase" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={row.pocketId} onValueChange={(value) => edit(row.id, { pocketId: value })} options={[{ value: "", label: t("noPocket"), description: t("categorizeLater") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
             {duplicate && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => edit(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
-            <div className="catchup-decision"><strong>{t("whatToDo")}</strong><div role="group" aria-label={t("importChoiceFor", { name: importRowName(row) })}>
-              <button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} onClick={() => edit(row.id, { decision: "ready" })}>{t("addToSaku")}<small>{t("includeComplete")}</small></button>
-              <button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} onClick={() => edit(row.id, { decision: "later" })}>{t("reviewLater")}<small>{t("keepSevenDays")}</small></button>
-              <button type="button" onClick={() => void remove([row.id])}>{t("dontImport")}<small>{t("removeFromPhone")}</small></button>
+            <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: importRowName(row) })}>
+              <button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} onClick={() => decide(row.id, "ready")}>{t("addToSaku")}</button>
+              <button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} onClick={() => decide(row.id, "later")}>{t("reviewLater")}</button>
+              <button type="button" onClick={() => { setEditingRow(""); void remove([row.id]); }}>{t("dontImport")}</button>
             </div></div>
           </div>
-        </div>}
+        </div></Modal>}
       </div>;
     })}
     <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? t("row") : t("rows")} {t("canAddNow")}</strong><span>{t("keptOnPhone", { count: rows.length - ready.length })}</span></div><button className="button primary" disabled={!ready.length || busy || saving} onClick={() => void save()}><Check size={16} /> {t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") })} <ArrowRight size={16} /></button></div>

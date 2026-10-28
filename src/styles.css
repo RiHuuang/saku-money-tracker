@@ -4210,3 +4210,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .catchup-row[data-swipe="skip"] { background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .catchup-row-note-text { color: var(--muted); font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
 .catchup-swipe-hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+/* A closed picker shows only its value, so side-by-side fields (account, pocket) line up at the same height. */
+.catchup-field .choice-trigger small { display: none; }
