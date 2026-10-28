@@ -4254,3 +4254,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .account-editor .cloud-note { display: flex; align-items: center; gap: 6px; margin: 0; }
 /* On phones the save bar stays in reach above the tab bar, so adding never needs a scroll to the bottom. */
 @media (max-width: 760px) { .catchup-save { position: sticky; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); z-index: 5; box-shadow: 0 -6px 18px #0f2a2214; } }
+/* The pinned save bar slides away while scrolling up and returns on the way down. */
+.catchup-save { transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s ease; }
+@media (max-width: 760px) { .catchup-save.is-hidden { transform: translateY(calc(100% + 96px)); opacity: 0; pointer-events: none; } }
+@media (prefers-reduced-motion: reduce) { .catchup-save { transition: none; } }

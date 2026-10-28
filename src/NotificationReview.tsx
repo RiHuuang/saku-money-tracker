@@ -10,6 +10,7 @@ import { notificationCapture, type InboxItem } from "./notificationCapture";
 import { inboxRows, type NotificationRow } from "./notificationRows";
 import { ChoiceField, Modal } from "./components";
 import { useRowGestures } from "./rowGestures";
+import { useHiddenWhileScrollingUp } from "./scrollReveal";
 import { RowStatus, type RowState } from "./RowStatus";
 import { checkinAdjustment, checkinGap, loadCheckins, mergeCheckins, saveCheckins, type BalanceCheckin } from "./balanceCheckins";
 import { localeTag, t } from "./i18n";
@@ -67,6 +68,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
     edit(id, { decision });
   };
   const gestures = useRowGestures({ onAdd: (id) => decide(id, "ready"), onSkip: (id) => decide(id, "skip"), onOpen: setEditingRow });
+  const saveBarHidden = useHiddenWhileScrollingUp();
   async function remove(ids: string[]) {
     await notificationCapture.removeInbox({ ids });
     setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !ids.includes(id))));
@@ -129,6 +131,6 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
         </div></Modal>}
       </div>;
     })}
-    <div className="catchup-save"><div><strong>{ready.length} {ready.length === 1 ? t("row") : t("rows")} {t("canAddNow")}</strong><span>{t("keptOnPhone", { count: rows.length - ready.length - skipped.length })}{skipped.length ? ` · ${t("skippedRemoved", { count: skipped.length })}` : ""}</span></div><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}><Check size={16} /> {ready.length ? t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
+    <div className={`catchup-save${saveBarHidden ? " is-hidden" : ""}`}><div><strong>{ready.length} {ready.length === 1 ? t("row") : t("rows")} {t("canAddNow")}</strong><span>{t("keptOnPhone", { count: rows.length - ready.length - skipped.length })}{skipped.length ? ` · ${t("skippedRemoved", { count: skipped.length })}` : ""}</span></div><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}><Check size={16} /> {ready.length ? t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
   </section></>;
 }
