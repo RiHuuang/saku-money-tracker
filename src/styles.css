@@ -4230,3 +4230,44 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .catchup-row[data-swipe] .catchup-row-summary { background: var(--surface); border-radius: 13px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (prefers-reduced-motion: reduce) { .catchup-row { transition: none; } }
+
+/* Account colours: fixed by the account's place in the list (validated: CVD-separated on both surfaces). */
+:root { --account-1: #2a78d6; --account-2: #eb6834; --account-3: #1baf7a; --account-4: #eda100; --account-5: #e87ba4; --account-6: #6250d6; --account-other: #898781; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --account-1: #3987e5; --account-2: #d95926; --account-3: #199e70; --account-4: #c98500; --account-5: #d55181; --account-6: #9085e9; } }
+:root[data-theme="dark"] { --account-1: #3987e5; --account-2: #d95926; --account-3: #199e70; --account-4: #c98500; --account-5: #d55181; --account-6: #9085e9; }
+
+/* The cash card breathes in when pressed instead of flashing the system highlight. */
+.balance-panel.balance-action { cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; transition: transform .32s cubic-bezier(.2,.8,.2,1), box-shadow .32s ease; }
+.balance-panel.balance-action:active { transform: scale(.975); box-shadow: 0 6px 18px #0f2a2214; transition-duration: .14s; }
+.balance-panel.balance-action:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+.balance-panel.balance-action:not(:active) { animation: cash-exhale .42s cubic-bezier(.2,.8,.2,1); }
+@keyframes cash-exhale { 0% { transform: scale(.975); } 60% { transform: scale(1.008); } 100% { transform: scale(1); } }
+.account-balance-item { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; transition: transform .2s ease; }
+.account-balance-item:active { transform: scale(.97); }
+.account-balance-item:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .balance-panel.balance-action, .account-balance-item { transition: none; animation: none !important; } .balance-panel.balance-action:active, .account-balance-item:active { transform: none; } }
+
+.accounts-overview { display: grid; gap: 16px; }
+.accounts-total { display: grid; gap: 2px; margin: 0; }
+.accounts-total small { color: var(--muted); font-size: 12px; font-weight: 600; }
+.accounts-total strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+.accounts-share { display: flex; gap: 2px; height: 14px; overflow: hidden; border-radius: 7px; background: var(--surface-muted); }
+.accounts-share i { min-width: 4px; }
+.accounts-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.accounts-list button { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; grid-template-areas: "dot name figure" ". bar bar"; align-items: center; gap: 6px 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.accounts-list button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.accounts-dot { grid-area: dot; width: 12px; height: 12px; border-radius: 4px; }
+.accounts-name { grid-area: name; display: grid; gap: 2px; min-width: 0; }
+.accounts-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.accounts-name small, .accounts-figure small { color: var(--muted); font-size: 11px; }
+.accounts-figure { grid-area: figure; display: grid; justify-items: end; gap: 2px; }
+.accounts-figure strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.accounts-figure .is-negative { color: var(--danger); }
+.accounts-bar { grid-area: bar; height: 6px; overflow: hidden; border-radius: 3px; background: var(--surface-muted); }
+.accounts-bar i { display: block; height: 100%; border-radius: 3px; }
+.accounts-tip { margin: 0; color: var(--muted); font-size: 12px; }
+.account-editor { display: grid; gap: 12px; }
+.account-editor .field-error { margin: -4px 0 0; color: var(--danger); font-size: 12px; }
+.account-editor .cloud-note { display: flex; align-items: center; gap: 6px; margin: 0; }
+/* On phones the save bar stays in reach above the tab bar, so adding never needs a scroll to the bottom. */
+@media (max-width: 760px) { .catchup-save { position: sticky; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); z-index: 5; box-shadow: 0 -6px 18px #0f2a2214; } }

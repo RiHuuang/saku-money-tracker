@@ -75,6 +75,8 @@ import { listImportDrafts } from "./importDraft";
 import { notificationCapture, notificationCaptureSupported } from "./notificationCapture";
 import NotificationAccess from "./NotificationAccess";
 import { importRowsWaiting } from "./importTransactions";
+import { AccountEditor, AccountsOverview, accountColor } from "./AccountsOverview";
+import { useHold } from "./rowGestures";
 import { applyRecentsPrivacy, appLockStatus, appLockSupported, authenticate, defaultAppLock, loadAppLock, saveAppLock, shouldLock, type AppLockSettings, type LockAfter } from "./appLock";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { defaultReminder, loadReminder, remindersSupported, requestReminderPermission, saveReminder, syncReminders, type ReminderSettings } from "./reminders";
@@ -182,7 +184,7 @@ export default function App() {
     [reminder, setReminder] = useState<ReminderSettings>(defaultReminder),
     [reminderTap, setReminderTap] = useState<{ kind: "catchup" | "card" } | null>(null),
     [catchUpDismissed, setCatchUpDismissed] = useState(() => { try { return localStorage.getItem(catchUpDismissedKey) || ""; } catch { return ""; } }),
-    [importWaiting, setImportWaiting] = useState(0),
+    [importWaiting, setImportWaiting] = useState(0), [draftsWaiting, setDraftsWaiting] = useState(0),
     [waitingRecount, setWaitingRecount] = useState(0),
     // Native builds start covered until the lock setting is read, so no amount can flash before authentication.
     [lockState, setLockState] = useState<"checking" | "covered" | "locked" | "open">(appLockSupported() ? "checking" : "open"),
@@ -194,6 +196,9 @@ export default function App() {
   const [languagePreference, setLanguagePreference] = useState<LanguagePreference>("system");
   const [setupCompletedAt, setSetupCompletedAt] = useState<string | null>(null);
   const [showAvailabilityInfo, setShowAvailabilityInfo] = useState(false);
+  const [accountsOpen, setAccountsOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState("");
+  const hold = useHold();
   setActiveLanguage(languagePreference);
   const [previousView, setPreviousView] = useState<View>("overview");
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
@@ -429,7 +434,7 @@ export default function App() {
     void Promise.all([
       cloud?.signedIn && cloud.user?.id ? listImportDrafts(cloud.user.id).then((drafts) => importRowsWaiting(drafts, data)).catch(() => 0) : 0,
       notificationCaptureSupported() ? notificationCapture.inbox().then((inbox) => inbox.items.length).catch(() => 0) : 0,
-    ]).then(([drafts, inbox]) => { if (live) setImportWaiting(drafts + inbox); });
+    ]).then(([drafts, inbox]) => { if (live) { setImportWaiting(drafts + inbox); setDraftsWaiting(drafts); } });
     return () => { live = false; };
   }, [data, view, cloud?.signedIn, cloud?.user?.id, waitingRecount]);
   useEffect(() => {
@@ -671,6 +676,8 @@ export default function App() {
   };
   const go = (v: View) => {
     if (v === "more" && !moreViews.includes(view)) setPreviousView(view);
+    // Opening Catch up lands on what is actually waiting: captured notifications, unless a screenshot draft is open.
+    if (v === "check" && view !== "check" && cloudImportEnabled && importWaiting > draftsWaiting && !draftsWaiting) setCheckTab("notifications");
     setSelectedPocketId(null);
     setView(v);
     window.scrollTo({ top: 0 });
@@ -837,9 +844,9 @@ export default function App() {
           </section>}
           {view === "overview" && (
             <>
-              {showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { setCheckTab(cloudImportEnabled ? "catchup" : "csv"); go("check"); }}>{cloudImportEnabled ? t("importScreenshot") : t("catchUpMonthly")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
+              {showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { go("check"); setCheckTab(cloudImportEnabled ? "catchup" : "csv"); }}>{cloudImportEnabled ? t("importScreenshot") : t("catchUpMonthly")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
-                <div className="balance-panel balance-action">
+                <div className="balance-panel balance-action" role="button" tabIndex={0} aria-label={t("openMoneyByAccount")} onClick={() => setAccountsOpen(true)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setAccountsOpen(true); } }}>
                   <div className="balance-top">
                     <span>
                       <Wallet size={17} />
@@ -855,12 +862,12 @@ export default function App() {
                     <span>
                       <span className="tiny-square" />
                       {t("budgetAvailability")}
-                      <button type="button" className="availability-info-button" aria-label={t("availabilityInfo")} aria-expanded={showAvailabilityInfo} onClick={() => setShowAvailabilityInfo((value) => !value)}><Info size={15} /></button>
+                      <button type="button" className="availability-info-button" aria-label={t("availabilityInfo")} aria-expanded={showAvailabilityInfo} onClick={(event) => { event.stopPropagation(); setShowAvailabilityInfo((value) => !value); }}><Info size={15} /></button>
                     </span>
                     <strong>{money(stats.available)} {t("available")}</strong>
                   </div>
                   {showAvailabilityInfo && <p className="availability-explainer">{t("availabilityExplainer")}</p>}
-                  <button type="button" className="balance-cta" onClick={() => go("insights")}>{t("viewInsights")} <ArrowRight size={16} /></button>
+                  <button type="button" className="balance-cta" onClick={(event) => { event.stopPropagation(); go("insights"); }}>{t("viewInsights")} <ArrowRight size={16} /></button>
                 </div>
                 <div className="metric-panel">
                   <div className="metric-label">
@@ -912,7 +919,14 @@ export default function App() {
                   <small>{money(stats.budget)} {t("planned")}</small>
                 </div>
               </section>
-              <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <div className="account-balance-item" key={item.account}><span className="account-balance-icon"><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></div>)}</section>
+              <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <button type="button" className="account-balance-item" key={item.account} aria-label={t("accountCardLabel", { account: item.account, amount: money(item.balance) })} {...hold(() => setAccountsOpen(true), () => setEditingAccount(item.account))}><span className="account-balance-icon" style={{ color: accountColor(data, item.account) }}><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></button>)}</section>
+              {accountsOpen && <AccountsOverview data={data} monthTransactions={stats.transactions} onClose={() => setAccountsOpen(false)} onEdit={(account) => { setAccountsOpen(false); setEditingAccount(account); }} />}
+              {editingAccount && <AccountEditor data={data} account={editingAccount} busy={busy} onClose={() => setEditingAccount("")} onAdjust={(account) => setEdit({ type: "balance_adjustment", account })} onSave={async (next, message, renamed) => {
+                const ok = await commit(next, message);
+                // Notification capture remembers the Saku account by name, so a rename moves those links too.
+                if (ok && renamed && notificationCaptureSupported()) void notificationCapture.status().then((status) => Promise.all(status.apps.filter((app) => app.account === renamed.from).map((app) => notificationCapture.setApp({ packageName: app.packageName, account: renamed.to })))).catch(() => {});
+                return ok;
+              }} />}
               <section className="daily-strip" aria-label={t("quickEntriesLabel")}>
                 <div className="daily-check"><span>{t("currentWeek")}</span><strong>{money(weekSpend)} {t("spent")}</strong><small>{weekTop?.amount ? t("largestPocket", { name: weekTop.name }) : t("noSpending")}</small><small>{money(currentAvailable)} {t("currentPlanAvailable")}</small></div>
                 <div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={`Remove ${f.name} shortcut`} aria-label={`Remove ${f.name} shortcut`} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, t("quickEntryRemoved"))}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>

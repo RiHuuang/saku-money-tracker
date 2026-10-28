@@ -131,6 +131,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     catch { setInfo(t("filesSaveError")); return; }
     setDrafts(await listImportDrafts(owner));
     setInfo([t(sources.length === 1 ? "sourceAddedOne" : "sourcesAdded", { count: sources.length }), skipped ? t("sourcesSkipped", { count: skipped }) : "", repeated ? t("duplicateFilesSkipped", { count: repeated }) : ""].filter(Boolean).join(" "));
+    // Picking files is the intent to read them: start right away (the one-time consent still asks first).
+    void extract();
   }
   async function extract(consentGiven = consented) {
     if (!draftRef.current || !userId || processingRef.current || savingRef.current) return;

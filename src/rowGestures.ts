@@ -43,3 +43,24 @@ export function useRowGestures({ onAdd, onSkip, onOpen }: { onAdd: (id: string) 
   }
   return { offset, handlers, announcement, announce };
 }
+
+// Tap for the main action, hold for editing: used by the account cards on Home. The press state lives in a ref,
+// because opening the editor re-renders the card before the click that ends the hold arrives.
+export function useHold() {
+  const press = useRef<{ timer: number; held: boolean; x: number; y: number } | null>(null);
+  const held = useRef(false);
+  return (onTap: () => void, onHold: () => void) => ({
+    onPointerDown: (event: React.PointerEvent) => {
+      held.current = false;
+      press.current = { x: event.clientX, y: event.clientY, held: false, timer: window.setTimeout(() => { held.current = true; navigator.vibrate?.(12); onHold(); }, 450) };
+    },
+    onPointerMove: (event: React.PointerEvent) => {
+      const current = press.current;
+      if (current && Math.hypot(event.clientX - current.x, event.clientY - current.y) > 10) { window.clearTimeout(current.timer); press.current = null; }
+    },
+    onPointerUp: () => { if (press.current) window.clearTimeout(press.current.timer); press.current = null; },
+    onPointerCancel: () => { if (press.current) window.clearTimeout(press.current.timer); press.current = null; },
+    onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
+    onClick: () => { if (held.current) { held.current = false; return; } onTap(); },
+  });
+}
