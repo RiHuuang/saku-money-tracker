@@ -4258,3 +4258,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .catchup-save { transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s ease; }
 @media (max-width: 760px) { .catchup-save.is-hidden { transform: translateY(calc(100% + 96px)); opacity: 0; pointer-events: none; } }
 @media (prefers-reduced-motion: reduce) { .catchup-save { transition: none; } }
+/* Compact save bar: one line, a count and the button. Details live in the list and the summary above it. */
+.catchup-save.is-compact { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 14px; }
+.catchup-save.is-compact p { display: grid; gap: 1px; margin: 0; min-width: 0; }
+.catchup-save.is-compact strong { font-size: 14px; }
+.catchup-save.is-compact small { color: var(--muted); font-size: 11px; }
+.catchup-save.is-compact .button { flex: none; width: auto; min-height: 42px; padding: 0 16px; }
+.catchup-save.is-compact p { text-align: left; }
+.catchup-bulk { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.catchup-bulk > div { display: flex; gap: 14px; }
+.catchup-bulk .text-button { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; font-size: 13px; }
+.catchup-source-check { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 10px 0; padding: 10px 12px; border-left: 3px solid var(--warning); border-radius: 8px; background: color-mix(in srgb, var(--warning) 10%, var(--surface)); }
+.catchup-source-check p { margin: 0; font-size: 12px; }

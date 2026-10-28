@@ -26,6 +26,8 @@ assert.deepEqual(settlePending([bcaRow(pend)], "2026-10-28").map((row) => [row.d
 
 // The amount repeated inside a transfer reference must agree with the IDR line.
 assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "2710/FTSCY/WS95271 55000.00 BAGUS PRAKOSO", type: "TRSF E-BANKING CR", amountText: "IDR 85,000.00" }, "2026-10-28").check, "amount");
+// myBCA prints both "QR" and "QRP" before the merchant on a QRIS debit.
+assert.equal(bcaRow({ dateText: "28 Oct 2026", ref: "TGL: 1028 QRP 008 00000.00Warung Bu Sri", type: "TRANSAKSI DEBIT", amountText: "IDR 3,000.00" }).cleanName, "Warung Bu Sri");
 // Unreadable amounts, unknown types and missing dates never go straight in.
 assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "X", type: "TRSF E-BANKING CR", amountText: "IDR 1,5" }, "2026-10-28").check, "amount");
 assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "BIAYA ADM", type: "SOMETHING NEW", amountText: "IDR 15,000.00" }, "2026-10-28").check, "type");

@@ -78,7 +78,7 @@ export function bcaRow(read) {
   else if (/FLAZZ/.test(type)) row = { ...base, cleanName: "Isi saldo Flazz", paymentMethod: "Flazz", direction: "expense", activity: "topup" };
   else if (/SETORAN/.test(type)) row = { ...base, cleanName: "Setoran", direction: "income", activity: "income" };
   else if (/TRANSAKSI DEBIT/.test(type)) {
-    const merchant = read.ref.replace(/^TGL:\s*\d{4}\s+QR\s+\d+\s+[\d.,]*\s*/i, "").trim();
+    const merchant = read.ref.replace(/^TGL:\s*\d{4}\s+QRP?\s+\d+\s+[\d.,]*\s*/i, "").trim();
     row = { ...base, cleanName: merchant || "Pembayaran QRIS", direction: "expense", activity: "purchase" };
   } else if (transfer && /\bCR$/.test(type)) {
     const [, , rest] = transfer;

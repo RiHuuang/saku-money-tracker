@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, BellRing, Check } from "lucide-react";
+import { ArrowRight, BellRing, Check, X } from "lucide-react";
 import { money, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
@@ -69,6 +69,12 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   };
   const gestures = useRowGestures({ onAdd: (id) => decide(id, "ready"), onSkip: (id) => decide(id, "skip"), onOpen: setEditingRow });
   const saveBarHidden = useHiddenWhileScrollingUp();
+  const decideAll = (decision: "ready" | "skip") => {
+    gestures.announce(t(decision === "ready" ? "allMarkedAdd" : "allMarkedSkip"));
+    // The second half of a paired transfer stays skipped: it is saved together with its twin.
+    const twins = new Set(inboxRows(items || [], data).filter((row) => row.pairedWith && row.decision === "skip").map((row) => row.id));
+    setEdits((current) => ({ ...current, ...Object.fromEntries(rows.filter((row) => !twins.has(row.id)).map((row) => [row.id, { ...current[row.id], decision }])) }));
+  };
   async function remove(ids: string[]) {
     await notificationCapture.removeInbox({ ids });
     setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !ids.includes(id))));
@@ -106,7 +112,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   });
   if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> {t("notificationsEmpty")}</p></section></>;
   return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
-    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div><p className="catchup-swipe-hint">{t("swipeHint")}</p><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
+    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div><div className="catchup-bulk"><p className="catchup-swipe-hint">{t("swipeHint")}</p><div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), offset = gestures.offset(row.id);
       const state: RowState = row.decision === "skip" ? "skip" : rowReady ? "ready" : row.decision === "later" ? "later" : "review";
@@ -131,6 +137,6 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
         </div></Modal>}
       </div>;
     })}
-    <div className={`catchup-save${saveBarHidden ? " is-hidden" : ""}`}><div><strong>{ready.length} {ready.length === 1 ? t("row") : t("rows")} {t("canAddNow")}</strong><span>{t("keptOnPhone", { count: rows.length - ready.length - skipped.length })}{skipped.length ? ` · ${t("skippedRemoved", { count: skipped.length })}` : ""}</span></div><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}><Check size={16} /> {ready.length ? t("addClearRows", { count: ready.length, unit: ready.length === 1 ? t("row") : t("rows") }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
+    <div className={`catchup-save is-compact${saveBarHidden ? " is-hidden" : ""}`}><p><strong>{t("readyCount", { count: ready.length })}</strong>{skipped.length > 0 && <small>{t("skippedCount", { count: skipped.length })}</small>}</p><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}>{ready.length ? t("addCount", { count: ready.length }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
   </section></>;
 }
