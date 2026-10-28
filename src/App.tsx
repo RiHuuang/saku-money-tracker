@@ -443,7 +443,8 @@ export default function App() {
       const dialogs = document.querySelectorAll<HTMLDialogElement>("dialog[open]");
       const dialog = dialogs[dialogs.length - 1];
       if (dialog) {
-        dialog.querySelector<HTMLButtonElement>('button[aria-label=t("closeDialog")]')?.click();
+        // The same path as Escape: every Modal closes itself on "cancel".
+        dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
         return;
       }
       if (edit) setEdit(null);
