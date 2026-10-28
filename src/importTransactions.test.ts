@@ -133,12 +133,12 @@ test("statement matches cannot be marked checked before their own source dates a
 
 test("review explains non-rupiah and unsettled rows before asking for missing amounts", () => {
   const incomplete = { ...base, date: "", amount: 0, account: "" };
-  assert.match(importRowReviewIssue({ ...incomplete, activity: "reward" }, "", ledger, false), /Points or rewards/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "reward" }, "", ledger, false), /Points, not rupiah/);
   assert.match(importRowReviewIssue({ ...incomplete, activity: "pending" }, "", ledger, false), /pending/);
-  assert.match(importRowReviewIssue({ ...incomplete, activity: "failed" }, "", ledger, false), /failed or expired/);
-  assert.match(importRowReviewIssue({ ...incomplete, activity: "pay_later" }, "", ledger, false), /PayLater or credit account/);
-  assert.match(importRowReviewIssue({ ...base, amount: 0 }, "BCA", ledger, false, "2026-10-15"), /whole-rupiah amount/);
-  assert.match(importRowReviewIssue({ ...base, date: "" }, "BCA", ledger, false, "2026-10-15"), /transaction date/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "failed" }, "", ledger, false), /Looks failed/);
+  assert.match(importRowReviewIssue({ ...incomplete, activity: "pay_later" }, "", ledger, false), /PayLater account/);
+  assert.match(importRowReviewIssue({ ...base, amount: 0 }, "BCA", ledger, false, "2026-10-15"), /Check the amount/);
+  assert.match(importRowReviewIssue({ ...base, date: "" }, "BCA", ledger, false, "2026-10-15"), /Check the date/);
 });
 
 test("thirty clear purchases can be committed together without duplicating IDs", () => {
@@ -220,8 +220,8 @@ test("PayLater funding waits until a matching card account is chosen", () => {
   assert.equal(importRowReady({ ...approved, firstDueMonth: "2026-09" }, "BCA Visa", ledger), false);
   assert.equal(importRowReady(approved, "BCA Visa", ledger), true);
   assert.match(importRowReviewIssue({ ...approved, firstDueMonth: "" }, "BCA Visa", ledger, false), /first due month/);
-  assert.match(importRowReviewIssue({ ...approved, direction: "income" }, "BCA Visa", ledger, false), /marked Money in, but its activity is a payment/);
-  assert.match(importRowReviewIssue({ ...base, activity: "income", direction: "expense" }, "BCA", ledger, false), /marked Money out, but its activity is money received/);
+  assert.match(importRowReviewIssue({ ...approved, direction: "income" }, "BCA Visa", ledger, false), /Check money in or out/);
+  assert.match(importRowReviewIssue({ ...base, activity: "income", direction: "expense" }, "BCA", ledger, false), /Check money in or out/);
   const transaction = importedTransactions(approved, "BCA Visa", "wallet.png", ledger)[0];
   assert.equal(transaction.kind, "card_purchase");
   assert.equal(transaction.cardId, "visa");
