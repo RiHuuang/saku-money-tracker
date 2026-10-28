@@ -1,7 +1,10 @@
 package id.saku.money
 
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.getcapacitor.JSArray
@@ -29,6 +32,7 @@ class NotificationCapturePlugin : Plugin() {
             // Read live each time, so revoking access in system settings shows up on the next check.
             put("granted", granted)
             put("paused", allowlist.paused)
+            put("needsAutostart", xiaomi)
             put("apps", apps)
         })
     }
@@ -38,6 +42,19 @@ class NotificationCapturePlugin : Plugin() {
         activity.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         call.resolve()
     }
+
+    // Xiaomi's memory cleaner kills Saku, and without Autostart MIUI then refuses to restart the listener,
+    // so capture stops until the app is opened again. Opens the Autostart list, or Saku's app info if it has moved.
+    @PluginMethod
+    fun openAutostart(call: PluginCall) {
+        val autostart = Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"))
+        val appInfo = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+        runCatching { activity.startActivity(autostart.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .recoverCatching { activity.startActivity(appInfo.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onSuccess { call.resolve() }.onFailure { call.reject("Could not open settings") }
+    }
+
+    private val xiaomi = Build.MANUFACTURER.lowercase() in setOf("xiaomi", "redmi", "poco")
 
     @PluginMethod
     fun setApp(call: PluginCall) {
