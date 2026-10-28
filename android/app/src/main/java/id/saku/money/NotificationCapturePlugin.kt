@@ -16,6 +16,7 @@ class NotificationCapturePlugin : Plugin() {
     @PluginMethod
     fun status(call: PluginCall) {
         val allowlist = NotificationCapture.load(context)
+        val granted = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
         val apps = JSArray()
         for (app in NotificationCapture.KNOWN_APPS) apps.put(JSObject().apply {
             put("packageName", app.packageName)
@@ -26,7 +27,7 @@ class NotificationCapturePlugin : Plugin() {
         })
         call.resolve(JSObject().apply {
             // Read live each time, so revoking access in system settings shows up on the next check.
-            put("granted", NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName))
+            put("granted", granted)
             put("paused", allowlist.paused)
             put("apps", apps)
         })
@@ -53,6 +54,8 @@ class NotificationCapturePlugin : Plugin() {
 
     @PluginMethod
     fun inbox(call: PluginCall) {
+        // Read on every app start for the badge, so this is where a dropped listener gets reconnected.
+        if (NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)) SakuNotificationListener.rebind(context)
         val items = JSArray()
         for (item in NotificationInbox.store(context).items()) items.put(JSObject().apply {
             put("id", item.id); put("packageName", item.packageName); put("account", item.account); put("amount", item.amount)

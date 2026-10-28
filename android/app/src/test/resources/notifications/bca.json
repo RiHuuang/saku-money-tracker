@@ -88,6 +88,16 @@
    }
   },
   {
+   "title": "Financial Diary",
+   "text": "You made a transaction of IDR 25,000.00 at KOPI KENANGAN at Food & Beverages category.",
+   "expected": {
+    "amount": 25000,
+    "direction": "expense",
+    "rawMerchant": "KOPI KENANGAN",
+    "balance": null
+   }
+  },
+  {
    "title": "BCA mobile",
    "text": "Dapatkan cashback hingga Rp50.000 dengan QRIS BCA!",
    "expected": null

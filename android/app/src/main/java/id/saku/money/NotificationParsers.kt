@@ -22,7 +22,7 @@ object NotificationParsers {
     private val notATransaction = Regex("""(?i)\b(?:otp|kode\s+verifikasi|promo|diskon|voucher|hingga|s\.?d\.?|dapatkan|nikmati|tagihan\s+akan|jatuh\s+tempo|limit|pengingat)\b""")
     private val incoming = Regex("""(?i)\b(?:masuk|diterima|menerima|kamu\s+terima|anda\s+terima|kredit|refund|pengembalian|cashback\s+(?:diterima|masuk)|uang\s+dari|dana\s+dari|kiriman\s+dari|received|credited|refunded|incoming)\b""")
     private val topUp = Regex("""(?i)\b(?:top\s?-?up|isi\s+saldo)\b""")
-    private val outgoing = Regex("""(?i)\b(?:pembayaran|bayar|dibayar|pembelian|beli|transfer|kirim|dikirim|debit|qris|tarik\s+tunai|transaksi|keluar|paid|payment|purchase|sent|spent|debited|transferred)\b""")
+    private val outgoing = Regex("""(?i)\b(?:pembayaran|bayar|dibayar|pembelian|beli|transfer|kirim|dikirim|debit|qris|tarik\s+tunai|transaksi|keluar|paid|payment|purchase|transaction|sent|spent|debited|transferred)\b""")
     private val merchantLead = Regex("""(?i)\b(?:di|ke|kepada|dari|untuk|at|to|from)\s+([^.,!\n]+)""")
     private val merchantStop = Regex("""(?i)\s+(?:(?:rp\.?|idr)\s?\d|at\s+[^.]*\bcategory\b|(?:sebesar|senilai|pada|tgl|tanggal|berhasil|sukses|telah|sudah|dengan|pakai|via|menggunakan|ref|no\.?|ke\s+(?:rekening|akun|saldo|nomor|kamu|anda|kantong))\b).*$""")
     private val notAName = Regex("""(?i)^(?:rekening|akun|saldo|nomor|rp|idr|kamu|anda)\b""")
