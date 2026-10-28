@@ -4248,24 +4248,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (prefers-reduced-motion: reduce) { .balance-panel.balance-action, .account-balance-item { transition: none; animation: none !important; } .balance-panel.balance-action:active, .account-balance-item:active { transform: none; } }
 
 .accounts-overview { display: grid; gap: 16px; }
-.accounts-total { display: grid; gap: 2px; margin: 0; }
-.accounts-total small { color: var(--muted); font-size: 12px; font-weight: 600; }
-.accounts-total strong { font-size: 28px; font-variant-numeric: tabular-nums; }
-.accounts-share { display: flex; gap: 2px; height: 14px; overflow: hidden; border-radius: 7px; background: var(--surface-muted); }
-.accounts-share i { min-width: 4px; }
-.accounts-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.accounts-list button { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; grid-template-areas: "dot name figure" ". bar bar"; align-items: center; gap: 6px 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.accounts-list button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-.accounts-dot { grid-area: dot; width: 12px; height: 12px; border-radius: 4px; }
-.accounts-name { grid-area: name; display: grid; gap: 2px; min-width: 0; }
-.accounts-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.accounts-name small, .accounts-figure small { color: var(--muted); font-size: 11px; }
-.accounts-figure { grid-area: figure; display: grid; justify-items: end; gap: 2px; }
-.accounts-figure strong { font-size: 14px; font-variant-numeric: tabular-nums; }
-.accounts-figure .is-negative { color: var(--danger); }
-.accounts-bar { grid-area: bar; height: 6px; overflow: hidden; border-radius: 3px; background: var(--surface-muted); }
-.accounts-bar i { display: block; height: 100%; border-radius: 3px; }
-.accounts-tip { margin: 0; color: var(--muted); font-size: 12px; }
+.accounts-overview .breakdown-row .legend-dot { flex: none; }
 .account-editor { display: grid; gap: 12px; }
 .account-editor .field-error { margin: -4px 0 0; color: var(--danger); font-size: 12px; }
 .account-editor .cloud-note { display: flex; align-items: center; gap: 6px; margin: 0; }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PencilLine, SlidersHorizontal, Trash2, Wallet } from "lucide-react";
-import { accountBalance, money, renameAccount, type Data, type Transaction } from "./domain";
-import { Modal } from "./components";
+import { accountBalance, compact, money, renameAccount, type Data, type Transaction } from "./domain";
+import { DonutRing, Modal } from "./components";
 import { t } from "./i18n";
 
 // Accounts keep their colour by their place in the account list, never by rank, so a balance change never repaints them.
@@ -27,24 +27,31 @@ export function AccountsOverview({ data, monthTransactions, onClose, onEdit }: {
   const total = rows.reduce((sum, row) => sum + row.balance, 0);
   const positive = rows.filter((row) => row.balance > 0);
   const held = positive.reduce((sum, row) => sum + row.balance, 0);
-  const largest = Math.max(1, ...rows.map((row) => Math.abs(row.balance)));
+  // Laid out like Insights (a chart panel with the ring, then an "at a glance" table) so it reads as the same kind of page.
   return <Modal title={t("moneyByAccount")} subtitle={t("acrossAccounts", { count: data.accounts.length })} onClose={onClose}>
-    <div className="accounts-overview">
-      <p className="accounts-total"><small>{t("recordedCash")}</small><strong>{money(total)}</strong></p>
-      {held > 0 && <div className="accounts-share" role="img" aria-label={positive.map((row) => `${row.account} ${Math.round(row.balance / held * 100)}%`).join(", ")}>
-        {positive.map((row) => <i key={row.account} title={`${row.account}: ${money(row.balance)}`} style={{ flexGrow: row.balance, background: accountColor(data, row.account) }} />)}
-      </div>}
-      <ul className="accounts-list">
-        {rows.map((row) => <li key={row.account}>
-          <button type="button" onClick={() => onEdit(row.account)} aria-label={t("editAccountNamed", { account: row.account })}>
-            <span className="accounts-dot" style={{ background: accountColor(data, row.account) }} aria-hidden="true" />
-            <span className="accounts-name"><strong>{row.account}</strong><small>{row.income || row.expense ? t("accountMonthFlow", { income: money(row.income), expense: money(row.expense) }) : t("noActivityThisMonth")}</small></span>
-            <span className="accounts-figure"><strong className={row.balance < 0 ? "is-negative" : ""}>{money(row.balance)}</strong><small>{held > 0 && row.balance > 0 ? `${Math.round(row.balance / held * 100)}%` : row.balance < 0 ? t("belowZero") : "0%"}</small></span>
-            <span className="accounts-bar" aria-hidden="true"><i style={{ width: `${Math.abs(row.balance) / largest * 100}%`, background: row.balance < 0 ? "var(--danger)" : accountColor(data, row.account) }} /></span>
-          </button>
-        </li>)}
-      </ul>
-      <p className="accounts-tip">{t("accountsTip")}</p>
+    <div className="accounts-overview insights-view">
+      <section className="chart-panel">
+        <h2>{t("whereYourMoneyIs")}</h2>
+        <div className="spending-content">
+          <DonutRing parts={positive.map((row) => ({ id: row.account, color: accountColor(data, row.account), value: row.balance }))} total={held}
+            label={`${t("recordedCash")} ${money(total)}: ${positive.map((row) => `${row.account} ${Math.round(row.balance / held * 100)}%`).join(", ")}`}
+            center={{ title: t("recordedCash"), value: compact(total), unit: "IDR" }} />
+          <div className="ring-legend">
+            {positive.map((row) => <div key={row.account}><span className="legend-dot" style={{ background: accountColor(data, row.account) }} /><span>{row.account}</span><strong>{Math.round(row.balance / held * 100)}%</strong></div>)}
+            {!positive.length && <p className="muted">{t("noMoneyRecorded")}</p>}
+          </div>
+        </div>
+      </section>
+      <section className="budget-breakdown">
+        <h2>{t("everyAccountAtAGlance")}</h2>
+        <div className="breakdown-header"><span>{t("account")}</span><span>{t("moneyIn")}</span><span>{t("moneyOut")}</span><span>{t("balance")}</span></div>
+        {rows.map((row) => <button type="button" className="breakdown-row" key={row.account} onClick={() => onEdit(row.account)} aria-label={t("editAccountNamed", { account: row.account })}>
+          <span><span className="legend-dot" style={{ background: accountColor(data, row.account) }} aria-hidden="true" /><strong>{row.account}</strong></span>
+          <span>{money(row.income)}</span>
+          <span>{money(row.expense)}</span>
+          <span className={row.balance < 0 ? "negative" : "positive"}>{money(row.balance)}</span>
+        </button>)}
+      </section>
     </div>
   </Modal>;
 }
