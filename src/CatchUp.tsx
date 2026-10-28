@@ -8,7 +8,7 @@ import { learnMerchant, suggestMerchant } from "./merchants";
 import { openImportPages } from "./importPages";
 import { ChoiceField, Modal } from "./components";
 import { localeTag, t } from "./i18n";
-import { applySharedSourceDate, bcaAccount, confirmedImportAccount, detectImportAccount, prepareBcaRow, importRowName, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
+import { applySharedSourceDate, withoutOverlap, bcaAccount, confirmedImportAccount, detectImportAccount, prepareBcaRow, importRowName, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation, suggestImportDecision, usesDeferredFunding } from "./importTransactions";
 
 const readConsent = (owner: string) => { try { return localStorage.getItem(importConsentKey(owner)) === "granted"; } catch { return false; } };
 const isImage = (name: string) => !/\.pdf$/i.test(name);
@@ -104,20 +104,26 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const hasFilesToProcess = !!draft?.sources.some((source) => !source.pageCount || source.processedPages < source.pageCount);
   async function addFiles(files: FileList | null) {
     if (!files?.length) return;
+    // Copy the list now: the input is cleared as soon as this returns its first promise.
+    const picked = Array.from(files);
     if (processingRef.current || savingRef.current) { setInfo(t("waitImport")); return; }
     if (!userId) { setInfo(t("signInSources")); return; }
     let next = draftRef.current;
     if (!next || next.owner !== owner || next.month !== month) next = { id: uid(), owner, month, sources: [], rows: [], saved: [], createdAt: Date.now() };
-    const chosen = Array.from(files);
+    // The same screenshot added twice is ignored.
+    const hashes = await Promise.all(picked.map(async (file) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())), (byte) => byte.toString(16).padStart(2, "0")).join("")));
+    const known = new Set(next.sources.map((source) => source.hash).filter(Boolean));
+    const chosen = picked.filter((_, index) => !known.has(hashes[index]) && hashes.indexOf(hashes[index]) === index);
+    const repeated = picked.length - chosen.length;
     const eligible = chosen.filter((file) => /\.pdf$/i.test(file.name) ? file.size <= 20_000_000 : /\.(png|jpe?g|webp)$/i.test(file.name) && file.size <= 12_000_000);
     const accepted = eligible.slice(0, Math.max(0, 10 - next.sources.length));
     const skipped = chosen.length - accepted.length;
-    const sources = accepted.map((file) => ({ id: uid(), name: file.name, account: bcaAccount(data), accountConfirmed: !!bcaAccount(data), accountDetected: !!bcaAccount(data), file, processedPages: 0, pageCount: 0 }));
-    if (!sources.length) { setInfo(next.sources.length >= 10 ? t("draftFull") : t("chooseValidFiles")); return; }
+    const sources = accepted.map((file) => ({ id: uid(), name: file.name, hash: hashes[picked.indexOf(file)], account: bcaAccount(data), accountConfirmed: !!bcaAccount(data), accountDetected: !!bcaAccount(data), file, processedPages: 0, pageCount: 0 }));
+    if (!sources.length) { setInfo(repeated ? t("duplicateFilesSkipped", { count: repeated }) : next.sources.length >= 10 ? t("draftFull") : t("chooseValidFiles")); return; }
     try { await save({ ...next, sources: [...next.sources, ...sources] }); }
     catch { setInfo(t("filesSaveError")); return; }
     setDrafts(await listImportDrafts(owner));
-    setInfo([t(sources.length === 1 ? "sourceAddedOne" : "sourcesAdded", { count: sources.length }), skipped ? t("sourcesSkipped", { count: skipped }) : ""].filter(Boolean).join(" "));
+    setInfo([t(sources.length === 1 ? "sourceAddedOne" : "sourcesAdded", { count: sources.length }), skipped ? t("sourcesSkipped", { count: skipped }) : "", repeated ? t("duplicateFilesSkipped", { count: repeated }) : ""].filter(Boolean).join(" "));
   }
   async function extract(consentGiven = consented) {
     if (!draftRef.current || !userId || processingRef.current || savingRef.current) return;
@@ -155,8 +161,9 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
             return prepareBcaRow({ ...row, decision: suggestImportDecision(row, reviewMonth) } as ImportRow, data, confirmedImportAccount(current, data) || bcaAccount(data));
           });
           const latest = draftRef.current;
-          const sourceRows = [...latest.rows, ...rows].filter((row) => row.sourceId === current.id);
-          await save({ ...latest, rows: [...latest.rows, ...rows], sources: latest.sources.map((item) => {
+          const fresh = withoutOverlap(rows, latest.rows.filter((row) => row.sourceId !== current.id)).rows;
+          const sourceRows = [...latest.rows, ...fresh].filter((row) => row.sourceId === current.id);
+          await save({ ...latest, rows: [...latest.rows, ...fresh], sources: latest.sources.map((item) => {
             if (item.id !== current.id) return item;
             const progress = { ...item, processedPages: page.number, pageCount: documentPages.count, datesChecked: false, error: undefined };
             if (item.accountConfirmed && !item.accountDetected) return progress;

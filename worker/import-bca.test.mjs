@@ -1,21 +1,28 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { bcaRow, looksLikeBcaStatement, mergeBcaReads, parseBcaAnswer } from "./import-bca.js";
+import { bcaRow, looksLikeBcaStatement, mergeBcaReads, parseBcaAnswer, settlePending } from "./import-bca.js";
 
 // Every synthetic myBCA row in the benchmark parses to the expected Saku row when the transcription is right.
 const { screens } = JSON.parse(readFileSync(new URL("../scripts/fixtures/bca/expected.json", import.meta.url), "utf8"));
 const read = (row) => ({ dateText: row.printedDate, ref: row.printedRef, type: row.printedType, amountText: `IDR ${row.amount.toLocaleString("en-US")}.00` });
 const kind = (row) => row.activity === "card_payment" ? "card_payment" : row.activity === "topup" ? "wallet_topup" : row.direction;
-for (const row of screens.flatMap((screen) => screen.rows)) {
-  const parsed = bcaRow(read(row), "2026-10-28");
+for (const screen of screens) for (const [index, parsed] of settlePending(screen.rows.map((row) => bcaRow(read(row))), "2026-10-28").entries()) {
+  const row = screen.rows[index];
   assert.equal(parsed.amount, row.amount, row.printedRef);
   assert.equal(parsed.direction, row.direction, row.printedRef);
-  assert.equal(parsed.date, row.expect.date === "TODAY" ? "2026-10-28" : row.expect.date, row.printedRef);
+  assert.equal(parsed.date, row.expect.date, row.printedRef);
   assert.equal(kind(parsed), row.expect.kind, row.printedRef);
   assert.equal(parsed.cleanName, row.expect.name, row.printedRef);
   assert.equal(parsed.note.replace(/\s/g, ""), row.expect.note.replace(/\s/g, ""), row.printedRef);
   assert.equal(parsed.check, "", row.printedRef);
 }
+
+// PEND takes the day after the latest booked date on screen, never later than today, and needs review with no date on screen.
+const pend = { dateText: "PEND", ref: "2710/FTSCY/WS95271 55000.00 BAGUS PRAKOSO", type: "TRSF E-BANKING CR", amountText: "IDR 55,000.00" };
+const dated = { ...pend, dateText: "25 Oct 2026" };
+assert.equal(settlePending([bcaRow(pend), bcaRow(dated)], "2026-10-28")[0].date, "2026-10-26");
+assert.equal(settlePending([bcaRow(pend), bcaRow({ ...pend, dateText: "28 Oct 2026" })], "2026-10-28")[0].date, "2026-10-28");
+assert.deepEqual(settlePending([bcaRow(pend)], "2026-10-28").map((row) => [row.date, row.check]), [["", "date"]]);
 
 // The amount repeated inside a transfer reference must agree with the IDR line.
 assert.equal(bcaRow({ dateText: "27 Oct 2026", ref: "2710/FTSCY/WS95271 55000.00 BAGUS PRAKOSO", type: "TRSF E-BANKING CR", amountText: "IDR 85,000.00" }, "2026-10-28").check, "amount");

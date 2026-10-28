@@ -194,3 +194,12 @@ export function prepareBcaRow(row: ImportRow, data: Data, account: string): Impo
   const ready = confident && next.direction === "expense" && (next.activity !== "purchase" || next.amount < 1_000_000);
   return { ...next, decision: ready ? "ready" : "later" };
 }
+
+// Overlapping screenshots repeat rows; a row another source in the draft already has is left out.
+const overlapKey = (row: Pick<ImportRow, "date" | "amount" | "direction" | "name">) =>
+  [row.date, row.amount, row.direction, row.name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim()].join("|");
+export function withoutOverlap<T extends Pick<ImportRow, "date" | "amount" | "direction" | "name">>(rows: readonly T[], otherSources: readonly ImportRow[]): { rows: T[]; dropped: number } {
+  const seen = new Set(otherSources.map(overlapKey));
+  const kept = rows.filter((row) => !seen.has(overlapKey(row)));
+  return { rows: kept, dropped: rows.length - kept.length };
+}

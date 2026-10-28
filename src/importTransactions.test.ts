@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, bcaAccount, prepareBcaRow, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, bcaAccount, prepareBcaRow, withoutOverlap, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -308,4 +308,15 @@ test("BCA rows fill in the card and wallet they imply and skip what the ledger h
   assert.equal(prepareBcaRow({ ...base, amount: 25000, check: "amount" }, data, "BCA").decision, "later");
   assert.equal(prepareBcaRow({ ...base, amount: 25000 }, data, "BCA").decision, "ready");
   assert.equal(prepareBcaRow({ ...base, amount: 2_000_000 }, data, "BCA").decision, "later");
+});
+
+test("rows another screenshot in the draft already has are left out", () => {
+  const earlier: ImportRow[] = [{ ...base, sourceId: "screen-1", name: "2310/FTSCY/WS95031 25000.00 makaaaaasi AGNES", amount: 25000, direction: "income", date: "2026-10-23" }];
+  const page = [
+    { ...base, id: "a", sourceId: "screen-2", name: "2310/FTSCY/WS95031 25000.00 makaaaaasi  AGNES", amount: 25000, direction: "income" as const, date: "2026-10-23" },
+    { ...base, id: "b", sourceId: "screen-2", name: "QR jajanan ah", amount: 15000, date: "2026-10-23" },
+  ];
+  const result = withoutOverlap(page, earlier);
+  assert.deepEqual(result.rows.map((row) => row.id), ["b"]);
+  assert.equal(result.dropped, 1);
 });

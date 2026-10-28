@@ -40,8 +40,9 @@ export function parseBcaAnswer(answer) {
 }
 
 const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, mei: 5, jun: 6, jul: 7, aug: 8, agu: 8, agt: 8, sep: 9, oct: 10, okt: 10, nov: 11, dec: 12, des: 12 };
-function bcaDate(dateText, today) {
-  if (/^pend/i.test(dateText)) return today;
+// PEND rows have no booking date yet; settlePending dates them from the rest of the screenshot.
+function bcaDate(dateText) {
+  if (/^pend/i.test(dateText)) return "";
   const match = dateText.match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(20\d{2})$/);
   const month = match && months[match[2].toLowerCase()];
   if (!month) return "";
@@ -66,8 +67,8 @@ function splitPerson(text) {
   return { person: title(words.slice(start).join(" ")), note: words.slice(0, start).join(" ") };
 }
 
-export function bcaRow(read, today) {
-  const date = bcaDate(read.dateText, today);
+export function bcaRow(read) {
+  const date = bcaDate(read.dateText);
   const amount = bcaAmount(read.amountText);
   const type = read.type.toUpperCase();
   const base = { date, dateEvidence: read.dateText, name: `${read.ref} ${read.type}`.trim().slice(0, 100), paymentMethod: "", amount, note: "", check: "" };
@@ -101,15 +102,28 @@ export function bcaRow(read, today) {
 }
 
 // Pairs the two reads row by row; a field that differs marks the row for review.
+// A pending row takes the day after the latest booked date on the same screenshot (never later than today);
+// with no booked date on screen it goes to review.
+export function settlePending(rows, today) {
+  const booked = rows.filter((row) => !/^pend/i.test(row.dateEvidence) && row.date).map((row) => row.date).sort();
+  const latest = booked.at(-1);
+  const next = latest ? new Date(Date.parse(`${latest}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : "";
+  return rows.map((row) => {
+    if (!/^pend/i.test(row.dateEvidence)) return row;
+    if (!next) return { ...row, date: "", check: row.check || "date" };
+    return { ...row, date: next > today ? today : next, check: row.check === "date" ? "" : row.check };
+  });
+}
+
 export function mergeBcaReads(first, second, today) {
-  return first.rows.map((read, index) => {
+  return settlePending(first.rows.map((read, index) => {
     const other = second.rows[index];
-    const row = bcaRow(read, today);
+    const row = bcaRow(read);
     if (!other) return { ...row, check: row.check || "unconfirmed" };
     if (other.amountText.replace(/\s/g, "") !== read.amountText.replace(/\s/g, "")) return { ...row, check: "amount" };
     if (other.type.toUpperCase() !== read.type.toUpperCase() || other.dateText !== read.dateText) return { ...row, check: row.check || "unconfirmed" };
     return row;
-  }).concat(second.rows.slice(first.rows.length).map((read) => ({ ...bcaRow(read, today), check: "unconfirmed" })));
+  }).concat(second.rows.slice(first.rows.length).map((read) => ({ ...bcaRow(read), check: "unconfirmed" }))), today);
 }
 
 export const looksLikeBcaStatement = (text) => /\bBANK CENTRAL ASIA\b|\bBCA\b/i.test(text);

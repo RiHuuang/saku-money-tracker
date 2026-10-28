@@ -28,6 +28,8 @@ export type ImportSource = {
   account: string;
   accountConfirmed?: boolean;
   accountDetected?: boolean;
+  // SHA-256 of the file, so the same screenshot can't be added to a draft twice.
+  hash?: string;
   mixedAccounts?: boolean;
   datesChecked?: boolean;
   file: File;

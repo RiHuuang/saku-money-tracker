@@ -34,7 +34,7 @@ export function score(expectedRows, actualRows) {
     const checks = {
       amount: true,
       direction: actual.direction === expected.direction,
-      date: actual.date === (want.date === "TODAY" ? today : want.date),
+      date: actual.date === want.date,
       kind: rowKind(actual) === want.kind,
       name: norm(actual.cleanName || actual.name).includes(norm(want.name).replace(/^(transfer dari|transfer ke|isi saldo|bayar kartu kredit) /, "")),
       note: norm(actual.note || "").replace(/ /g, "") === norm(want.note).replace(/ /g, ""),

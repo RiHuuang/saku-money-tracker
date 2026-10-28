@@ -1,5 +1,5 @@
 {
-  "note": "Synthetic myBCA rows. 'expect' is what Saku should store; date TODAY means the day the screenshot is read.",
+  "note": "Synthetic myBCA rows. 'expect' is what Saku should store; A PEND row takes the day after the latest booked date on its screenshot.",
   "owner": "RANI SUSANTO",
   "screens": [
     {
@@ -7,7 +7,7 @@
       "account": "123 - 456 - 7890",
       "rows": [
         { "printedDate": "PEND", "printedRef": "2710/FTSCY/WS95271 315229.00 barang te sis 27ok t SINTA", "printedType": "TRSF E-BANKING CR", "amount": 315229, "direction": "income",
-          "expect": { "date": "TODAY", "kind": "income", "name": "Transfer dari Sinta", "note": "barang te sis 27okt" } },
+          "expect": { "date": "2026-10-28", "kind": "income", "name": "Transfer dari Sinta", "note": "barang te sis 27okt" } },
         { "printedDate": "27 Oct 2026", "printedRef": "2710/FTSCY/WS95271 250000.00 haidilaaao MAYA LESTARI W", "printedType": "TRSF E-BANKING CR", "amount": 250000, "direction": "income",
           "expect": { "date": "2026-10-27", "kind": "income", "name": "Transfer dari Maya Lestari W", "note": "haidilaaao" } },
         { "printedDate": "27 Oct 2026", "printedRef": "2710/FTSCY/WS95271 55000.00 BAGUS PRAKOSO", "printedType": "TRSF E-BANKING CR", "amount": 55000, "direction": "income",
