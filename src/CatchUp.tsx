@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Check, ChevronDown, FileImage, FileText, LockKeyhole, RotateCcw, Upload, X } from "lucide-react";
+import { ArrowRight, Check, FileImage, FileText, LockKeyhole, RotateCcw, Upload, X } from "lucide-react";
 import { extractImportPage } from "./cloud";
 import { money, reconcile, today, uid, validAmount, validDate, type BankRow, type Data, type Transaction } from "./domain";
 import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, type ImportDraft, type ImportRow } from "./importDraft";
@@ -39,7 +39,11 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const [previewId, setPreviewId] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [deleteConfirmationId, setDeleteConfirmationId] = useState("");
-  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [editingRow, setEditingRow] = useState("");
+  const [swipe, setSwipe] = useState<{ id: string; dx: number } | null>(null);
+  const gesture = useRef<{ id: string; x: number; y: number; moved: boolean; held: boolean; touch: boolean; timer: number } | null>(null);
+  // Rows keep the place they first appeared in, so choosing one never makes the list jump.
+  const rowOrder = useRef(new Map<string, number>());
   const [sharedDates, setSharedDates] = useState<Record<string, string>>({});
   const [selectedMatches, setSelectedMatches] = useState<string[]>([]);
   const cancelled = useRef(false);
@@ -315,11 +319,12 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       {!unverifiedMatches.length && !!exactMatches.length && <p className="catchup-match-done"><Check size={16} /> {t("allExactChecked")}</p>}
       <p className="import-note">{t("incompleteSourceNote")}</p></section>}
     {!!draft?.rows.length && <section className="catchup-panel catchup-review"><div className="catchup-panel-head"><div><h3>{t("reviewTitle")}</h3><p>{t("reviewHelp")}</p></div><span className="catchup-private"><LockKeyhole size={13} /> {t("savedDevice")}</span></div>
-      <div className="catchup-review-overview"><div><strong>{ready.length}</strong><span>{t("toAdd")}</span></div><div><strong>{needsReview.length}</strong><span>{t("needLook")}</span></div><div><strong>{setAside.length}</strong><span>{t("notImported")}</span></div></div>
+      <div className="catchup-review-overview"><div><strong>{ready.length}</strong><span>{t("toAdd")}</span></div><div><strong>{needsReview.length}</strong><span>{t("needLook")}</span></div><div><strong>{setAside.length}</strong><span>{t("notImported")}</span></div></div><p className="catchup-swipe-hint">{t("swipeHint")}</p>
       {!!undatedSources.length && <div className="catchup-missing-dates"><strong>{t("someDatesMissing")}</strong><p>{t("sharedDateHelp")}</p>{undatedSources.map((source) => { const count = draft.rows.filter((row) => row.sourceId === source.id && !row.date && row.decision !== "skip" && !rowSaved(row)).length; return <div key={source.id}><b>{source.name} · {count} {count === 1 ? t("row") : t("rows")}</b><div><label>{t("sharedDate")}<input type="date" value={sharedDates[source.id] || ""} max={today()} disabled={processing || saving} onChange={(event) => setSharedDates((current) => ({ ...current, [source.id]: event.target.value }))} /></label><button type="button" className="button secondary" disabled={!validDate(sharedDates[source.id] || "") || (sharedDates[source.id] || "") > today() || processing || saving} onClick={() => void applySharedDate(source.id)}>{t("setDateFor", { count, unit: count === 1 ? t("row") : t("rows") })}</button></div></div>; })}</div>}
       {draft.sources.map((source) => {
         const order = (row: ImportRow) => needsReview.includes(row) ? 0 : ready.includes(row) ? 1 : 2;
-        const rows = draft.rows.filter((row) => row.sourceId === source.id).sort((a, b) => order(a) - order(b));
+        for (const row of draft.rows) if (row.sourceId === source.id && !rowOrder.current.has(row.id)) rowOrder.current.set(row.id, order(row) * 1_000_000 + rowOrder.current.size);
+        const rows = draft.rows.filter((row) => row.sourceId === source.id).sort((a, b) => rowOrder.current.get(a.id)! - rowOrder.current.get(b.id)!);
         return rows.length ? <div className="catchup-group" key={source.id}>
           <h4>{source.mixedAccounts ? t("mixedAccountLabel") : confirmedImportAccount(source, data) || t("chooseAccount")} <span>· {source.name}</span></h4>
           {rows.map((row) => {
@@ -330,16 +335,46 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
             const pair = ["transfer", "topup"].includes(row.activity) ? draft.rows.find((candidate) => candidate.id !== row.id && ["transfer", "topup"].includes(candidate.activity) && candidate.date === row.date && candidate.amount === row.amount && candidate.direction !== row.direction && accountForRow(candidate) && accountForRow(candidate) !== account) : undefined;
             const card = data.creditCards.find((item) => item.name === account);
             const rowReady = ready.includes(row);
-            const expanded = expandedRows[row.id] ?? false;
-            const status = alreadySaved ? t("inActivity") : row.alreadyInSaku && row.decision === "skip" ? t("alreadyInSaku") : row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : t("openReview");
+            const editing = editingRow === row.id;
+            const decide = (decision: ImportRow["decision"]) => { setEditingRow(""); void updateRow(row.id, { decision }); };
+            // Swipe right to add, left to leave out; hold to open the row for editing.
+            const startGesture = (event: React.PointerEvent) => {
+              if (alreadySaved || saving) return;
+              const touch = event.pointerType !== "mouse";
+              gesture.current = { id: row.id, x: event.clientX, y: event.clientY, moved: false, held: false, touch, timer: touch ? window.setTimeout(() => {
+                if (!gesture.current || gesture.current.id !== row.id || gesture.current.moved) return;
+                gesture.current.held = true; navigator.vibrate?.(12); setEditingRow(row.id);
+              }, 450) : 0 };
+            };
+            const moveGesture = (event: React.PointerEvent) => {
+              const current = gesture.current;
+              if (!current || current.id !== row.id || current.held) return;
+              const dx = event.clientX - current.x, dy = event.clientY - current.y;
+              if (!current.moved && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { window.clearTimeout(current.timer); gesture.current = null; return; }
+              if (!current.moved && Math.abs(dx) > 10) { current.moved = true; window.clearTimeout(current.timer); try { (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); } catch { /* the swipe still follows the finger */ } }
+              if (current.moved) setSwipe({ id: row.id, dx: Math.max(-140, Math.min(140, dx)) });
+            };
+            const endGesture = () => {
+              const current = gesture.current;
+              if (!current || current.id !== row.id) return;
+              window.clearTimeout(current.timer);
+              const dx = swipe?.id === row.id ? swipe.dx : 0;
+              if (current.moved && dx > 90) decide("ready");
+              else if (current.moved && dx < -90) decide("skip");
+              setSwipe(null);
+              window.setTimeout(() => { if (gesture.current === current) gesture.current = null; }, 0);
+            };
+            const offset = swipe?.id === row.id ? swipe.dx : 0;            const status = alreadySaved ? t("inActivity") : row.alreadyInSaku && row.decision === "skip" ? t("alreadyInSaku") : row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : t("openReview");
             const hint = !alreadySaved && !rowReady && row.decision !== "skip" ? importRowReviewIssue(row, account, data, duplicate) : "";
-            return <div className="catchup-row" key={row.id}>
-              <button type="button" className="catchup-row-summary" aria-expanded={expanded} aria-controls={expanded ? `catchup-details-${row.id}` : undefined} onClick={() => setExpandedRows((current) => ({ ...current, [row.id]: !expanded }))}>
-                <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date || undefined}>{validDate(row.date) ? friendlyDate(row.date) : t("checkDate")}</time>{accountHint && <small className="catchup-row-account">{accountHint}</small>}<small>{activityOptions().find((item) => item.value === row.activity)?.label}</small></span><strong>{importRowName(row) || t("unnamedTransaction")}</strong>{importRowName(row) !== row.name.trim() && <small className="catchup-row-raw">{row.name}</small>}{hint && <small className="catchup-row-hint">{hint}</small>}</span>
+            return <div className="catchup-row" key={row.id} data-swipe={offset > 40 ? "add" : offset < -40 ? "skip" : undefined}>
+              <button type="button" className="catchup-row-summary" aria-haspopup="dialog" style={offset ? { transform: `translateX(${offset}px)` } : undefined}
+                onPointerDown={startGesture} onPointerMove={moveGesture} onPointerUp={endGesture} onPointerCancel={endGesture} onContextMenu={(event) => event.preventDefault()}
+                onClick={() => { const current = gesture.current; if (current?.moved || current?.held || current?.touch) return; if (!alreadySaved) setEditingRow(row.id); }}>
+                <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date || undefined}>{validDate(row.date) ? friendlyDate(row.date) : t("checkDate")}</time>{accountHint && <small className="catchup-row-account">{accountHint}</small>}<small>{activityOptions().find((item) => item.value === row.activity)?.label}</small></span><strong>{importRowName(row) || t("unnamedTransaction")}</strong>{row.note && <small className="catchup-row-note-text">{row.note}</small>}{hint && <small className="catchup-row-hint">{hint}</small>}</span>
                 <span className="catchup-row-figure"><strong>{row.activity === "reward" ? `${row.amount || 0} ${t("pointsCoinsShort")}` : `${row.direction === "expense" ? "−" : row.direction === "income" ? "+" : "?"}${money(row.amount || 0)}`}</strong><small className={rowReady ? "is-ready" : alreadySaved ? "is-saved" : ""}>{status}</small></span>
-                <ChevronDown size={16} aria-hidden="true" />
+                
               </button>
-              {expanded && <div id={`catchup-details-${row.id}`} className="catchup-row-details">
+              {editing && <Modal title={importRowName(row) || t("unnamedTransaction")} subtitle={`${validDate(row.date) ? friendlyDate(row.date) : t("checkDate")} · ${row.direction === "expense" ? "−" : row.direction === "income" ? "+" : "?"}${money(row.amount || 0)}`} onClose={() => setEditingRow("")}><div className="catchup-row-details">
               <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={importRowName(row)} maxLength={100} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { cleanName: event.target.value })} /></label><label className="catchup-field">{t("date")}<input type="date" value={row.date} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { date: event.target.value })} /></label><label className="catchup-field">{row.activity === "reward" ? t("pointsCoins") : t("amountRupiah")}<span className="catchup-amount">{row.activity !== "reward" && <span>Rp</span>}<input type="number" min="1" step="1" value={row.amount || ""} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { amount: Number(event.target.value) })} /></span></label></div>
               <div className="catchup-row-meta">
                 <ChoiceField className="catchup-field" label={t("moneyMovement")} value={row.direction} disabled={alreadySaved || saving} onValueChange={(value) => void updateRow(row.id, { direction: value as ImportRow["direction"], ...(["transfer", "topup", "card_payment"].includes(row.activity) ? {} : { activity: value === "income" ? "income" : "purchase" }) })} options={[{ value: "expense", label: t("wentOut") }, { value: "income", label: t("cameIn") }, { value: "unknown", label: t("unsure") }]} />
@@ -351,8 +386,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
                 <p className="catchup-row-note">{t("fromPage", { page: row.page })}{importRowName(row) !== row.name.trim() ? ` · ${t("printedAs", { name: row.name })}` : ""}{row.dateEvidence ? ` · ${t("printedDate", { date: row.dateEvidence })}` : ""}{alreadySaved ? ` · ${t("savedEditActivity")}` : ""}{row.date && !row.date.startsWith(draft.month) && !alreadySaved ? ` · ${t("outsideMonth")}` : ""}{pair && !alreadySaved ? ` · ${t("possibleTransfer", { account: accountForRow(pair) })}` : ""}{duplicate && !alreadySaved ? ` · ${t("possibleDuplicate")}` : ""}</p>
                 {duplicate && !alreadySaved && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => void updateRow(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
                 {row.decision === "ready" && !rowReady && !alreadySaved && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
-                {!alreadySaved && <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: row.name || t("unnamedTransaction") })}><button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} disabled={saving} onClick={() => void updateRow(row.id, { decision: "ready" })}>{t("addToSaku")}</button><button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} disabled={saving} onClick={() => void updateRow(row.id, { decision: "later" })}>{t("reviewLater")}</button><button type="button" className={row.decision === "skip" ? "selected" : ""} aria-pressed={row.decision === "skip"} disabled={saving} onClick={() => void updateRow(row.id, { decision: "skip" })}>{t("dontImport")}</button></div></div>}
-              </div></div>}
+                {!alreadySaved && <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: row.name || t("unnamedTransaction") })}><button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} disabled={saving} onClick={() => decide("ready")}>{t("addToSaku")}</button><button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} disabled={saving} onClick={() => decide("later")}>{t("reviewLater")}</button><button type="button" className={row.decision === "skip" ? "selected" : ""} aria-pressed={row.decision === "skip"} disabled={saving} onClick={() => decide("skip")}>{t("dontImport")}</button></div></div>}
+              </div></div></Modal>}
             </div>;
           })}
         </div> : null;
