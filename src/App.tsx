@@ -71,6 +71,7 @@ import {
   type Transaction,
 } from "./domain";
 import { learnMerchant, suggestMerchant } from "./merchants";
+import { goalProgress, pocketFunding, removePocketWithGoals, type SavingsGoal } from "./goals";
 import { listImportDrafts } from "./importDraft";
 import { notificationCapture, notificationCaptureSupported } from "./notificationCapture";
 import NotificationAccess from "./NotificationAccess";
@@ -145,7 +146,8 @@ type Edit =
   | { type: "pocket"; value?: Pocket }
   | { type: "pocket_delete"; value: Pocket }
   | { type: "account_transfer"; value?: Transaction }
-  | { type: "pocket_transfer" }
+  | { type: "pocket_transfer"; toPocketId?: string }
+  | { type: "goal"; value?: SavingsGoal; pocketId?: string }
   | { type: "start" }
   | null;
 const cloudImportEnabled = true;
@@ -164,9 +166,10 @@ const mobileNavigation = [
   navigation[0], navigation[1], navigation[5], navigation[2],
   { id: "more", label: "More", icon: Menu },
 ] as const;
-const pocketHasReferences = (data: Data, pocketId: string) =>
+const pocketHasOtherReferences = (data: Data, pocketId: string) =>
   data.transactions.some((t) => t.pocketId === pocketId) || data.recurring.some((r) => r.pocketId === pocketId) ||
   data.favorites.some((f) => f.pocketId === pocketId) || data.pocketTransfers.some((move) => move.fromPocketId === pocketId || move.toPocketId === pocketId);
+const pocketHasReferences = (data: Data, pocketId: string) => pocketHasOtherReferences(data, pocketId) || data.goals.some((goal) => goal.pocketId === pocketId);
 export default function App() {
   const [data, setData] = useState<Data | null>(null),
     [loadError, setLoadError] = useState(""),
@@ -1094,6 +1097,19 @@ export default function App() {
                   <span>{t("createPocket")}</span>
                 </button>
               </div>
+              <section className="goals-section">
+                <div className="section-heading"><div><h2>{t("savingsGoals")}</h2><p>{t("goalsWatchPocketFunding")}</p></div><button className="button secondary" disabled={!data.pockets.length} onClick={() => setEdit({ type: "goal" })}><Plus size={16} />{t("newGoal")}</button></div>
+                {data.goals.length > 0 && <div className="goal-grid">{data.goals.map((goal) => {
+                  const progress = goalProgress(data, goal, today().slice(0, 7));
+                  return <article className="goal-card" key={goal.id}>
+                    <div className="goal-card-heading"><div><strong>{goal.name}</strong><span>{data.pockets.find((p) => p.id === goal.pocketId)?.name}</span></div><button className="text-button" onClick={() => setEdit({ type: "goal", value: goal })}>{t("edit")}</button></div>
+                    <progress value={progress.saved} max={goal.target} aria-label={t("goalProgressLabel", { name: goal.name })} />
+                    <p>{money(progress.saved)} / {money(goal.target)}</p>
+                    <p className="goal-card-detail">{progress.remaining === 0 ? t("goalReached") : progress.monthlyTarget !== null ? t("goalMonthlyTarget", { amount: money(progress.monthlyTarget) }) : t("goalRemaining", { amount: money(progress.remaining) })}</p>
+                    {progress.remaining > 0 && <button className="text-button" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer", toPocketId: goal.pocketId })}>{t("addToGoal")}</button>}
+                  </article>;
+                })}</div>}
+              </section>
               <div className="inline-note">
                 <CalendarDays size={18} />
                 <span>
@@ -1280,7 +1296,8 @@ export default function App() {
           if (await commit({ ...data, transactions: data.transactions.filter((item) => item.id !== id) }, t("balanceAdjustmentRemoved"))) setEdit(null);
         }}
       />}
-      {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, t("pocketBudgetMoved"))) setEdit(null); }} />}
+      {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={edit.toPocketId ? today().slice(0, 7) : month} toPocketId={edit.toPocketId} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, t("pocketBudgetMoved"))) setEdit(null); }} />}
+      {edit?.type === "goal" && <GoalEditor key={edit.value?.id || "new"} data={data} goal={edit.value} pocketId={edit.pocketId} busy={busy} onClose={() => setEdit(null)} onSave={async (goal) => { if (await commit({ ...data, goals: edit.value ? data.goals.map((item) => item.id === goal.id ? goal : item) : [...data.goals, goal] }, edit.value ? t("goalUpdated") : t("goalCreated"))) setEdit(null); }} onDelete={async (id) => { if (await commit({ ...data, goals: data.goals.filter((item) => item.id !== id) }, t("goalDeleted"))) setEdit(null); }} />}
       {catchUpSheet && !edit && <Suspense fallback={null}><CatchUpDays data={data} days={catchUpSheet.days} index={catchUpSheet.index} busy={busy} onIndex={(index) => setCatchUpSheet({ ...catchUpSheet, index })} onAdd={(date, favorite) => setEdit({ type: "transaction", date, favorite })} onEdit={(value) => openTransaction(value)} onNothingSpent={(day) => commit({ ...data, checkedDays: [...new Set([...data.checkedDays, day])].sort() }, t("markedAsNothingSpent"))} onClose={() => setCatchUpSheet(null)} /></Suspense>}
       {edit?.type === "transaction" && (
         <TransactionEditor
@@ -1392,10 +1409,7 @@ export default function App() {
           }}
         />
       )}
-      {edit?.type === "pocket_delete" && <Modal title={t("deleteNamed", { name: edit.value.name })} subtitle={t("thisPocketWillBeRemoved")} onClose={() => setEdit(null)}>
-        {pocketHasReferences(data, edit.value.id) ? <p className="editor-help">{t("thisPocketHasTransactionsRecurring")}</p> : <p>{t("deleteThisPocketAndIts")}</p>}
-        <div className="form-footer"><button className="button secondary" onClick={() => setEdit(null)}>{t("cancel")}</button>{!pocketHasReferences(data, edit.value.id) && <button className="button danger" disabled={busy} onClick={() => void commit({ ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) }, t("pocketDeleted")).then((saved) => { if (saved) setEdit(null); })}>{t("deletePocket")}</button>}</div>
-      </Modal>}
+      {edit?.type === "pocket_delete" && <PocketDeleteDialog data={data} pocket={edit.value} busy={busy} onClose={() => setEdit(null)} onSave={async (next) => { if (await commit(next, t("pocketDeleted"))) setEdit(null); }} />}
       {edit?.type === "start" && (
         <StartProfile
           busy={busy}
@@ -2134,10 +2148,53 @@ function PocketEditor({
   );
 }
 
-function PocketTransferEditor({ data, month, busy, onClose, onSave }: { data: Data; month: string; busy: boolean; onClose: () => void; onSave: (move: Data["pocketTransfers"][number]) => Promise<void> }) {
-  const stats = summary(data, month), [from, setFrom] = useState(data.pockets[0]?.id || ""), [to, setTo] = useState(data.pockets[1]?.id || ""), [amount, setAmount] = useState(""), [error, setError] = useState("");
+function PocketTransferEditor({ data, month, toPocketId, busy, onClose, onSave }: { data: Data; month: string; toPocketId?: string; busy: boolean; onClose: () => void; onSave: (move: Data["pocketTransfers"][number]) => Promise<void> }) {
+  const stats = summary(data, month), [from, setFrom] = useState(data.pockets.find((p) => p.id !== toPocketId)?.id || ""), [to, setTo] = useState(toPocketId || data.pockets[1]?.id || ""), [amount, setAmount] = useState(""), [error, setError] = useState("");
   const choices = stats.pockets.map((p) => ({ value: p.id, label: p.name, description: `${money(Math.max(0, p.limit - p.spent))} remaining` }));
-  return <Modal title={t("movePocketBudget")} subtitle={t("adjustMonthOnly", { month: monthLabel(month) })} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError(t("chooseTwoDifferentPocketsAnd")); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">{t("from")}<ChoiceField hideLabel label={t("pocketToMoveFrom")} value={from} onValueChange={setFrom} options={choices} /></label><label className="field">To<ChoiceField hideLabel label={t("pocketToMoveTo")} value={to} onValueChange={setTo} options={choices} /></label><label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">{t("moveBudget")}</button></div></fieldset></form></Modal>;
+  return <Modal title={t("movePocketBudget")} subtitle={t("adjustMonthOnly", { month: monthLabel(month) })} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError(t("chooseTwoDifferentPocketsAnd")); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">{t("from")}<ChoiceField hideLabel label={t("pocketToMoveFrom")} value={from} onValueChange={setFrom} options={choices} /></label><label className="field">{t("to")}<ChoiceField hideLabel label={t("pocketToMoveTo")} value={to} onValueChange={setTo} options={choices} /></label><label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">{t("moveBudget")}</button></div></fieldset></form></Modal>;
+}
+
+function GoalEditor({ data, goal, pocketId, busy, onClose, onSave, onDelete }: { data: Data; goal?: SavingsGoal; pocketId?: string; busy: boolean; onClose: () => void; onSave: (goal: SavingsGoal) => Promise<void>; onDelete: (id: string) => Promise<void> }) {
+  const currentMonth = today().slice(0, 7);
+  const pockets = data.pockets.filter((pocket) => pocket.createdMonth <= currentMonth);
+  const [name, setName] = useState(goal?.name || "");
+  const [target, setTarget] = useState(goal ? String(goal.target) : "");
+  const [targetDate, setTargetDate] = useState(goal?.targetDate || "");
+  const [chosenPocketId, setChosenPocketId] = useState(goal?.pocketId || pocketId || pockets[0]?.id || "");
+  const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  return <Modal title={goal ? t("editGoal") : t("newGoal")} subtitle={t("goalsWatchPocketFunding")} onClose={onClose}>
+    <form onSubmit={(event) => {
+      event.preventDefault();
+      const amount = Number(target);
+      if (!name.trim() || name.trim().length > 60 || !validAmount(amount) || amount > 1e12 || !pockets.some((pocket) => pocket.id === chosenPocketId) || targetDate && targetDate < currentMonth) { setError(t("goalDetailsInvalid")); return; }
+      void onSave({ id: goal?.id || uid(), name: name.trim(), target: amount, ...(targetDate ? { targetDate } : {}), pocketId: chosenPocketId, createdMonth: goal?.createdMonth || currentMonth, startingFunding: goal?.startingFunding ?? pocketFunding(data, chosenPocketId, currentMonth) });
+    }}><fieldset disabled={busy}>
+      <label className="field">{t("goalName")}<input required maxLength={60} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label className="field">{t("goalPocket")}<ChoiceField hideLabel label={t("goalPocket")} value={chosenPocketId} onValueChange={setChosenPocketId} options={pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))} disabled={Boolean(goal)} /></label>
+      <label className="field">{t("goalTarget")}<div className="amount-input"><span>Rp</span><MoneyInput required value={target} onValueChange={setTarget} /></div></label>
+      <label className="field">{t("goalTargetMonth")}<input type="month" min={currentMonth} value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /></label>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {deleting && <p>{t("deleteGoalConfirm")}</p>}
+      <div className="form-footer">{goal && <button type="button" className="button danger" onClick={() => deleting ? void onDelete(goal.id) : setDeleting(true)}>{t("deleteGoal")}</button>}<button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button><button className="button primary" type="submit">{goal ? t("saveChanges") : t("createGoal")}</button></div>
+    </fieldset></form>
+  </Modal>;
+}
+
+function PocketDeleteDialog({ data, pocket, busy, onClose, onSave }: { data: Data; pocket: Pocket; busy: boolean; onClose: () => void; onSave: (next: Data) => Promise<void> }) {
+  const linkedGoals = data.goals.filter((goal) => goal.pocketId === pocket.id);
+  const [replacementId, setReplacementId] = useState("");
+  const blocked = pocketHasOtherReferences(data, pocket.id);
+  return <Modal title={t("deleteNamed", { name: pocket.name })} subtitle={t("thisPocketWillBeRemoved")} onClose={onClose}>
+    {blocked ? <p className="editor-help">{t("thisPocketHasTransactionsRecurring")}</p> : linkedGoals.length ? <>
+      <p>{t("pocketHasGoalsDeleteOrReassign", { count: linkedGoals.length })}</p>
+      <ChoiceField label={t("goalReassignment")} value={replacementId} onValueChange={setReplacementId} options={[{ value: "", label: t("deleteGoalsWithPocket") }, ...data.pockets.filter((item) => item.id !== pocket.id).map((item) => ({ value: item.id, label: t("moveGoalsToPocket", { name: item.name }) }))]} />
+      {replacementId && <p className="editor-help">{t("reassignedGoalStartsNow")}</p>}
+    </> : <p>{t("deleteThisPocketAndIts")}</p>}
+    <div className="form-footer"><button className="button secondary" onClick={onClose}>{t("cancel")}</button>{!blocked && <button className="button danger" disabled={busy} onClick={() => {
+      void onSave(removePocketWithGoals(data, pocket.id, replacementId, today().slice(0, 7)));
+    }}>{t("deletePocket")}</button>}</div>
+  </Modal>;
 }
 
 function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean; busy: boolean; error: string; onLogin: () => Promise<void> }) {

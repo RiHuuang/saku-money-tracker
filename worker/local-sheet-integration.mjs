@@ -124,7 +124,7 @@ async function call(pathname, options = {}) {
   const body = await response.json().catch(() => ({}));
   return { status: response.status, body };
 }
-const empty = () => ({ version: 3, accounts: ["Cash"], pockets: [], transactions: [], creditCards: [], recurring: [], favorites: [], pocketTransfers: [], existingInstallments: [] });
+const empty = () => ({ version: 3, accounts: ["Cash"], pockets: [], transactions: [], creditCards: [], recurring: [], favorites: [], pocketTransfers: [], goals: [], existingInstallments: [] });
 const transaction = (id, name) => ({ id, date: "2026-10-04", name, type: "expense", amount: 100, account: "Cash" });
 async function value(range, values) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(created.spreadsheetId)}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
@@ -202,6 +202,8 @@ try {
   if (!resumeUid) {
     await uploadSnapshot(JSON.stringify(first), 0, send);
     await mirror();
+    const tabs = await google(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(created.spreadsheetId)}?fields=sheets(properties(title))`);
+    assert.ok(tabs.sheets.some(({ properties }) => properties.title === "Goals"), "existing eight-tab Sheet gains a Goals tab");
     await value("'Transactions'!S2", [["preserve this manual column"]]);
   } else if (resumedRevision === 1) {
     const prior = d1(`SELECT baseline_path FROM sheet_jobs WHERE uid=${sql(uid)}`)[0].results[0];
