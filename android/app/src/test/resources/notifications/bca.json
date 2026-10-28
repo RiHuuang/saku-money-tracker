@@ -68,6 +68,26 @@
    }
   },
   {
+   "title": "Financial Diary",
+   "text": "You received IDR 5,000.00 from ****NIA TRIC**YA W at Account Transfer category.",
+   "expected": {
+    "amount": 5000,
+    "direction": "income",
+    "rawMerchant": "****NIA TRIC**YA W",
+    "balance": null
+   }
+  },
+  {
+   "title": "Financial Diary",
+   "text": "You sent IDR 40,000.00 to DIMAS ARYA at Account Transfer category.",
+   "expected": {
+    "amount": 40000,
+    "direction": "expense",
+    "rawMerchant": "DIMAS ARYA",
+    "balance": null
+   }
+  },
+  {
    "title": "BCA mobile",
    "text": "Dapatkan cashback hingga Rp50.000 dengan QRIS BCA!",
    "expected": null

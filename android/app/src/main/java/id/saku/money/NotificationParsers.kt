@@ -2,7 +2,8 @@ package id.saku.money
 
 data class ParsedNotification(val amount: Long, val direction: String, val rawMerchant: String, val balance: Long?, val occurredAt: Long)
 
-// Deterministic parsing of bank and wallet notifications. Anything unclear returns null and is
+// Deterministic parsing of bank and wallet notifications, in Indonesian or English
+// (myBCA's Financial Diary writes "You received IDR 5,000.00 from …"). Anything unclear returns null and is
 // simply not captured: a missed row is cheap, a wrong amount in the ledger is not.
 object NotificationParsers {
     private data class AppRules(val wallet: Boolean)
@@ -19,11 +20,11 @@ object NotificationParsers {
     private val balanceLead = Regex("""(?i)(?<!isi\s)(?<!top\s?-?up\s)\b(?:sisa\s+)?(?:saldo|balance)(?:\s+\p{L}+){0,3}\s*(?::|adalah|menjadi|jadi)?\s*$""")
     private val unsettled = Regex("""(?i)\b(?:gagal|dibatalkan|batal|expired|kedaluwarsa|kadaluarsa|ditolak|tertunda|pending|menunggu|sedang\s+diproses|diproses)\b""")
     private val notATransaction = Regex("""(?i)\b(?:otp|kode\s+verifikasi|promo|diskon|voucher|hingga|s\.?d\.?|dapatkan|nikmati|tagihan\s+akan|jatuh\s+tempo|limit|pengingat)\b""")
-    private val incoming = Regex("""(?i)\b(?:masuk|diterima|menerima|kamu\s+terima|anda\s+terima|kredit|refund|pengembalian|cashback\s+(?:diterima|masuk)|uang\s+dari|dana\s+dari|kiriman\s+dari)\b""")
+    private val incoming = Regex("""(?i)\b(?:masuk|diterima|menerima|kamu\s+terima|anda\s+terima|kredit|refund|pengembalian|cashback\s+(?:diterima|masuk)|uang\s+dari|dana\s+dari|kiriman\s+dari|received|credited|refunded|incoming)\b""")
     private val topUp = Regex("""(?i)\b(?:top\s?-?up|isi\s+saldo)\b""")
-    private val outgoing = Regex("""(?i)\b(?:pembayaran|bayar|dibayar|pembelian|beli|transfer|kirim|dikirim|debit|qris|tarik\s+tunai|transaksi|keluar)\b""")
+    private val outgoing = Regex("""(?i)\b(?:pembayaran|bayar|dibayar|pembelian|beli|transfer|kirim|dikirim|debit|qris|tarik\s+tunai|transaksi|keluar|paid|payment|purchase|sent|spent|debited|transferred)\b""")
     private val merchantLead = Regex("""(?i)\b(?:di|ke|kepada|dari|untuk|at|to|from)\s+([^.,!\n]+)""")
-    private val merchantStop = Regex("""(?i)\s+(?:(?:rp\.?|idr)\s?\d|(?:sebesar|senilai|pada|tgl|tanggal|berhasil|sukses|telah|sudah|dengan|pakai|via|menggunakan|ref|no\.?|ke\s+(?:rekening|akun|saldo|nomor|kamu|anda|kantong))\b).*$""")
+    private val merchantStop = Regex("""(?i)\s+(?:(?:rp\.?|idr)\s?\d|at\s+[^.]*\bcategory\b|(?:sebesar|senilai|pada|tgl|tanggal|berhasil|sukses|telah|sudah|dengan|pakai|via|menggunakan|ref|no\.?|ke\s+(?:rekening|akun|saldo|nomor|kamu|anda|kantong))\b).*$""")
     private val notAName = Regex("""(?i)^(?:rekening|akun|saldo|nomor|rp|idr|kamu|anda)\b""")
     private val topUpTarget = Regex("""(?i)\b(?:top\s?-?up|isi\s+saldo)\s+(?!rp|idr|\d|berhasil|sukses|sebesar|senilai)([^.,!\n]+)""")
 
@@ -55,7 +56,7 @@ object NotificationParsers {
         val amount = amounts.distinct().singleOrNull() ?: return null
         val direction = when {
             topUp.containsMatchIn(message) -> if (rules.wallet) "income" else "expense"
-            incoming.containsMatchIn(message) && !Regex("""(?i)\b(?:transfer|kirim)\s+ke\b""").containsMatchIn(message) -> "income"
+            incoming.containsMatchIn(message) && !Regex("""(?i)\b(?:transfer|kirim)\s+ke\b|\b(?:sent|transferred|paid)\b""").containsMatchIn(message) -> "income"
             outgoing.containsMatchIn(message) -> "expense"
             else -> return null
         }
