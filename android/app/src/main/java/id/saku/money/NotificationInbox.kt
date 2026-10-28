@@ -66,6 +66,16 @@ class InboxStore(private val cipher: InboxCipher, private val read: () -> String
 
     fun remove(ids: Set<String>) = save(items().filterNot { it.id in ids })
 
+    // Drops the latest spend of this amount from the same app in the day before a cancellation; returns what is left.
+    fun cancel(packageName: String, amount: Long, cancelledAt: Long): Int {
+        val current = items()
+        val spend = current.lastOrNull { it.packageName == packageName && it.direction == "expense" && it.amount == amount && it.occurredAt in (cancelledAt - 86_400_000L)..cancelledAt }
+            ?: return current.size
+        val next = current - spend
+        save(next)
+        return next.size
+    }
+
     fun clear() = write(null)
 
     private fun purge(items: List<InboxItem>) = items.filter { now() - it.occurredAt <= MAX_AGE_MS }.sortedBy { it.occurredAt }.takeLast(LIMIT)
@@ -124,6 +134,10 @@ object NotificationInbox {
     }
 
     fun receive(context: Context, captured: CapturedNotification) {
+        NotificationParsers.cancelledSpend(captured.packageName, captured.title, captured.text)?.let { amount ->
+            summarize(context, store(context).cancel(captured.packageName, amount, captured.postedAt))
+            return
+        }
         val parsed = NotificationParsers.parse(captured.packageName, captured.title, captured.text, captured.postedAt) ?: return
         val id = MessageDigest.getInstance("SHA-256").digest("${captured.packageName}|${captured.postedAt}|${parsed.amount}|${parsed.direction}".toByteArray())
             .joinToString("") { "%02x".format(it) }.take(32)

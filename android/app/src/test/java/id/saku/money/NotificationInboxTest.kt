@@ -29,6 +29,19 @@ class NotificationInboxTest {
     private fun item(id: String, at: Long = now, merchant: String = "ALFAMART") = InboxItem(id, "com.bca", "BCA", 48500, "expense", merchant, null, at)
 
     @Test
+    fun aCancelledSpendRemovesOnlyTheMatchingRow() {
+        val inbox = store(key())
+        inbox.add(item("old", at = now - 2 * 86_400_000L))
+        inbox.add(item("spend", at = now - 60_000))
+        inbox.add(item("other").copy(amount = 1000))
+        assertEquals(48500L, NotificationParsers.cancelledSpend("com.bca", "Financial Diary", "Spending of IDR 48,500.00 in Shopping category in 28 October 2026 was cancelled."))
+        assertNull(NotificationParsers.cancelledSpend("com.bca", "Financial Diary", "You spent IDR 48,500.00 at Shopping."))
+        assertEquals(2, inbox.cancel("com.bca", 48500, now))
+        assertEquals(listOf("old", "other"), inbox.items().map { it.id })
+        assertEquals(2, inbox.cancel("com.bca", 48500, now))
+    }
+
+    @Test
     fun accountNumbersAndReferencesAreNeverStored() {
         val parsed = NotificationParsers.parse("com.bca", "BCA mobile", "Transfer Rp250.000 ke BUDI 1234567890 ref TRX99887766 berhasil.", now)!!
         val merchant = InboxRedaction.redact(parsed.rawMerchant, parsed.amount)
