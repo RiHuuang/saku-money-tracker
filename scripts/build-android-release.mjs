@@ -5,7 +5,8 @@ import { resolve } from "node:path";
 // The website APK (direct) carries the self-updater; the Play bundle never does.
 const tasks = ["clean", "lintDirectRelease", "testDirectReleaseUnitTest", "testPlayReleaseUnitTest", "assembleDirectRelease", "bundlePlayRelease"];
 const android = resolve("android");
-const gradle = process.platform === "win32" ? "gradlew.bat" : "./gradlew";
+// Windows only finds the wrapper by full path, quoted because the checkout path can contain spaces.
+const gradle = process.platform === "win32" ? `"${resolve(android, "gradlew.bat")}"` : "./gradlew";
 const result = spawnSync(gradle, tasks, { cwd: android, stdio: "inherit", shell: process.platform === "win32" });
 if (result.status !== 0) throw new Error(`Gradle failed${result.error ? `: ${result.error.message}` : ""}`);
 const outputs = {
