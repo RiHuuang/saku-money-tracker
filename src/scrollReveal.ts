@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 
 // Hides a bottom bar while the page scrolls up and brings it back on the way down, so it stays out of the way
 // when someone goes back to read and is there again when they head for the end of the list.
-export function useHiddenWhileScrollingUp() {
+// Short lists (enabled false) keep the bar where it is: there is nothing to scroll past.
+export function useHiddenWhileScrollingUp(enabled = true) {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
+    if (!enabled) { setHidden(false); return; }
     let last = window.scrollY;
     const onScroll = () => {
       const y = window.scrollY, delta = y - last;
@@ -15,6 +17,6 @@ export function useHiddenWhileScrollingUp() {
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  return hidden;
+  }, [enabled]);
+  return enabled && hidden;
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { emptyData, summary, validateData } from "./domain";
-import { applySharedSourceDate, bcaAccount, prepareBcaRow, withoutOverlap, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { emptyData, shiftMonth, summary, validateData } from "./domain";
+import { applySharedSourceDate, bcaAccount, prepareBcaRow, withoutOverlap, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowFirstDueMonth, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -164,9 +164,16 @@ test("a wallet top-up becomes one balanced transfer and does not count as spendi
 
 test("card purchase and payment need their correct account details", () => {
   const purchase: ImportRow = { ...base, firstDueMonth: "2026-11" };
-  assert.equal(importRowReady({ ...purchase, firstDueMonth: undefined }, "BCA Visa", ledger), false);
+  // Without a chosen month a card purchase is billed from the next month, as in the manual add form.
+  const undated = { ...purchase, firstDueMonth: undefined };
+  assert.equal(importRowReady(undated, "BCA Visa", ledger), true);
+  assert.doesNotMatch(importRowReviewIssue(undated, "BCA Visa", ledger, false), /first due month/);
+  assert.equal(importedTransactions(undated, "BCA Visa", "notification", ledger)[0].firstDueMonth, shiftMonth(base.date.slice(0, 7), 1));
+  assert.equal(importRowFirstDueMonth({ ...undated, activity: "pay_later" }), "");
+  assert.match(importRowReviewIssue({ ...purchase, firstDueMonth: "2026-09" }, "BCA Visa", ledger, false), /first due month/);
   const cardPurchase = importedTransactions(purchase, "BCA Visa", "card.pdf", ledger)[0];
   assert.equal(cardPurchase.kind, "card_purchase");
+  assert.equal(cardPurchase.firstDueMonth, "2026-11");
   const payment: ImportRow = { ...base, id: "row-2", activity: "card_payment", name: "Pay BCA Visa", cardId: "visa" };
   assert.equal(importRowReady({ ...payment, cardId: undefined }, "BCA", ledger), false);
   const cardPayment = importedTransactions(payment, "BCA", "bank.png", ledger)[0];
