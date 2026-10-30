@@ -1,4 +1,4 @@
-import { today, validAmount, validDate, type Data, type Transaction } from "./domain";
+import { shiftMonth, today, validAmount, validDate, type Data, type Transaction } from "./domain";
 import type { ImportDraft, ImportRow, ImportSource } from "./importDraft";
 import { t } from "./i18n";
 
@@ -26,6 +26,9 @@ export function detectImportAccount(rows: readonly Pick<ImportRow, "paymentMetho
   return found.size === 1 ? [...found][0] : "";
 }
 export const importRowName = (row: Pick<ImportRow, "name" | "cleanName">) => (row.cleanName?.trim() || row.name).trim();
+// A card purchase is billed from the next month unless the user picks another one, as in the manual add form.
+export const importRowFirstDueMonth = (row: Pick<ImportRow, "date" | "activity" | "firstDueMonth">) =>
+  row.firstDueMonth || (row.activity === "purchase" && validDate(row.date) ? shiftMonth(row.date.slice(0, 7), 1) : "");
 
 export const usesDeferredFunding = (row: Pick<ImportRow, "name" | "paymentMethod">) => /pay[\s-]?later/i.test(`${row.name} ${row.paymentMethod || ""}`);
 const looksLikeTransfer = (name: string) => /\b(?:top[\s-]?up|isi saldo|pindah dana|move money|antar[\s-]?kantong|transfer|trsf|trf)\b/i.test(name);
@@ -111,7 +114,7 @@ export function importRowReviewIssue(row: ImportRow, account: string, data: Data
   if (row.activity === "unknown") return t("reviewActivity");
   if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return t("reviewOtherAccount");
   if (row.activity === "card_payment" && !row.cardId) return t("reviewPaidCard");
-  if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !row.firstDueMonth) return t("reviewFirstDue");
+  if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !importRowFirstDueMonth(row)) return t("reviewFirstDue");
   if (duplicate && !row.confirmedSeparate) return t("reviewSeparate");
   if (row.activity === "income") return t("reviewExternalIncome");
   if (namesOnlyWallet(row.name)) return t("reviewWallet");
@@ -138,7 +141,10 @@ export function importRowReady(row: ImportRow, account: string, data: Data, curr
   const card = data.creditCards.find((item) => item.name === account);
   if (row.activity === "pay_later" && !card) return false;
   if (usesDeferredFunding(row) && !card) return false;
-  if (card) return row.direction === "expense" && ["purchase", "pay_later"].includes(row.activity) && !!row.firstDueMonth && validDate(`${row.firstDueMonth}-01`) && row.firstDueMonth >= row.date.slice(0, 7);
+  if (card) {
+    const due = importRowFirstDueMonth(row);
+    return row.direction === "expense" && ["purchase", "pay_later"].includes(row.activity) && !!due && validDate(`${due}-01`) && due >= row.date.slice(0, 7);
+  }
   if (!data.accounts.includes(account)) return false;
   return row.direction === "income" || !row.pocketId || data.pockets.some((pocket) => pocket.id === row.pocketId && pocket.createdMonth <= row.date.slice(0, 7));
 }
@@ -158,7 +164,7 @@ export function importedTransactions(row: ImportRow, account: string, sourceName
   }
   const card = data.creditCards.find((item) => item.name === account);
   const base: Transaction = { id: row.id, name, amount: row.amount, type: row.direction as "expense" | "income", date: row.date, account, pocketId: row.direction === "income" ? "" : row.pocketId, note, verified: true };
-  if (card) return [{ ...base, kind: "card_purchase", cardId: card.id, installments: 1, firstDueMonth: row.firstDueMonth }];
+  if (card) return [{ ...base, kind: "card_purchase", cardId: card.id, installments: 1, firstDueMonth: importRowFirstDueMonth(row) }];
   if (row.activity === "card_payment") return [{ ...base, kind: "card_payment", cardId: row.cardId, pocketId: "" }];
   return [base];
 }

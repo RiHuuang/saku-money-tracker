@@ -44,13 +44,15 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const [deleteConfirmationId, setDeleteConfirmationId] = useState("");
   const [editingRow, setEditingRow] = useState("");
   const decide = (id: string, decision: ImportRow["decision"]) => {
-    setEditingRow("");
-    const name = draft?.rows.find((row) => row.id === id);
-    gestures.announce(t(decision === "ready" ? "rowWillAdd" : decision === "skip" ? "rowSkipped" : "rowLater", { name: name ? importRowName(name) || t("unnamedTransaction") : "" }));
+    const row = draft?.rows.find((item) => item.id === id);
+    // A row that still can't be added opens (or stays open) so its missing detail is right there to fix.
+    const blocked = decision === "ready" && !!row && !(importRowReady({ ...row, decision }, accountForRow(row), data) && (!needsSeparateConfirmation(row) || row.confirmedSeparate));
+    setEditingRow(blocked ? id : "");
+    gestures.announce(t(blocked ? "rowNeedsLook" : decision === "ready" ? "rowWillAdd" : decision === "skip" ? "rowSkipped" : "rowLater", { name: row ? importRowName(row) || t("unnamedTransaction") : "" }));
     void updateRow(id, { decision });
   };
   const gestures = useRowGestures({ onAdd: (id) => decide(id, "ready"), onSkip: (id) => decide(id, "skip"), onOpen: setEditingRow });
-  const saveBarHidden = useHiddenWhileScrollingUp();
+  const saveBarHidden = useHiddenWhileScrollingUp((draft?.rows.filter((row) => !importRowAlreadySaved(row, draft, data)).length || 0) > 4);
   // Rows keep the place they first appeared in, so choosing one never makes the list jump.
   const rowOrder = useRef(new Map<string, number>());
   const [sharedDates, setSharedDates] = useState<Record<string, string>>({});
@@ -373,7 +375,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
                 
               </button>
               {editing && <Modal title={importRowName(row) || t("unnamedTransaction")} subtitle={`${validDate(row.date) ? friendlyDate(row.date) : t("checkDate")} · ${row.direction === "expense" ? "−" : row.direction === "income" ? "+" : "?"}${money(row.amount || 0)}`} onClose={() => setEditingRow("")}><div className="catchup-row-details">
-              <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={importRowName(row)} maxLength={100} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { cleanName: event.target.value })} /></label><label className="catchup-field">{t("date")}<input type="date" value={row.date} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { date: event.target.value })} /></label><label className="catchup-field">{row.activity === "reward" ? t("pointsCoins") : t("amountRupiah")}<span className="catchup-amount">{row.activity !== "reward" && <span>Rp</span>}<input type="number" min="1" step="1" value={row.amount || ""} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { amount: Number(event.target.value) })} /></span></label></div>
+              <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={row.cleanName ?? importRowName(row)} placeholder={row.name} maxLength={100} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { cleanName: event.target.value })} /></label><label className="catchup-field">{t("date")}<input type="date" value={row.date} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { date: event.target.value })} /></label><label className="catchup-field">{row.activity === "reward" ? t("pointsCoins") : t("amountRupiah")}<span className="catchup-amount">{row.activity !== "reward" && <span>Rp</span>}<input type="number" min="1" step="1" value={row.amount || ""} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { amount: Number(event.target.value) })} /></span></label></div>
               <div className="catchup-row-meta">
                 <ChoiceField className="catchup-field" label={t("moneyMovement")} value={row.direction} disabled={alreadySaved || saving} onValueChange={(value) => void updateRow(row.id, { direction: value as ImportRow["direction"], ...(["transfer", "topup", "card_payment"].includes(row.activity) ? {} : { activity: value === "income" ? "income" : "purchase" }) })} options={[{ value: "expense", label: t("wentOut") }, { value: "income", label: t("cameIn") }, { value: "unknown", label: t("unsure") }]} />
                 <ChoiceField className="catchup-field" label={row.activity === "pay_later" ? t("payLaterAccount") : t("sakuAccount")} value={row.activity === "pay_later" && !card ? "" : account} disabled={alreadySaved || saving} onValueChange={(value) => void updateRow(row.id, { account: source.mixedAccounts || value !== confirmedImportAccount(source, data) ? value : undefined, counterparty: undefined })} placeholder={row.activity === "pay_later" ? t("chooseCreditAccount") : t("chooseUsedAccount")} options={(row.activity === "pay_later" ? data.creditCards.map((item) => ({ value: item.name, label: item.name, description: t("creditAccount") })) : [...data.accounts.map((item) => ({ value: item, label: item })), ...data.creditCards.map((item) => ({ value: item.name, label: item.name }))])} />

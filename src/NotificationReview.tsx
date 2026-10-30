@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, BellRing, Check, X } from "lucide-react";
 import { money, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
-import { importedTransactions, importRowAccount, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
+import { importedTransactions, importRowAccount, importRowFirstDueMonth, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
 import { learnMerchant } from "./merchants";
 import { cleanMerchantNames } from "./cloud";
 import { loadCleaningOptIn, namesToClean } from "./merchantCleaning";
@@ -64,13 +64,15 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   const skippedIds = [...new Set(skipped.flatMap((row) => row.pairedWith ? [row.id, row.pairedWith] : [row.id]))];
   const edit = (id: string, patch: Partial<ImportRow>) => setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
   const decide = (id: string, decision: ImportRow["decision"]) => {
-    setEditingRow("");
     const row = rows.find((item) => item.id === id);
-    gestures.announce(t(decision === "ready" ? "rowWillAdd" : decision === "skip" ? "rowSkipped" : "rowLater", { name: row ? importRowName(row) : "" }));
+    // A row that still can't be added opens (or stays open) so its missing detail is right there to fix.
+    const blocked = decision === "ready" && !!row && !(importRowReady({ ...row, decision }, accountFor(row), data) && (!duplicates.has(row.id) || row.confirmedSeparate));
+    setEditingRow(blocked ? id : "");
+    gestures.announce(t(blocked ? "rowNeedsLook" : decision === "ready" ? "rowWillAdd" : decision === "skip" ? "rowSkipped" : "rowLater", { name: row ? importRowName(row) : "" }));
     edit(id, { decision });
   };
   const gestures = useRowGestures({ onAdd: (id) => decide(id, "ready"), onSkip: (id) => decide(id, "skip"), onOpen: setEditingRow });
-  const saveBarHidden = useHiddenWhileScrollingUp();
+  const saveBarHidden = useHiddenWhileScrollingUp(rows.length > 4);
   const decideAll = (decision: "ready" | "skip") => {
     gestures.announce(t(decision === "ready" ? "allMarkedAdd" : "allMarkedSkip"));
     // The second half of a paired transfer stays skipped: it is saved together with its twin.
@@ -125,11 +127,13 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
           <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : "+"}{money(row.amount)}</strong><RowStatus state={state} label={row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : row.decision === "later" ? t("reviewLater") : t("openReview")} /></span>
         </button>
         {editingRow === row.id && <Modal title={importRowName(row)} subtitle={`${friendlyDate(row.date)} · ${row.direction === "expense" ? "−" : "+"}${money(row.amount)}`} onClose={() => setEditingRow("")}><div className="catchup-row-details">
-          <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={importRowName(row)} maxLength={100} onChange={(event) => edit(row.id, { cleanName: event.target.value })} /></label></div>
+          <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={row.cleanName ?? importRowName(row)} placeholder={row.name} maxLength={100} onChange={(event) => edit(row.id, { cleanName: event.target.value })} /></label></div>
           <div className="catchup-row-meta">
             <ChoiceField className="catchup-field" label={t("sakuAccount")} value={account} onValueChange={(value) => edit(row.id, { account: value, confirmedSeparate: false })} placeholder={t("chooseUsedAccount")} options={[...data.accounts.map((item) => ({ value: item, label: item })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: t("creditCard") }))]} />
             {row.direction === "expense" && row.activity === "purchase" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={row.pocketId} onValueChange={(value) => edit(row.id, { pocketId: value })} options={[{ value: "", label: t("noPocket"), description: t("categorizeLater") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
+            {data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && <label className="catchup-field">{t("firstDueMonth")}<input type="month" min={row.date.slice(0, 7)} value={importRowFirstDueMonth(row)} onChange={(event) => edit(row.id, { firstDueMonth: event.target.value })} /></label>}
             {duplicate && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => edit(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
+            {row.decision === "ready" && !rowReady && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
             <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: importRowName(row) })}>
               <button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} onClick={() => decide(row.id, "ready")}>{t("addToSaku")}</button>
               <button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} onClick={() => decide(row.id, "later")}>{t("reviewLater")}</button>
