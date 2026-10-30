@@ -170,6 +170,7 @@ test("card purchase and payment need their correct account details", () => {
   assert.doesNotMatch(importRowReviewIssue(undated, "BCA Visa", ledger, false), /first due month/);
   assert.equal(importedTransactions(undated, "BCA Visa", "notification", ledger)[0].firstDueMonth, shiftMonth(base.date.slice(0, 7), 1));
   assert.equal(importRowFirstDueMonth({ ...undated, activity: "pay_later" }), "");
+  assert.match(importRowReviewIssue({ ...purchase, firstDueMonth: "2026-09" }, "BCA Visa", ledger, false), /first due month/);
   const cardPurchase = importedTransactions(purchase, "BCA Visa", "card.pdf", ledger)[0];
   assert.equal(cardPurchase.kind, "card_purchase");
   assert.equal(cardPurchase.firstDueMonth, "2026-11");

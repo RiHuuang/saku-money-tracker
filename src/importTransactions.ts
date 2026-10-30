@@ -114,7 +114,10 @@ export function importRowReviewIssue(row: ImportRow, account: string, data: Data
   if (row.activity === "unknown") return t("reviewActivity");
   if (["transfer", "topup"].includes(row.activity) && !row.counterparty) return t("reviewOtherAccount");
   if (row.activity === "card_payment" && !row.cardId) return t("reviewPaidCard");
-  if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && !importRowFirstDueMonth(row)) return t("reviewFirstDue");
+  if (data.creditCards.some((card) => card.name === account) && row.activity === "purchase") {
+    const due = importRowFirstDueMonth(row);
+    if (!due || !validDate(`${due}-01`) || validDate(row.date) && due < row.date.slice(0, 7)) return t("reviewFirstDue");
+  }
   if (duplicate && !row.confirmedSeparate) return t("reviewSeparate");
   if (row.activity === "income") return t("reviewExternalIncome");
   if (namesOnlyWallet(row.name)) return t("reviewWallet");
