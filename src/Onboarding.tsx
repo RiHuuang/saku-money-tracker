@@ -39,7 +39,15 @@ export default function Onboarding({ busy, suggestedName, userId, onClose, onSta
   const heading = useRef<HTMLHeadingElement>(null);
   const incomeValue = Number(income || 0);
   const chosenAccounts = accounts.map((item) => ({ ...item, name: item.name.trim() })).filter((item) => item.name);
-  const plan = usePlanSuggestion({ income: incomeValue, kind: incomeKind, pockets: pocketNames.map((value) => ({ key: value.toLocaleLowerCase("id-ID").replace(/[^\p{L}\p{N}]+/gu, "-").slice(0, 60) || uid(), name: value, icon: iconFor(value) })), data: emptyData(), month, userId });
+  // Keys follow the name (so a pocket set by hand keeps its amount while others are toggled) and stay unique even
+  // when two names differ only in punctuation.
+  const planPockets = pocketNames.reduce<{ key: string; name: string; icon: string }[]>((list, value) => {
+    const base = value.toLocaleLowerCase("id-ID").replace(/[^\p{L}\p{N}]+/gu, "-").slice(0, 56) || "pocket";
+    let key = base;
+    for (let n = 2; list.some((item) => item.key === key); n++) key = `${base}-${n}`;
+    return [...list, { key, name: value, icon: iconFor(value) }];
+  }, []);
+  const plan = usePlanSuggestion({ income: incomeValue, kind: incomeKind, pockets: planPockets, data: emptyData(), month, userId });
   const asked = useRef(false);
   // The AI refines once, when the split first shows; "Ask Saku again" repeats it on request.
   useEffect(() => { if (step === 2 && incomeValue >= 100_000 && plan.rows.length && !asked.current) { asked.current = true; void plan.refine(); } }, [step, plan.rows.length, incomeValue]);
