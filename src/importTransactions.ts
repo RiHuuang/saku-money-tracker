@@ -1,6 +1,7 @@
 import { shiftMonth, today, validAmount, validDate, type Data, type Transaction } from "./domain";
 import type { ImportDraft, ImportRow, ImportSource } from "./importDraft";
 import { t } from "./i18n";
+import { bankOfAccount } from "../worker/banks.js";
 
 export function confirmedImportAccount(source: Pick<ImportSource, "account" | "accountConfirmed"> | undefined, data: Data): string {
   return source?.accountConfirmed && [...data.accounts, ...data.creditCards.map((card) => card.name)].includes(source.account) ? source.account : "";
@@ -182,7 +183,12 @@ export const bcaAccount = (data: Data) => {
 };
 
 // BCA rows (2.4.0): fill in what the reading already implies, and skip rows the ledger already has.
-export function prepareBcaRow(row: ImportRow, data: Data, account: string): ImportRow {
+export const prepareBcaRow = (row: ImportRow, data: Data, account: string): ImportRow => prepareImportRow(row, data, account);
+
+// Any supported bank: a wallet top-up goes to the user's wallet account, a card payment to the card from the same
+// bank. Catch up skips rows the ledger already has (±1 day); Monthly check leaves that to statementMatch, which also
+// sees names, aliases and the other statements (checkLedger: false).
+export function prepareImportRow(row: ImportRow, data: Data, account: string, options: { checkLedger?: boolean } = {}): ImportRow {
   let next = { ...row };
   if (next.activity === "topup") {
     const pattern = walletPatterns[(next.paymentMethod || "").toLocaleLowerCase("id-ID").replace(/\s/g, "")];
@@ -190,12 +196,13 @@ export function prepareBcaRow(row: ImportRow, data: Data, account: string): Impo
     next = wallets.length === 1 ? { ...next, counterparty: wallets[0] } : { ...next, activity: "purchase" };
   }
   if (next.activity === "card_payment") {
-    const cards = data.creditCards.filter((card) => /\bbca\b/i.test(card.name));
+    const bank = bankOfAccount(account) || "bca";
+    const cards = data.creditCards.filter((card) => bankOfAccount(card.name) === bank);
     const card = cards.length === 1 ? cards[0] : data.creditCards.length === 1 ? data.creditCards[0] : undefined;
     if (card) next = { ...next, cardId: card.id };
   }
   const day = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86_400_000;
-  const recorded = validDate(next.date) && data.transactions.some((transaction) => transaction.account === account && transaction.amount === next.amount &&
+  const recorded = options.checkLedger !== false && validDate(next.date) && data.transactions.some((transaction) => transaction.account === account && transaction.amount === next.amount &&
     transaction.type === next.direction && Math.abs(day(transaction.date) - day(next.date)) <= 1);
   if (recorded) return { ...next, alreadyInSaku: true, decision: "skip" };
   const confident = !next.check && validDate(next.date) && validAmount(next.amount) && next.direction !== "unknown" && next.activity !== "unknown";

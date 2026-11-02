@@ -28,6 +28,8 @@ export type ImportRow = {
   unpaired?: boolean;
   pairRowId?: string;
   userDecided?: boolean;
+  // Read without AI from a page whose running balance proves every row.
+  proven?: boolean;
   // Saku's guess from the compare-names helper, shown but never applied without a tap.
   aiPick?: string;
 };

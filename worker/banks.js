@@ -55,14 +55,15 @@ export const BANK_IDS = BANKS.map((bank) => bank.id);
 export const bankById = (id) => BANKS.find((bank) => bank.id === id);
 
 // The header names the bank; a transaction line may name another one (a transfer to Jago on a BCA statement),
-// so the first part of the document decides before the whole text is considered.
+// so the bank named earliest in the document wins. On a tie the list order decides (blu before BCA).
 export function detectBank(text) {
   if (typeof text !== "string" || !text.trim()) return "";
-  for (const part of [text.slice(0, 1500), text]) {
-    const found = BANKS.find((bank) => bank.signature.test(part));
-    if (found) return found.id;
+  let best = null;
+  for (const bank of BANKS) {
+    const at = text.search(bank.signature);
+    if (at >= 0 && (!best || at < best.at)) best = { id: bank.id, at };
   }
-  return "";
+  return best ? best.id : "";
 }
 
 // The user's Saku account for a bank: the only account whose name names it ("BCA Utama", "Jago").

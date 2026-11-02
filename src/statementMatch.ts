@@ -16,7 +16,7 @@ export type Verdict =
   | { kind: "look"; reason: "ambiguous" | "other_account" | "transfer_tie" | "check"; candidates: string[]; partnerRowIds?: string[] }
   | { kind: "new" };
 
-export type MatchRow = Pick<ImportRow, "id" | "sourceId" | "date" | "amount" | "direction" | "name" | "cleanName" | "activity" | "matchId" | "unlinked" | "unpaired" | "pairRowId" | "confirmedSeparate" | "userDecided"> & { account: string };
+export type MatchRow = Pick<ImportRow, "id" | "sourceId" | "date" | "amount" | "direction" | "name" | "cleanName" | "activity" | "matchId" | "unlinked" | "unpaired" | "pairRowId" | "confirmedSeparate" | "userDecided" | "proven"> & { account: string };
 
 export type Analysis = { verdicts: Map<string, Verdict>; onlyInSaku: Transaction[] };
 
@@ -150,7 +150,7 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   // 6. Everything else is new; a source Saku may have misread sends its new rows for a look.
   for (const row of usable) {
     if (verdicts.has(row.id)) continue;
-    verdicts.set(row.id, options.flagged?.has(row.sourceId) && !row.userDecided && !row.confirmedSeparate ? { kind: "look", reason: "check", candidates: [] } : { kind: "new" });
+    verdicts.set(row.id, options.flagged?.has(row.sourceId) && !row.proven && !row.userDecided && !row.confirmedSeparate ? { kind: "look", reason: "check", candidates: [] } : { kind: "new" });
   }
 
   // Only in Saku: entries on a checked account, inside the dates the statements cover, with no statement row.
@@ -180,7 +180,10 @@ export function applyVerdict(row: ImportRow, verdict: Verdict | undefined): Impo
   if (verdict.kind === "linked") return { ...row, decision: "skip", alreadyInSaku: true };
   if (verdict.kind === "transfer") return { ...row, activity: "transfer", counterparty: verdict.counterparty, decision: row.userDecided ? row.decision : "ready", alreadyInSaku: false };
   if (verdict.kind === "look") return { ...row, decision: row.userDecided && verdict.reason === "check" ? row.decision : "later", alreadyInSaku: false };
-  return { ...row, alreadyInSaku: false };
+  // A clean row the statement proves is ready to add: the statement is the truth for amounts, so large amounts and
+  // money in don't need a second look once no match, transfer or misread is in question.
+  const clean = !row.check && validDate(row.date) && validAmount(row.amount) && row.direction !== "unknown" && !["pending", "failed", "reward", "unknown", "pay_later"].includes(row.activity);
+  return { ...row, alreadyInSaku: false, decision: row.userDecided || !clean ? row.decision : "ready" };
 }
 
 // The balance printed on a statement must equal the opening balance plus the rows Saku read.

@@ -188,7 +188,7 @@ function requestsFor(userId: string | undefined): SnapshotRequest {
     return response;
   };
 }
-export async function extractImportPage(userId: string, page: { month: string; source?: "bca" } & ({ kind: "text"; text: string } | { kind: "image"; image: string })): Promise<{ rows: { date: string; dateEvidence: string; name: string; cleanName?: string; paymentMethod: string; amount: number; note?: string; check?: string; direction: "expense" | "income" | "unknown"; activity: "purchase" | "transfer" | "topup" | "card_payment" | "refund" | "income" | "fee" | "interest" | "pay_later" | "reward" | "pending" | "failed" | "unknown" }[] }> {
+export async function extractImportPage(userId: string, page: { month: string; source?: string } & ({ kind: "text"; text: string } | { kind: "image"; image: string })): Promise<{ rows: { date: string; dateEvidence: string; name: string; cleanName?: string; paymentMethod: string; amount: number; note?: string; check?: string; direction: "expense" | "income" | "unknown"; activity: "purchase" | "transfer" | "topup" | "card_payment" | "refund" | "income" | "fee" | "interest" | "pay_later" | "reward" | "pending" | "failed" | "unknown" }[]; bank?: string }> {
   const send = requestsFor(userId);
   try {
     return (await send("/v1/import/extract", { method: "POST", body: JSON.stringify(page) })).json();
@@ -398,6 +398,14 @@ export async function acceptAgreement() {
 }
 export async function cleanMerchantNames(userId: string, names: string[]): Promise<{ name: string; cleanName: string }[]> {
   return (await (await requestsFor(userId)("/v1/merchants/clean", { method: "POST", body: JSON.stringify({ names }) })).json()).results;
+}
+export type MatchItem = { id: string; name: string; date: string; candidates: { id: string; name: string; note: string; date: string }[] };
+export async function compareImportNames(userId: string, items: MatchItem[]): Promise<{ id: string; candidateId: string; confidence: "high" | "low" }[]> {
+  return (await (await requestsFor(userId)("/v1/import/match", { method: "POST", body: JSON.stringify({ items }) })).json()).picks;
+}
+export type BudgetRequest = { income: number; kind: "fixed" | "variable"; pockets: { key: string; name: string; group: string; baseline: number; spend: number; fixed: number }[] };
+export async function suggestBudget(userId: string, plan: BudgetRequest): Promise<{ source: "ai" | "baseline"; allocations: { key: string; amount: number; reason: string }[] }> {
+  return (await requestsFor(userId)("/v1/budget/suggest", { method: "POST", body: JSON.stringify(plan) })).json();
 }
 export type SignedInDevice = { id: string; label: string; createdAt: number | null; lastActiveAt: number; current: boolean };
 export async function listDevices(): Promise<SignedInDevice[]> {
