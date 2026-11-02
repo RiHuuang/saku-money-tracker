@@ -36,6 +36,7 @@ try {
     await import("../worker/refresh-reuse.test.mjs");
     await import("../worker/sessions-route.test.mjs");
     await import("../worker/monthly-check-route.test.mjs");
+    await import("./statement-bench.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });

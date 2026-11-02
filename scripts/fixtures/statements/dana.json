@@ -1,3 +1,23 @@
-{ "note": "Synthetic DANA history: no running balance, so the page goes to the AI reader.", "month": "2026-10", "bank": "dana",
-  "text": "PT Espay Debit Indonesia Koe\nRiwayat Transaksi DANA\n07 Okt 2026 Top Up dari BCA +150.000\n08 Okt 2026 Kirim uang ke DIMAS -50.000",
-  "rows": null }
+{
+ "note": "Synthetic DANA history: no running balance, so the page goes to the AI reader.",
+ "month": "2026-10",
+ "bank": "dana",
+ "text": "PT Espay Debit Indonesia Koe\nRiwayat Transaksi DANA\n07 Okt 2026 Top Up dari BCA +150.000\n08 Okt 2026 Kirim uang ke DIMAS -50.000",
+ "rows": null,
+ "names": [
+  "Top Up",
+  "Dimas"
+ ],
+ "expected": [
+  [
+   "2026-10-07",
+   150000,
+   "income"
+  ],
+  [
+   "2026-10-08",
+   50000,
+   "expense"
+  ]
+ ]
+}

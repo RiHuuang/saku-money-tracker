@@ -1,3 +1,28 @@
-{ "note": "Synthetic Bank Jago history (Kantong Utama) with a running balance.", "month": "2026-10", "bank": "jago",
-  "text": "PT Bank Jago Tbk\nRiwayat Transaksi Kantong Utama\nPeriode 1 Okt 2026 - 31 Okt 2026\nSaldo Awal 1.000.000,00\n05 Okt 2026 Transfer masuk dari RINA WULANDARI BCA +500.000,00 1.500.000,00\n09 Okt 2026 Pindah ke Kantong Liburan -200.000,00 1.300.000,00\n18 Okt 2026 QRIS INDOMARET SUDIRMAN -72.500,00 1.227.500,00\nSaldo Akhir 1.227.500,00",
-  "rows": [["2026-10-05", 500000, "income"], ["2026-10-09", 200000, "expense"], ["2026-10-18", 72500, "expense"]] }
+{
+ "note": "Synthetic Bank Jago history (Kantong Utama) with a running balance.",
+ "month": "2026-10",
+ "bank": "jago",
+ "text": "PT Bank Jago Tbk\nRiwayat Transaksi Kantong Utama\nPeriode 1 Okt 2026 - 31 Okt 2026\nSaldo Awal 1.000.000,00\n05 Okt 2026 Transfer masuk dari RINA WULANDARI BCA +500.000,00 1.500.000,00\n09 Okt 2026 Pindah ke Kantong Liburan -200.000,00 1.300.000,00\n18 Okt 2026 QRIS INDOMARET SUDIRMAN -72.500,00 1.227.500,00\nSaldo Akhir 1.227.500,00",
+ "rows": [
+  [
+   "2026-10-05",
+   500000,
+   "income"
+  ],
+  [
+   "2026-10-09",
+   200000,
+   "expense"
+  ],
+  [
+   "2026-10-18",
+   72500,
+   "expense"
+  ]
+ ],
+ "names": [
+  "Rina Wulandari",
+  "Kantong Liburan",
+  "Indomaret"
+ ]
+}

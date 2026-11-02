@@ -1,3 +1,22 @@
-{ "note": "Synthetic blu by BCA history; it prints BCA too and must still read as blu.", "month": "2026-10", "bank": "blu",
-  "text": "blu by BCA Digital\nPT Bank Digital BCA\nMutasi Rekening Oktober 2026\nSaldo Awal 500,000\n03 Oct 2026 Transfer dari BCA RINA WULANDARI 300,000 800,000\n20 Oct 2026 bluSaving Liburan 150,000 DB 650,000\nSaldo Akhir 650,000",
-  "rows": [["2026-10-03", 300000, "income"], ["2026-10-20", 150000, "expense"]] }
+{
+ "note": "Synthetic blu by BCA history; it prints BCA too and must still read as blu.",
+ "month": "2026-10",
+ "bank": "blu",
+ "text": "blu by BCA Digital\nPT Bank Digital BCA\nMutasi Rekening Oktober 2026\nSaldo Awal 500,000\n03 Oct 2026 Transfer dari BCA RINA WULANDARI 300,000 800,000\n20 Oct 2026 bluSaving Liburan 150,000 DB 650,000\nSaldo Akhir 650,000",
+ "rows": [
+  [
+   "2026-10-03",
+   300000,
+   "income"
+  ],
+  [
+   "2026-10-20",
+   150000,
+   "expense"
+  ]
+ ],
+ "names": [
+  "Rina Wulandari",
+  "bluSaving"
+ ]
+}

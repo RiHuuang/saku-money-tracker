@@ -1,3 +1,34 @@
-{ "note": "Synthetic BCA e-statement page as pdf.js lines (made-up names).", "month": "2026-10", "bank": "bca",
-  "text": "PT BANK CENTRAL ASIA Tbk\nREKENING TAHAPAN\nNAMA : RINA WULANDARI PERIODE : OKTOBER 2026\nTANGGAL KETERANGAN CBG MUTASI SALDO\n01/10 SALDO AWAL 2,000,000.00\n05/10 TRSF E-BANKING DB 0510/FTSCY/WS95051 0000 500,000.00 DB 1,500,000.00\nRINA WULANDARI BANK JAGO\n12/10 TRANSAKSI DEBIT TGL: 1210 QR 008 45,500.00 DB 1,454,500.00\nWARTEG BAHARI\n25/10 TRSF E-BANKING CR 2510/FTSCY/WS95053 8,000,000.00 9,454,500.00\nPT MAJU JAYA\n31/10 BIAYA ADM 15,000.00 DB 9,439,500.00\nSALDO AKHIR 9,439,500.00\nBersambung ke halaman berikut",
-  "rows": [["2026-10-05", 500000, "expense"], ["2026-10-12", 45500, "expense"], ["2026-10-25", 8000000, "income"], ["2026-10-31", 15000, "expense"]] }
+{
+ "note": "Synthetic BCA e-statement page as pdf.js lines (made-up names).",
+ "month": "2026-10",
+ "bank": "bca",
+ "text": "PT BANK CENTRAL ASIA Tbk\nREKENING TAHAPAN\nNAMA : RINA WULANDARI PERIODE : OKTOBER 2026\nTANGGAL KETERANGAN CBG MUTASI SALDO\n01/10 SALDO AWAL 2,000,000.00\n05/10 TRSF E-BANKING DB 0510/FTSCY/WS95051 0000 500,000.00 DB 1,500,000.00\nRINA WULANDARI BANK JAGO\n12/10 TRANSAKSI DEBIT TGL: 1210 QR 008 45,500.00 DB 1,454,500.00\nWARTEG BAHARI\n25/10 TRSF E-BANKING CR 2510/FTSCY/WS95053 8,000,000.00 9,454,500.00\nPT MAJU JAYA\n31/10 BIAYA ADM 15,000.00 DB 9,439,500.00\nSALDO AKHIR 9,439,500.00\nBersambung ke halaman berikut",
+ "rows": [
+  [
+   "2026-10-05",
+   500000,
+   "expense"
+  ],
+  [
+   "2026-10-12",
+   45500,
+   "expense"
+  ],
+  [
+   "2026-10-25",
+   8000000,
+   "income"
+  ],
+  [
+   "2026-10-31",
+   15000,
+   "expense"
+  ]
+ ],
+ "names": [
+  "Rina Wulandari",
+  "Warteg Bahari",
+  "Maju Jaya",
+  "Biaya Adm"
+ ]
+}

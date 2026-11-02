@@ -82,6 +82,14 @@ A bank stays `beta: true` in `worker/banks.js` until its fixtures pass on stage.
 | GoPay | `gopay.json` | no balance column, so AI | to run | beta |
 | DANA | `dana.json` | no balance column, so AI | to run | beta |
 
+**Run the gate** with `scripts/fixtures/statements/bench.mjs`. It sends every bank's fixture page through stage `/v1/import/extract` with `source: "auto"`, as the app does for a page it can't prove locally, and exits non-zero on a miss:
+
+```bash
+SAKU_BENCH_TOKEN=… SAKU_BENCH_UID=… node scripts/fixtures/statements/bench.mjs --out=statement-bench.json
+```
+
+`--bank=jago` runs one bank. `--local` only checks the scorer offline and measures nothing. The 2026-11-02 build session could not run it, because its network policy refused `stage.sakumoney.my.id` and `api.cloudflare.com`. That is why the AI column below still says "to run".
+
 **To graduate a bank:**
 1. Add synthetic screenshots and pages for its real formats next to the JSON fixture.
 2. Score them against the stage Worker as `scripts/fixtures/bca/bench.mjs` does.
