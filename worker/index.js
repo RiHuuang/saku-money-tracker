@@ -5,7 +5,10 @@ import { jwtVerify } from "jose/jwt/verify";
 import { decrypt, encrypt, encryptionKey, hashToken, pkceChallenge, timingSafeEqual, tokenPart } from "./crypto.js";
 import { avatarAfterSignIn, isGoogleAvatarUrl, sessionToken, splitSessionToken } from "../server/src/identity.js";
 import { CLEAN_RESERVATION, cleanMessages, parseCleanAnswer, validateCleanInput } from "./merchant-clean.js";
-import { aiImportAvailable, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
+import { detectBank } from "./banks.js";
+import { MATCH_RESERVATION, matchMessages, parseMatchAnswer, validateMatchInput } from "./import-match.js";
+import { BUDGET_RESERVATION, budgetMessages, parseBudgetAnswer, validateBudgetInput } from "./budget-ai.js";
+import { aiImportAvailable, answerBank, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
 import { bcaCheckMessages, bcaMessages, jakartaToday, looksLikeBcaStatement, mergeBcaReads, parseBcaAnswer } from "./import-bca.js";
 import { withSecurityHeaders } from "./security-headers.js";
 export { UserLiveUpdates } from "./live.js";
@@ -661,24 +664,66 @@ async function route(request, env) {
       await settleImport(env.DB, day, auth.uid, answer);
       return answer;
     };
-    // 2.4.0 reads BCA only: screenshots are copied field by field and parsed here; statements must be BCA.
-    if (input.source === "bca" && input.kind === "text" && !looksLikeBcaStatement(input.text)) throw fault(422, "not_bca");
-    if (input.source === "bca" && input.kind === "image") {
+    const unreadable = (error) => { if (error?.status) throw error; throw fault(502, "Could not extract this page. It remains in your local draft for retry."); };
+    // BCA screenshots are copied field by field and parsed here (2.4.0).
+    const readBcaImage = async (bank) => {
       let first;
       try { first = parseBcaAnswer(await runPass(bcaMessages(input))); }
-      catch (error) { if (error?.status === 429) throw error; throw fault(502, "Could not extract this page. It remains in your local draft for retry."); }
-      if (first.bank !== "BCA") throw fault(422, "not_bca");
-      try { return reply({ rows: mergeBcaReads(first, parseBcaAnswer(await runPass(bcaCheckMessages(input))), jakartaToday()) }, 200, cors); }
-      catch (error) { if (error?.status === 429) throw error; throw fault(502, "Could not extract this page. It remains in your local draft for retry."); }
+      catch (error) { unreadable(error); }
+      if (first.bank !== "BCA") throw fault(422, input.source === "bca" ? "not_bca" : "unsupported_bank");
+      try { return reply({ rows: mergeBcaReads(first, parseBcaAnswer(await runPass(bcaCheckMessages(input))), jakartaToday()), ...(bank ? { bank } : {}) }, 200, cors); }
+      catch (error) { unreadable(error); }
+    };
+    const general = async (bank, first) => {
+      const sourceText = input.kind === "text" ? input.text : "";
+      const read = { ...input, ...(bank ? { bank } : {}) };
+      try {
+        const firstRows = first || parseImportAnswer(await runPass(importMessages(read)), input.kind, input.month, sourceText);
+        const verifiedRows = parseImportAnswer(await runPass(importVerificationMessages(read, firstRows)), input.kind, input.month, sourceText);
+        return reply({ rows: mergeImportPasses(firstRows, verifiedRows), ...(bank ? { bank } : {}) }, 200, cors);
+      } catch (error) { unreadable(error); }
+    };
+    // 2.4.0 clients ask for BCA only.
+    if (input.source === "bca") {
+      if (input.kind === "text" && !looksLikeBcaStatement(input.text)) throw fault(422, "not_bca");
+      return input.kind === "image" ? readBcaImage() : general();
     }
-    try {
-      const firstRows = parseImportAnswer(await runPass(importMessages(input)), input.kind, input.month, input.kind === "text" ? input.text : "");
-      const verifiedRows = parseImportAnswer(await runPass(importVerificationMessages(input, firstRows)), input.kind, input.month, input.kind === "text" ? input.text : "");
-      return reply({ rows: mergeImportPasses(firstRows, verifiedRows) }, 200, cors);
-    } catch (error) {
-      if (error?.status === 429) throw error;
-      throw fault(502, "Could not extract this page. It remains in your local draft for retry.");
+    if (!input.source) return general();
+    // Monthly check (3.0): BCA, Jago, GoPay, SeaBank, DANA and blu by BCA. A text statement names its bank in its
+    // header; a screenshot is named by the app's account guess or, failing that, by the model on the first pass.
+    if (input.kind === "text") {
+      const bank = detectBank(input.text);
+      if (!bank) throw fault(422, "unsupported_bank");
+      return general(bank);
     }
+    if (input.source !== "auto") return input.source === "bca" ? readBcaImage("bca") : general(input.source);
+    let answer;
+    try { answer = await runPass(importMessages(input)); }
+    catch (error) { unreadable(error); }
+    const bank = answerBank(answer);
+    if (!bank) throw fault(422, "unsupported_bank");
+    if (bank === "bca") return readBcaImage("bca");
+    let firstRows;
+    try { firstRows = parseImportAnswer(answer, input.kind, input.month, ""); }
+    catch (error) { unreadable(error); }
+    return general(bank, firstRows);
+  }
+  if (request.method === "POST" && (path === "/v1/import/match" || path === "/v1/budget/suggest")) {
+    if (expectedUid !== auth.uid) throw fault(403, "Account identity is required");
+    if (!aiImportAvailable(env)) throw fault(503, "AI is unavailable");
+    const matching = path === "/v1/import/match";
+    let input;
+    try { input = (matching ? validateMatchInput : validateBudgetInput)(await readBody(request, 32_000)); }
+    catch (error) { throw fault(400, error.message); }
+    const reservationSize = matching ? MATCH_RESERVATION : BUDGET_RESERVATION;
+    const day = new Date().toISOString().slice(0, 10);
+    const reservation = await reserveImport(env.DB, day, auth.uid, reservationSize);
+    if (!reservation.reserved) throw fault(429, reservation.limit === "user" ? "You've used today's AI allowance for your account." : "Saku's shared AI allowance is used for today.");
+    let answer;
+    try { answer = await env.AI.run(MODEL, { messages: matching ? matchMessages(input) : budgetMessages(input), max_completion_tokens: 1024, temperature: 0, seed: 0, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, store: false, n: 1 }); }
+    catch { await settleImport(env.DB, day, auth.uid, { usage: { prompt_tokens: 0, completion_tokens: 0 } }, reservationSize); throw fault(502, "Saku couldn't think this through right now."); }
+    await settleImport(env.DB, day, auth.uid, answer, reservationSize);
+    return reply(matching ? { picks: parseMatchAnswer(answer, input) } : parseBudgetAnswer(answer, input), 200, cors);
   }
   if (request.method === "GET" && path === "/v1/sessions") {
     await ensureSessionColumns(env);
