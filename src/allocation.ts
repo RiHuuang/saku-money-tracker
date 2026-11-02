@@ -19,12 +19,15 @@ export function classifyPocket(name: string): PocketGroup {
   return KEYWORDS.find(([, pattern]) => pattern.test(name))?.[0] || "wants";
 }
 
-const SHARES: Record<"fixed" | "variable", Record<"needs" | "wants" | "savings", number>> = {
-  fixed: { needs: 0.5, wants: 0.3, savings: 0.2 },
-  // Income that moves around keeps more aside for the thin months.
-  variable: { needs: 0.5, wants: 0.25, savings: 0.25 },
-};
-const bucket = (group: PocketGroup): "needs" | "wants" | "savings" => group === "debt" ? "needs" : group === "giving" ? "wants" : group;
+// Savings first ("pay yourself first"); income that moves around keeps more aside for the thin months.
+const SAVINGS_SHARE = { fixed: 0.2, variable: 0.25 } as const;
+// The rest is split by how much such a pocket usually needs, so one fun pocket never outweighs food and rent.
+const WEIGHTS: [number, RegExp][] = [
+  [3.5, /kos|kost|sewa|rent|rumah|home|kpr/i], [3, /makan|food|groceri|dapur|sayur|pasar/i], [2, /cicil|installment|kredit|loan|pinjam|utang|hutang/i],
+  [1.5, /transport|bensin|fuel|ojek|commute|tagihan|bills?|listrik|internet|wifi|sekolah|school|pendidikan|education|anak|child/i],
+  [1.2, /orang\s*tua|ortu|parents|keluarga|family|kesehatan|health|asuransi|bpjs/i], [0.6, /kopi|coffee|jajan|snack|langganan|subscription|netflix|spotify/i],
+];
+const weightOf = (name: string, group: PocketGroup) => WEIGHTS.find(([, pattern]) => pattern.test(name))?.[0] ?? (group === "needs" ? 1.5 : 1);
 export const planStep = (income: number) => income >= 3_000_000 ? 50_000 : 10_000;
 
 /** Average monthly spending per pocket over the three months before `month`, and how many of them had any. */
@@ -55,16 +58,14 @@ export function baselinePlan(income: number, kind: "fixed" | "variable", pockets
     return { ...pocket, group: classifyPocket(pocket.name), amount: 0, spend: pocket.pocketId ? history.spend.get(pocket.pocketId) || 0 : 0, fixed, reason: { kind: "template" } };
   });
   if (!rows.length || !available) return rows;
-  // Template shares: a bucket with no pocket passes its share on, except savings, which stays visible as unallocated.
-  const shares = { ...SHARES[kind] };
-  const present = (name: "needs" | "wants" | "savings") => rows.some((row) => bucket(row.group) === name);
-  const missing = (["needs", "wants"] as const).filter((name) => !present(name)).reduce((sum, name) => sum + shares[name], 0);
-  for (const name of ["needs", "wants"] as const) if (!present(name)) shares[name] = 0;
-  const spendTotal = (["needs", "wants"] as const).filter(present).reduce((sum, name) => sum + shares[name], 0);
-  for (const name of ["needs", "wants"] as const) if (present(name) && spendTotal) shares[name] += missing * shares[name] / spendTotal;
+  const savers = rows.filter((row) => row.group === "savings");
+  const savingsPool = available * SAVINGS_SHARE[kind];
+  const spenders = rows.filter((row) => row.group !== "savings");
+  const weightTotal = spenders.reduce((sum, row) => sum + weightOf(row.name, row.group), 0);
+  // Without spending pockets, savings pockets share everything; without savings pockets, savings stays unallocated.
+  const spendingPool = spenders.length ? available - savingsPool : 0;
   for (const row of rows) {
-    const peers = rows.filter((item) => bucket(item.group) === bucket(row.group)).length;
-    const template = available * shares[bucket(row.group)] / peers;
+    const template = row.group === "savings" ? (spenders.length ? savingsPool : available) / savers.length : spendingPool * weightOf(row.name, row.group) / weightTotal;
     const blended = history.months >= 2 && row.spend > 0 ? 0.7 * row.spend + 0.3 * template : template;
     row.amount = Math.max(row.fixed, blended);
     row.reason = row.fixed && row.fixed >= blended ? { kind: "fixed", amount: row.fixed } : history.months >= 2 && row.spend > 0 ? { kind: "spend", amount: row.spend } : row.group === "savings" ? { kind: "savings" } : { kind: "template" };
@@ -78,11 +79,11 @@ export function baselinePlan(income: number, kind: "fixed" | "variable", pockets
   }
   const step = planStep(income);
   for (const row of rows) row.amount = Math.max(row.fixed, Math.floor(row.amount / step) * step);
-  // Rounding leftovers go to savings, else to the largest needs pocket, so a full plan adds up exactly.
-  const left = available - rows.reduce((sum, row) => sum + row.amount, 0);
-  const target = rows.find((row) => row.group === "savings") || (present("savings") ? undefined : [...rows].filter((row) => bucket(row.group) === "needs").sort((a, b) => b.amount - a.amount)[0]);
-  const savingsShare = present("savings") ? 0 : Math.round(available * shares.savings);
-  if (target && left > 0 && left - savingsShare > 0) target.amount += present("savings") ? left : left - Math.floor(savingsShare / step) * step;
+  // Rounding leftovers go to savings, else to the largest pocket, so a full plan adds up exactly; with no savings
+  // pocket the savings share is left visible as unallocated.
+  const left = available - rows.reduce((sum, row) => sum + row.amount, 0) - (savers.length ? 0 : Math.floor(savingsPool / step) * step);
+  const target = savers[0] || [...rows].sort((a, b) => b.amount - a.amount)[0];
+  if (target && left > 0) target.amount += left;
   return rows;
 }
 

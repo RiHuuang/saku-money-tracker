@@ -29,6 +29,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Sparkles,
   Target,
   Trash2,
   TrendingUp,
@@ -70,6 +71,8 @@ import {
   type RecurringRule,
   type Transaction,
   pocketHasReferences,
+  applyPocketPlan,
+  rollbackPocketPlan,
 } from "./domain";
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { listImportDrafts } from "./importDraft";
@@ -100,6 +103,8 @@ import {
   TransactionList,
 } from "./components";
 const Statements = lazy(() => import("./Statements"));
+const Onboarding = lazy(() => import("./Onboarding"));
+const PocketPlanner = lazy(() => import("./PocketPlanner"));
 const CsvStatements = lazy(() => import("./CsvStatements"));
 const CatchUp = lazy(() => import("./CatchUp"));
 const Plans = lazy(() => import("./Plans"));
@@ -148,6 +153,7 @@ type Edit =
   | { type: "account_transfer"; value?: Transaction }
   | { type: "pocket_transfer" }
   | { type: "start" }
+  | { type: "plan" }
   | null;
 const cloudImportEnabled = true;
 const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
@@ -207,6 +213,7 @@ export default function App() {
   const activeSync = useRef<Data | null>(null);
   const syncRunning = useRef(false);
   const mirrorRunning = useRef(false);
+  const [planHintHidden, setPlanHintHidden] = useState(() => { try { return localStorage.getItem("saku-plan-hint-hidden-v1") === "1"; } catch { return false; } });
   const latest = useRef({ data, cloud, edit, resolution });
   latest.current = { data, cloud, edit, resolution };
   const reconcileRef = useRef<((afterFailedSync?: boolean) => Promise<void>) | null>(null);
@@ -450,6 +457,9 @@ export default function App() {
         dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
         return;
       }
+      // Full-page flows (setup) step back themselves instead of closing.
+      const stepper = document.querySelector("[data-back-step]");
+      if (stepper) { stepper.dispatchEvent(new Event("saku-back")); return; }
       if (edit) setEdit(null);
       else if (selectedPocketId) setSelectedPocketId(null);
       else {
@@ -1072,7 +1082,8 @@ export default function App() {
                   budget. Review the highlighted balances below.
                 </div>
               )}
-              <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div>
+              <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><div className="section-actions"><button className="button secondary" onClick={() => setEdit({ type: "plan" })}><Sparkles size={16} />{t("planWithSaku")}</button><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div></div>
+              {!data.monthlyIncome && data.pockets.length > 0 && !planHintHidden && <section className="plan-hint"><span className="plan-hint-icon" aria-hidden="true"><Sparkles size={18} /></span><div><strong>{t("planHintTitle")}</strong><p>{t("planHintBody")}</p></div><div className="plan-hint-actions"><button className="button primary" onClick={() => setEdit({ type: "plan" })}>{t("planWithSaku")}</button><button className="text-button" onClick={() => { setPlanHintHidden(true); try { localStorage.setItem("saku-plan-hint-hidden-v1", "1"); } catch { /* A convenience only. */ } }}>{t("notNow")}</button></div></section>}
               <div className="pocket-grid all-pockets">
                 {stats.pockets.map((p) => (
                   <PocketCard
@@ -1394,10 +1405,36 @@ export default function App() {
         {pocketHasReferences(data, edit.value.id) ? <p className="editor-help">{t("thisPocketHasTransactionsRecurring")}</p> : <p>{t("deleteThisPocketAndIts")}</p>}
         <div className="form-footer"><button className="button secondary" onClick={() => setEdit(null)}>{t("cancel")}</button>{!pocketHasReferences(data, edit.value.id) && <button className="button danger" disabled={busy} onClick={() => void commit({ ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) }, t("pocketDeleted")).then((saved) => { if (saved) setEdit(null); })}>{t("deletePocket")}</button>}</div>
       </Modal>}
+      {edit?.type === "plan" && <Suspense fallback={null}><PocketPlanner
+        data={data}
+        month={today().slice(0, 7)}
+        userId={cloud?.signedIn ? cloud.user?.id : undefined}
+        busy={busy}
+        onClose={() => setEdit(null)}
+        onApply={async (plan) => {
+          let next: Data;
+          try { next = applyPocketPlan(data, plan, today().slice(0, 7)); }
+          catch (error) { setToast(error instanceof Error ? error.message : t("planNotApplied")); return false; }
+          const planId = next.pocketPlans?.[0]?.id;
+          if (!(await commit(next, t("planSaved")))) return false;
+          if (planId) setToast({ message: t("planSaved"), action: { label: t("undo"), run: () => {
+            const current = latest.current.data;
+            if (!current?.pocketPlans?.some((item) => item.id === planId)) return;
+            const { data: back, kept } = rollbackPocketPlan(current, planId);
+            void commit(back, kept.length ? t("rolledBackKept", { names: kept.join(", ") }) : t("rolledBack"));
+          } } });
+          return true;
+        }}
+        onRollback={async (planId) => {
+          const { data: back, kept } = rollbackPocketPlan(data, planId);
+          await commit(back, kept.length ? t("rolledBackKept", { names: kept.join(", ") }) : t("rolledBack"));
+        }}
+      /></Suspense>}
       {edit?.type === "start" && (
-        <StartProfile
+        <Suspense fallback={null}><Onboarding
           busy={busy}
           suggestedName={cloud?.user?.name}
+          userId={cloud?.signedIn ? cloud.user?.id : undefined}
           onClose={() => setEdit(null)}
           onStart={async (next) => {
             if (await commit(next, t("yourOwnLittleFreshStart"))) {
@@ -1409,7 +1446,7 @@ export default function App() {
               go("pockets");
             }
           }}
-        />
+        /></Suspense>
       )}
       {toast && (
         <div className={`toast${view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket) ? " above-mobile-add" : ""}`} role="status">
@@ -2171,77 +2208,6 @@ function WorkspaceChoice({ local, remote, onChoose, onBackup }: { local: Data; r
     <button className="workspace-option" onClick={() => void onChoose(remote, false)}><strong>{remote.transactions.length || remote.pockets.length ? t("restoreCloud") : t("startFresh")}</strong><span>{t("transactionsPockets", { transactions: remote.transactions.length, pockets: remote.pockets.length })}</span></button>
     <button className="button secondary" onClick={onBackup}><Download size={17} />{t("exportFirst")}</button>
   </section></main>;
-}
-
-function StartProfile({
-  busy,
-  suggestedName,
-  onClose,
-  onStart,
-}: {
-  busy: boolean;
-  suggestedName?: string;
-  onClose: () => void;
-  onStart: (data: Data) => Promise<void>;
-}) {
-  const [name, setName] = useState(suggestedName?.trim().slice(0, 40) || "");
-  const [accounts, setAccounts] = useState([{ name: "BCA", balance: "" }, { name: "Jago", balance: "" }]);
-  const [pockets, setPockets] = useState([{ name: t("defaultFood"), budget: "", icon: "utensils" }, { name: t("defaultBills"), budget: "", icon: "home" }, { name: t("defaultFun"), budget: "", icon: "game" }]);
-  const [hasCard, setHasCard] = useState(false), [cardName, setCardName] = useState(""), [cardLimit, setCardLimit] = useState(""), [cardDebt, setCardDebt] = useState("0"), [dueDay, setDueDay] = useState("15");
-  const [hasInstallment, setHasInstallment] = useState(false), [installmentName, setInstallmentName] = useState(""), [monthlyAmount, setMonthlyAmount] = useState(""), [nextDueMonth, setNextDueMonth] = useState(shiftMonth(today().slice(0, 7), 1)), [paymentsLeft, setPaymentsLeft] = useState("1");
-  const [step, setStep] = useState(0), [stepError, setStepError] = useState("");
-  function advance() {
-    if (step === 0) {
-      const chosen = accounts.map((item) => item.name.trim()).filter(Boolean);
-      if (!name.trim() || !chosen.length || new Set(chosen.map((item) => item.toLowerCase())).size !== chosen.length) {
-        setStepError(t("setupError")); return;
-      }
-    }
-    setStepError(""); setStep((value) => value + 1);
-  }
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    const chosenAccounts = accounts.map((item) => ({ ...item, name: item.name.trim() })).filter((item) => item.name);
-    if (!chosenAccounts.length || new Set(chosenAccounts.map((item) => item.name.toLowerCase())).size !== chosenAccounts.length) return;
-    const next = emptyData(); next.name = name.trim(); next.accounts = chosenAccounts.map((item) => item.name); next.pockets = pockets.filter((item) => item.name.trim()).map((item, index) => ({ id: uid(), name: item.name.trim(), budget: Number(item.budget || 0), budgets: {}, createdMonth: today().slice(0, 7), icon: item.icon, color: COLORS[index % COLORS.length] }));
-    next.transactions = chosenAccounts.filter((item) => Number(item.balance) > 0).map((item) => ({ id: uid(), name: t("openingBalance"), amount: Number(item.balance), type: "income" as const, kind: "opening_balance" as const, date: today(), pocketId: "", account: item.name, note: "Opening balance when starting Saku" }));
-    if (hasCard && cardName.trim() && validAmount(Number(cardLimit))) {
-      const cardId = uid(); next.creditCards = [{ id: cardId, name: cardName.trim(), limit: Number(cardLimit), openingDebt: Number(cardDebt || 0), dueDay: Number(dueDay) }];
-      if (hasInstallment && installmentName.trim() && validAmount(Number(monthlyAmount)) && Number(paymentsLeft) >= 1) next.existingInstallments = [{ id: uid(), cardId, name: installmentName.trim(), monthlyAmount: Number(monthlyAmount), nextDueMonth, paymentsLeft: Number(paymentsLeft) }];
-    }
-    void onStart(next);
-  }
-  return (
-    <Modal title={t("setupTitle")} subtitle={t("setupSubtitle")} onClose={onClose}>
-      <form onSubmit={submit}>
-        <fieldset disabled={busy}>
-          <div className="setup-progress" aria-label={`Setup step ${step + 1} of 3`}><span className={step === 0 ? "active" : ""}>1 {t("accounts")}</span><span className={step === 1 ? "active" : ""}>2 {t("pockets")}</span><span className={step === 2 ? "active" : ""}>3 {t("cards")}</span></div>
-          {step === 0 && <><label className="field">{t("yourName")}<input autoFocus required value={name} maxLength={40} pattern=".*\S.*" onChange={(e) => setName(e.target.value)} placeholder={suggestedName?.trim() || t("namePrompt")} /></label>
-          <div className="setup-account-heading">
-            <div><h3>{t("moneyLives")}</h3><p>{t("balanceHelp")}</p></div>
-          </div>
-          <div className="setup-account-list">{accounts.map((item, index) => {
-            const balanceHelpId = `opening-balance-help-${index}`;
-            return <section className="setup-account-card" key={index} aria-label={item.name ? t("namedAccount", { name: item.name }) : t("accountNumber", { number: index + 1 })}>
-              <span className="setup-account-icon" aria-hidden="true"><Wallet size={18} /></span>
-              <label className="field setup-account-name">{t("accountName")}<input aria-label={`${t("account")} ${index + 1}`} value={item.name} maxLength={50} onChange={(e) => setAccounts(accounts.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /></label>
-              <label className="field setup-opening-balance">{t("openingBalance")}<div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || t("account")} ${t("openingBalance")}`} aria-describedby={balanceHelpId} placeholder={index === 0 ? groupDigits(2450000) : index === 1 ? groupDigits(875000) : "0"} value={item.balance} onValueChange={(balance) => setAccounts(accounts.map((x, i) => i === index ? { ...x, balance } : x))} /></div><small id={balanceHelpId}>{item.balance ? t("startingBalance") : t("exampleOnly")}</small></label>
-            </section>;
-          })}</div>
-          <button type="button" className="button secondary" onClick={() => setAccounts([...accounts, { name: "", balance: "" }])}><Plus size={16} />{t("addAccount")}</button></>}
-          {step === 1 && <>
-          <h3>{t("monthlyPockets")}</h3>{pockets.map((item, index) => <div className="setup-row" key={index}><input aria-label={`${t("pocket")} ${index + 1}`} value={item.name} maxLength={40} onChange={(e) => setPockets(pockets.map((x, i) => i === index ? { ...x, name: e.target.value } : x))} /><div className="amount-input"><span>Rp</span><MoneyInput aria-label={`${item.name || t("pocket")} ${t("monthlyBudget")}`} placeholder={t("monthlyBudget")} value={item.budget} onValueChange={(budget) => setPockets(pockets.map((x, i) => i === index ? { ...x, budget } : x))} /></div></div>)}
-          <button type="button" className="button secondary" onClick={() => setPockets([...pockets, { name: "", budget: "", icon: "home" }])}><Plus size={16} />{t("addPocket")}</button></>}
-          {step === 2 && <>
-          <label className="checkbox-label editor-option"><input type="checkbox" checked={hasCard} onChange={(e) => setHasCard(e.target.checked)} />{t("useCard")}</label>
-          {hasCard && <div className="setup-section"><label className="field">{t("cardName")}<input required value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="mis. BCA Visa" /></label><label className="field">{t("creditLimit")}<div className="amount-input"><span>Rp</span><MoneyInput required value={cardLimit} onValueChange={setCardLimit} /></div></label><label className="field">{t("currentlyOwed")}<div className="amount-input"><span>Rp</span><MoneyInput value={cardDebt} onValueChange={setCardDebt} /></div></label><label className="field">{t("paymentDay")}<input type="number" min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></label><label className="checkbox-label"><input type="checkbox" checked={hasInstallment} onChange={(e) => setHasInstallment(e.target.checked)} />{t("ongoingInstallment")}</label>{hasInstallment && <><label className="field">{t("whatIsIt")}<input required value={installmentName} onChange={(e) => setInstallmentName(e.target.value)} /></label><label className="field">{t("monthlyPayment")}<div className="amount-input"><span>Rp</span><MoneyInput required value={monthlyAmount} onValueChange={setMonthlyAmount} /></div></label><div className="form-columns"><label className="field">{t("nextDueMonth")}<input type="month" value={nextDueMonth} onChange={(e) => setNextDueMonth(e.target.value)} /></label><label className="field">{t("paymentsLeft")}<input type="number" min={1} max={60} value={paymentsLeft} onChange={(e) => setPaymentsLeft(e.target.value)} /></label></div></>}</div>}</>}
-          {stepError && <p className="form-error" role="alert">{stepError}</p>}
-          <p className="privacy-copy"><LockKeyhole size={17} />{t("setupPrivacy")}</p>
-          <div className="form-footer">{step > 0 && <button type="button" className="button secondary" onClick={() => { setStep(step - 1); setStepError(""); }}>{t("back")}</button>}{step < 2 ? <button key="next" type="button" className="button primary" onClick={advance}>{t("continue")} <ArrowRight size={17} /></button> : <button key="finish" className="button primary" type="submit">{busy ? t("creating") : t("startTracker")}<ArrowRight size={17} /></button>}</div>
-        </fieldset>
-      </form>
-    </Modal>
-  );
 }
 
 function SettingsView({
