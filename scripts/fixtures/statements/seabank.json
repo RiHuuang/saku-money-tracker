@@ -1,0 +1,3 @@
+{ "note": "Synthetic SeaBank statement in English layout.", "month": "2026-10", "bank": "seabank",
+  "text": "PT Bank SeaBank Indonesia\nAccount Statement October 2026\nOpening Balance 3,000,000.00\n02/10/2026 Transfer Out BI-FAST BCA 250,000.00 DR 2,750,000.00\n15/10/2026 ShopeePay Top Up 100,000.00 DR 2,650,000.00\n31/10/2026 Bunga 1,234.56 CR 2,651,234.56\n31/10/2026 Pajak Bunga 246.91 DR 2,650,987.65\nClosing Balance 2,650,987.65",
+  "rows": [["2026-10-02", 250000, "expense"], ["2026-10-15", 100000, "expense"], ["2026-10-31", 1235, "income"], ["2026-10-31", 247, "expense"]] }

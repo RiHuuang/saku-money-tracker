@@ -194,3 +194,16 @@ test("pages continue the proof from the balance the previous page ended on", () 
   assert.equal(parseStatementPage(second, "2026-11"), null, "without a carried balance the first row can't be proven");
   assert.equal(parseStatementPage("15/12 SALDO AWAL 100.000,00\n31/12 TRANSFER 50.000,00 DB 50.000,00", "2027-01")?.rows[0].date, "2026-12-31", "December rows in a January check");
 });
+
+test("synthetic statements for all six banks: detected, and proven locally wherever a running balance is printed", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const bank of ["bca", "jago", "seabank", "blu", "gopay", "dana"]) {
+    const fixture = JSON.parse(readFileSync(`scripts/fixtures/statements/${bank}.json`, "utf8"));
+    assert.equal(detectBank(fixture.text), fixture.bank, `${bank}: detected`);
+    const parsed = parseStatementPage(fixture.text, fixture.month);
+    if (fixture.rows === null) { assert.equal(parsed, null, `${bank}: no balance column, so AI reads it`); continue; }
+    assert.ok(parsed, `${bank}: proven without AI`);
+    assert.deepEqual(parsed.rows.map((item) => [item.date, item.amount, item.direction]), fixture.rows, `${bank}: rows`);
+    assert.equal(balanceMismatch(parsed.rows, statementTotals(fixture.text)), false, `${bank}: balance adds up`);
+  }
+});

@@ -33,6 +33,8 @@ export function moneyToken(raw: string): { sen: number; sign: -1 | 0 | 1 } | nul
   else if (/^\d{1,3}(?:\.\d{3})*,\d{2}$/.test(token)) [whole, fraction] = [token.slice(0, -3).replace(/\./g, ""), token.slice(-2)];
   else if (/^\d+\.\d{2}$/.test(token)) [whole, fraction] = [token.slice(0, -3), token.slice(-2)];
   else if (/^\d{1,3}(?:\.\d{3})+$/.test(token)) whole = token.replace(/\./g, "");
+  // Three digits after a comma are a thousands group, never sen (sen always have two).
+  else if (/^\d{1,3}(?:,\d{3})+$/.test(token)) whole = token.replace(/,/g, "");
   else return null;
   const sen = Number(whole) * 100 + Number(fraction);
   return Number.isSafeInteger(sen) ? { sen, sign } : null;
