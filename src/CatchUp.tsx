@@ -325,7 +325,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     } finally { savingRef.current = false; setSaving(false); }
   }
   async function undo() {
-    if ((!draftRef.current?.saved.length && !draftRef.current?.verified?.length) || busy || processingRef.current || savingRef.current) return;
+    if ((!draftRef.current?.saved.length && !draftRef.current?.verified?.length && !draftRef.current?.moved?.length) || busy || processingRef.current || savingRef.current) return;
     const draftId = draftRef.current.id;
     savingRef.current = true; setSaving(true);
     try {
@@ -335,14 +335,21 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     const removable = unchanged.filter((transaction) => !transaction.transferId || data.transactions.filter((part) => part.transferId === transaction.transferId).every((part) => unchangedIds.has(part.id)));
     // Links this check marked as checked lose the mark again.
     const unverify = new Set(draftRef.current.verified || []);
-    if (!removable.length && !unverify.size) { setInfo(t("savedTransactionsChanged")); return; }
+    // An entry moved with "Move it" goes back to its own account, unless it was changed again since.
+    const moves = new Map((draftRef.current.moved || []).map((item) => [item.id, item]));
+    const movedBack = data.transactions.filter((transaction) => moves.get(transaction.id)?.to === transaction.account && data.accounts.concat(data.creditCards.map((card) => card.name)).includes(moves.get(transaction.id)!.from)).length;
+    if (!removable.length && !unverify.size && !movedBack) { setInfo(t("savedTransactionsChanged")); return; }
     const ids = new Set(removable.map((t) => t.id));
-    const kept = data.transactions.filter((transaction) => !ids.has(transaction.id)).map((transaction) => unverify.has(transaction.id) ? (({ verified: _, ...rest }) => rest)(transaction) : transaction);
-    if (!(await commit({ ...data, transactions: kept }, t("importedUndone", { count: ids.size + unverify.size })))) return;
+    const kept = data.transactions.filter((transaction) => !ids.has(transaction.id)).map((transaction) => {
+      const move = moves.get(transaction.id);
+      const placed = move && move.to === transaction.account ? { ...transaction, account: move.from } : transaction;
+      return unverify.has(placed.id) ? (({ verified: _, ...rest }) => rest)(placed) : placed;
+    });
+    if (!(await commit({ ...data, transactions: kept }, t("importedUndone", { count: ids.size + unverify.size + movedBack })))) return;
     if (draftRef.current?.id !== draftId) return;
     const transferIds = new Set(removable.map((transaction) => transaction.transferId).filter(Boolean));
     const pairedRowIds = new Set(draftRef.current.saved.filter((item) => ids.has(item.id)).map((item) => item.pairedRowId).filter(Boolean));
-    try { await save({ ...draftRef.current, rows: draftRef.current.rows.map((row) => ids.has(row.id) || transferIds.has(row.id) || pairedRowIds.has(row.id) ? { ...row, decision: "later" } : row), saved: draftRef.current.saved.filter((item) => !ids.has(item.id)), verified: [] }); }
+    try { await save({ ...draftRef.current, rows: draftRef.current.rows.map((row) => ids.has(row.id) || transferIds.has(row.id) || pairedRowIds.has(row.id) ? { ...row, decision: "later" } : row), saved: draftRef.current.saved.filter((item) => !ids.has(item.id)), verified: [], moved: [] }); }
     catch { setInfo(t("undoneButDraftFailed")); }
     } finally { savingRef.current = false; setSaving(false); }
   }
@@ -358,7 +365,11 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     const account = accountForRow(row);
     if (!entry || !account || busy || savingRef.current) return;
     if (!(await commit({ ...data, transactions: data.transactions.map((transaction) => transaction.id === transactionId ? { ...transaction, account } : transaction) }, t("movedToAccount", { account })))) return;
-    await patchRows({ [row.id]: { matchId: transactionId, unlinked: false, userDecided: true } });
+    if (draftRef.current) {
+      try { await save({ ...draftRef.current, moved: [...(draftRef.current.moved || []).filter((item) => item.id !== transactionId), { id: transactionId, from: entry.account, to: account }] }); }
+      catch { /* save explains the local storage problem */ }
+    }
+    await patchRows({ [row.id]: { matchId: transactionId, unlinked: false, userDecided: true } }, "decisions");
   }
   async function removeOnlyInSaku(transaction: Transaction) {
     if (busy || savingRef.current) return;
@@ -535,7 +546,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
         </div> : null;
       })}
       <div className={`catchup-save is-compact${saveBarHidden ? " is-hidden" : ""}`}><p><strong>{t("readyCount", { count: ready.length })}</strong>{needsReview.length > 0 && <small>{t("laterCount", { count: needsReview.length })}</small>}</p><button className="button primary" aria-describedby={uncheckedDateSources.length ? "catchup-save-gate" : undefined} disabled={!ready.length || !!uncheckedDateSources.length || busy || processing || saving} onClick={() => void saveReady()}>{uncheckedDateSources.length ? t("checkDatesShort") : t("addCount", { count: ready.length })} <ArrowRight size={16} /></button></div></section>}
-    {!!draft?.saved.length && <section className="catchup-finish"><div><strong>{draft.saved.length} {t("savedDraft")}</strong><span>{t("existingSync")}</span></div><button className="button secondary" disabled={busy || processing || saving} onClick={() => void undo()}><RotateCcw size={15} /> {t("undoEntries")}</button></section>}
+    {!!(draft?.saved.length || draft?.verified?.length || draft?.moved?.length) && <section className="catchup-finish"><div><strong>{draft.saved.length + (draft.verified?.length || 0) + (draft.moved?.length || 0)} {t("savedDraft")}</strong><span>{t("existingSync")}</span></div><button className="button secondary" disabled={busy || processing || saving} onClick={() => void undo()}><RotateCcw size={15} /> {t("undoEntries")}</button></section>}
     {consentAsk && <Modal title={t("sendFiles")} subtitle={t("asksOnce")} onClose={() => setConsentAsk(false)}><p className="catchup-consent-text">{t("consentText")}</p><div className="form-footer"><button className="button secondary" type="button" onClick={() => setConsentAsk(false)}>{t("cancel")}</button><button className="button primary" type="button" onClick={() => { try { localStorage.setItem(importConsentKey(owner), "granted"); } catch { /* Without storage, Saku asks again next time. */ } setConsented(true); setConsentAsk(false); void extract(true); }}>{t("continue")}<ArrowRight size={16} /></button></div></Modal>}
     {preview && previewUrl && <Modal title={preview.name} subtitle={t("sourceFile")} onClose={() => setPreviewId("")}><div className="catchup-preview">{/\.pdf$/i.test(preview.name) ? <iframe title={preview.name} src={previewUrl} /> : <img alt={`${t("preview")} ${preview.name}`} src={previewUrl} />}</div></Modal>}
   </div>;

@@ -64,6 +64,8 @@ export type ImportDraft = {
   saved: { id: string; fingerprint: string; pairedRowId?: string }[];
   // Ledger entries this draft marked as checked, so Undo can clear the mark again.
   verified?: string[];
+  // Entries this draft moved to the statement's account ("Move it"), so Undo can move them back.
+  moved?: { id: string; from: string; to: string }[];
   // Monthly check tuning (shown in development builds only): how many choices the person had to make, and how many
   // automatic links they undid. Stays on the device with the draft.
   stats?: { decisions: number; unlinks: number };
