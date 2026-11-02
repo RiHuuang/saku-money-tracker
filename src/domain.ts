@@ -76,7 +76,14 @@ export type Data = {
   existingInstallments: ExistingInstallment[];
   checkedDays: string[];
   merchantRules: MerchantRule[];
+  // Pocket planning: what the person earns a month (fixed salary, or the usual minimum when it varies), and the
+  // pockets as they were before each of the last three applied plans, so a plan can be rolled back.
+  monthlyIncome?: number;
+  incomeKind?: "fixed" | "variable";
+  pocketPlans?: PocketPlanSnapshot[];
 };
+export type PocketPlanSnapshot = { id: string; appliedAt: string; month: string; incomeBefore?: number; incomeKindBefore?: "fixed" | "variable"; pocketsBefore: Pocket[]; createdPocketIds: string[] };
+export const POCKET_PLAN_HISTORY = 3;
 export type MerchantRule = { key: string; name: string; pocketId: string; updatedAt: string };
 export const COLORS = [
   "#15786e",
@@ -593,6 +600,10 @@ export function validateData(input: unknown): Data {
       throw new Error("The backup contains an invalid existing installment.");
     installmentIds.add(item.id);
   }
+  if (d.monthlyIncome !== undefined && (!Number.isSafeInteger(d.monthlyIncome) || d.monthlyIncome < 0 || d.monthlyIncome > 1e12)) throw new Error("The backup contains an invalid monthly income.");
+  if (d.incomeKind !== undefined && d.incomeKind !== "fixed" && d.incomeKind !== "variable") throw new Error("The backup contains an invalid income type.");
+  if (d.pocketPlans !== undefined && (!Array.isArray(d.pocketPlans) || d.pocketPlans.length > POCKET_PLAN_HISTORY || d.pocketPlans.some((plan) => !plan || typeof plan.id !== "string" || !plan.id || typeof plan.appliedAt !== "string" || plan.appliedAt.length > 40 || !validDate(`${plan.month}-01`) || (plan.incomeBefore !== undefined && (!Number.isSafeInteger(plan.incomeBefore) || plan.incomeBefore < 0)) || !Array.isArray(plan.pocketsBefore) || plan.pocketsBefore.length > 1000 || plan.pocketsBefore.some((pocket) => !pocket || typeof pocket.id !== "string") || !Array.isArray(plan.createdPocketIds) || plan.createdPocketIds.some((id) => typeof id !== "string"))))
+    throw new Error("The backup contains an invalid pocket plan.");
   // A rule may outlive its pocket; it then suggests Unassigned rather than blocking the ledger.
   d.merchantRules = d.merchantRules.map((rule) => !rule.pocketId || ids.has(rule.pocketId) ? rule : { ...rule, pocketId: "" });
   return d;
@@ -834,4 +845,74 @@ export function exportCSV(transactions: Transaction[], pockets: Pocket[]) {
     })),
     { escapeFormulae: true },
   );
+}
+
+export const pocketHasReferences = (data: Pick<Data, "transactions" | "recurring" | "favorites" | "pocketTransfers">, pocketId: string) =>
+  data.transactions.some((t) => t.pocketId === pocketId) || data.recurring.some((r) => r.pocketId === pocketId) ||
+  data.favorites.some((f) => f.pocketId === pocketId) || data.pocketTransfers.some((move) => move.fromPocketId === pocketId || move.toPocketId === pocketId);
+
+// One pocket in a plan: an existing pocket (pocketId) or a new one, with its monthly amount from `month` on.
+export type PocketPlanItem = { pocketId?: string; name: string; icon: string; amount: number };
+export type PocketPlan = { income: number; kind: "fixed" | "variable"; items: PocketPlanItem[] };
+
+/**
+ * Applies a plan from `month` on, as one change that can be rolled back. Past months keep the budgets they had:
+ * a month without its own override used to read the default, so the old default is written into it before the
+ * default changes. Pockets the plan doesn't mention are left alone; a plan never deletes a pocket.
+ */
+export function applyPocketPlan(data: Data, plan: PocketPlan, month: string, now = new Date().toISOString(), id: string = uid()): Data {
+  if (!validDate(`${month}-01`)) throw new Error("Choose a valid month");
+  if (!Number.isSafeInteger(plan.income) || plan.income < 0) throw new Error("Monthly income must be a whole rupiah amount");
+  const snapshot: PocketPlanSnapshot = { id, appliedAt: now, month, ...(data.monthlyIncome !== undefined ? { incomeBefore: data.monthlyIncome } : {}), ...(data.incomeKind ? { incomeKindBefore: data.incomeKind } : {}), pocketsBefore: JSON.parse(JSON.stringify(data.pockets)), createdPocketIds: [] };
+  const names = new Set<string>();
+  for (const item of plan.items) {
+    const name = item.name.trim().toLocaleLowerCase("id-ID");
+    if (!name || name.length > 40 || names.has(name)) throw new Error("Each pocket needs its own name");
+    if (!Number.isSafeInteger(item.amount) || item.amount < 0 || item.amount > 1e12) throw new Error("Pocket amounts must be whole rupiah");
+    names.add(name);
+  }
+  const pockets = data.pockets.map((pocket) => {
+    const item = plan.items.find((entry) => entry.pocketId === pocket.id);
+    if (!item) return pocket;
+    const budgets: Record<string, number> = {};
+    for (const [key, value] of Object.entries(pocket.budgets)) if (key < month) budgets[key] = value;
+    for (let m = pocket.createdMonth; m < month; m = shiftMonth(m, 1)) if (budgets[m] === undefined) budgets[m] = pocket.budget;
+    return { ...pocket, name: item.name.trim(), icon: ICONS.includes(item.icon) ? item.icon : pocket.icon, budget: item.amount, budgets };
+  });
+  const clash = (name: string) => pockets.some((pocket) => pocket.name.trim().toLocaleLowerCase("id-ID") === name.trim().toLocaleLowerCase("id-ID"));
+  for (const item of plan.items.filter((entry) => !entry.pocketId || !data.pockets.some((pocket) => pocket.id === entry.pocketId))) {
+    if (clash(item.name)) throw new Error("Each pocket needs its own name");
+    const pocket: Pocket = { id: uid(), name: item.name.trim(), icon: ICONS.includes(item.icon) ? item.icon : "home", color: COLORS[pockets.length % COLORS.length], budget: item.amount, budgets: {}, createdMonth: month };
+    pockets.push(pocket);
+    snapshot.createdPocketIds.push(pocket.id);
+  }
+  return validateData({ ...data, pockets, monthlyIncome: plan.income, incomeKind: plan.kind, pocketPlans: [snapshot, ...(data.pocketPlans || [])].slice(0, POCKET_PLAN_HISTORY) });
+}
+
+/**
+ * Goes back to the pockets as they were before a plan. A pocket the plan created stays when something now uses it
+ * (a transaction, a recurring rule, a favorite or a budget move); its name is returned so the person is told.
+ * Plans applied after this one are rolled back with it.
+ */
+export function rollbackPocketPlan(data: Data, planId: string): { data: Data; kept: string[] } {
+  const plans = data.pocketPlans || [];
+  const index = plans.findIndex((plan) => plan.id === planId);
+  if (index < 0) throw new Error("That plan can no longer be undone");
+  const undone = plans.slice(0, index + 1);
+  const snapshot = plans[index];
+  const created = new Set(undone.flatMap((plan) => plan.createdPocketIds));
+  const before = new Map(snapshot.pocketsBefore.map((pocket) => [pocket.id, pocket]));
+  const kept: string[] = [];
+  const pockets = data.pockets.flatMap((pocket) => {
+    if (before.has(pocket.id)) return [before.get(pocket.id)!];
+    if (!created.has(pocket.id)) return [pocket];
+    if (pocketHasReferences(data, pocket.id)) { kept.push(pocket.name); return [pocket]; }
+    return [];
+  });
+  for (const pocket of snapshot.pocketsBefore) if (!pockets.some((item) => item.id === pocket.id)) pockets.push(pocket);
+  const { monthlyIncome: _income, incomeKind: _kind, pocketPlans: _plans, ...rest } = data;
+  return {
+    kept,
+    data: validateData({ ...rest, pockets, ...(snapshot.incomeBefore !== undefined ? { monthlyIncome: snapshot.incomeBefore } : {}), ...(snapshot.incomeKindBefore ? { incomeKind: snapshot.incomeKindBefore } : {}), pocketPlans: plans.slice(index + 1) }),
+  };
 }

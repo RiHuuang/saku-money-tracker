@@ -69,6 +69,7 @@ import {
   type Pocket,
   type RecurringRule,
   type Transaction,
+  pocketHasReferences,
 } from "./domain";
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { listImportDrafts } from "./importDraft";
@@ -164,9 +165,6 @@ const mobileNavigation = [
   navigation[0], navigation[1], navigation[5], navigation[2],
   { id: "more", label: "More", icon: Menu },
 ] as const;
-const pocketHasReferences = (data: Data, pocketId: string) =>
-  data.transactions.some((t) => t.pocketId === pocketId) || data.recurring.some((r) => r.pocketId === pocketId) ||
-  data.favorites.some((f) => f.pocketId === pocketId) || data.pocketTransfers.some((move) => move.fromPocketId === pocketId || move.toPocketId === pocketId);
 export default function App() {
   const [data, setData] = useState<Data | null>(null),
     [loadError, setLoadError] = useState(""),
