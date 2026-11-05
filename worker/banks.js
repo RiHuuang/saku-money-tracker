@@ -32,7 +32,7 @@ export const BANKS = [
     signature: /\bgo-?pay\b.*\b(?:riwayat|history|transaksi|transactions?)\b|\b(?:riwayat|history)\b.*\bgo-?pay\b|\bgojek\b/i,
     account: /\bgo-?pay\b/i,
     keyword: /\bgo-?pay\b|\bgojek\b/i,
-    hint: "This is a GoPay wallet history. Top ups (Isi saldo) are money in from a bank and are topup. GoPay Coins are rewards, not rupiah. GoPay Later is pay_later.",
+    hint: "This is a GoPay wallet history. Top ups (Isi saldo) are money in from a bank and are topup; name them 'Isi saldo', not the bank they came from. GoPay Coins are rewards, not rupiah. GoPay Later is pay_later.",
   },
   {
     id: "dana", name: "DANA", beta: true,
