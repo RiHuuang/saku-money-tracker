@@ -45,13 +45,18 @@ export function recentSpending(data: Data, month: string) {
 }
 
 /** Money already promised every month that no pocket holds: card instalments and recurring bills without a pocket. */
-export function unpocketedCommitments(data: Data) {
-  return data.existingInstallments.reduce((sum, item) => sum + item.monthlyAmount, 0)
+const monthIndex = (month: string) => Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7));
+export function unpocketedCommitments(data: Data, month = new Date().toISOString().slice(0, 7)) {
+  // An instalment counts only while it is running: from its next due month, for the payments it has left.
+  return data.existingInstallments.reduce((sum, item) => {
+    const index = monthIndex(month) - monthIndex(item.nextDueMonth);
+    return sum + (index >= 0 && index < item.paymentsLeft ? item.monthlyAmount : 0);
+  }, 0)
     + data.recurring.filter((rule) => rule.active && rule.type === "expense" && !rule.pocketId).reduce((sum, rule) => sum + rule.amount, 0);
 }
 
 export function baselinePlan(income: number, kind: "fixed" | "variable", pockets: { key: string; pocketId?: string; name: string; icon: string }[], data: Data, month: string): PlanRow[] {
-  const available = Math.max(0, income - unpocketedCommitments(data));
+  const available = Math.max(0, income - unpocketedCommitments(data, month));
   const history = recentSpending(data, month);
   const rows: PlanRow[] = pockets.map((pocket) => {
     const fixed = pocket.pocketId ? data.recurring.filter((rule) => rule.active && rule.type === "expense" && rule.pocketId === pocket.pocketId).reduce((sum, rule) => sum + rule.amount, 0) : 0;
@@ -103,7 +108,7 @@ export function spreadRest(rows: PlanRow[], income: number, data: Data): PlanRow
 
 export const planTotal = (rows: readonly Pick<PlanRow, "amount">[]) => rows.reduce((sum, row) => sum + row.amount, 0);
 export const percentOf = (amount: number, income: number) => income > 0 ? Math.round(amount / income * 1000) / 10 : 0;
-export const amountFromPercent = (percent: number, income: number) => Math.max(0, Math.round(income * percent / 100 / 1000) * 1000);
+export const amountFromPercent = (percent: number, income: number) => Math.max(0, Math.round(income * percent / 100 / planStep(income)) * planStep(income));
 
 // A sensible icon for a new pocket from its name, using only the app's existing pocket icons.
 const ICON_HINTS: [string, RegExp][] = [

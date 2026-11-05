@@ -5,7 +5,7 @@ import { jwtVerify } from "jose/jwt/verify";
 import { decrypt, encrypt, encryptionKey, hashToken, pkceChallenge, timingSafeEqual, tokenPart } from "./crypto.js";
 import { avatarAfterSignIn, isGoogleAvatarUrl, sessionToken, splitSessionToken } from "../server/src/identity.js";
 import { CLEAN_RESERVATION, cleanMessages, parseCleanAnswer, validateCleanInput } from "./merchant-clean.js";
-import { detectBank } from "./banks.js";
+import { BANK_IDS, detectBank } from "./banks.js";
 import { MATCH_RESERVATION, matchMessages, parseMatchAnswer, validateMatchInput } from "./import-match.js";
 import { BUDGET_RESERVATION, budgetMessages, parseBudgetAnswer, validateBudgetInput } from "./budget-ai.js";
 import { aiImportAvailable, answerBank, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
@@ -692,7 +692,8 @@ async function route(request, env) {
     // Monthly check (3.0): BCA, Jago, GoPay, SeaBank, DANA and blu by BCA. A text statement names its bank in its
     // header; a screenshot is named by the app's account guess or, failing that, by the model on the first pass.
     if (input.kind === "text") {
-      const bank = detectBank(input.text);
+      // Only the first page prints the header, so a bank the app already settled on is trusted over detection.
+      const bank = BANK_IDS.includes(input.source) ? input.source : detectBank(input.text);
       if (!bank) throw fault(422, "unsupported_bank");
       return general(bank);
     }

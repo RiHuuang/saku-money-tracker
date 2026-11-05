@@ -207,3 +207,9 @@ test("synthetic statements for all six banks: detected, and proven locally where
     assert.equal(balanceMismatch(parsed.rows, statementTotals(fixture.text)), false, `${bank}: balance adds up`);
   }
 });
+
+test("equal amounts with no sign of a transfer are asked about, never paired", () => {
+  const rows = [row({ id: "out", amount: 150_000 }), row({ id: "in", account: "Jago", direction: "income", amount: 150_000, activity: "income" })];
+  const out = verdict(analyzeStatement(rows, { ...data, transactions: [] }), "out");
+  assert.equal(out?.kind, "look");
+});

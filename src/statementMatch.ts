@@ -94,20 +94,22 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
 
   // 3. Moves between the user's own accounts, across the uploaded statements.
   const transferable = usable.filter((row) => !verdicts.has(row.id) && !row.unpaired && data.accounts.includes(row.account));
-  const signal = (row: MatchRow, other: MatchRow) => {
+  const owner = (options.ownerName ?? data.name).toLocaleLowerCase("id-ID").split(/\s+/).filter((part) => part.length >= 4);
+  // Evidence beyond equal value and a close date; without any, two rows are only a coincidence.
+  const evidence = (row: MatchRow, other: MatchRow) => {
     let value = ["transfer", "topup"].includes(row.activity) || ["transfer", "topup"].includes(other.activity) ? 2 : 0;
     if (mentionsAccount(`${row.name} ${row.cleanName || ""}`, other.account)) value += 2;
     if (mentionsAccount(`${other.name} ${other.cleanName || ""}`, row.account)) value += 2;
-    const owner = (options.ownerName ?? data.name).toLocaleLowerCase("id-ID").split(/\s+/).filter((part) => part.length >= 4 && part !== "my");
     if (owner.some((part) => `${row.name} ${other.name}`.toLocaleLowerCase("id-ID").includes(part))) value += 2;
-    return value - gap(row.date, other.date);
+    return value;
   };
   const outs = transferable.filter((row) => row.direction === "expense");
   const ins = transferable.filter((row) => row.direction === "income");
-  const pairs: { out: MatchRow; in: MatchRow; score: number }[] = [];
+  const pairs: { out: MatchRow; in: MatchRow; score: number; proof: number }[] = [];
   for (const out of outs) for (const into of ins) {
     if (out.account === into.account || out.amount !== into.amount || gap(out.date, into.date) > MATCH_DAYS) continue;
-    pairs.push({ out, in: into, score: signal(out, into) });
+    const proof = evidence(out, into);
+    pairs.push({ out, in: into, score: proof - gap(out.date, into.date), proof });
   }
   // Rows the user paired by hand come first.
   for (const row of transferable) {
@@ -121,7 +123,8 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   for (const pair of [...pairs].sort((a, b) => b.score - a.score)) {
     if (verdicts.has(pair.out.id) || verdicts.has(pair.in.id)) continue;
     const tied = [pair.out, pair.in].some((row) => options_(row).filter((other) => other !== pair && other.score >= pair.score).length > 0);
-    if (tied) continue;
+    // Equal value alone is a coincidence (a friend repaying the exact dinner bill): ask instead of pairing.
+    if (tied || !pair.proof) continue;
     verdicts.set(pair.out.id, { kind: "transfer", counterparty: pair.in.account, partnerRowId: pair.in.id });
     verdicts.set(pair.in.id, { kind: "transfer", counterparty: pair.out.account, partnerRowId: pair.out.id });
   }
@@ -191,5 +194,6 @@ export function balanceMismatch(rows: readonly Pick<ImportRow, "amount" | "direc
   if (totals?.opening === undefined || totals.closing === undefined) return false;
   const counted = rows.filter((row) => !["pending", "failed", "reward"].includes(row.activity) && row.direction !== "unknown");
   const sum = counted.reduce((total, row) => total + (row.direction === "income" ? row.amount : -row.amount), 0);
-  return Math.abs(totals.opening + sum - totals.closing) > 1;
+  // Each row is rounded to whole rupiah on its own, so allow half a rupiah of drift per row.
+  return Math.abs(totals.opening + sum - totals.closing) > Math.max(1, Math.ceil(counted.length / 2));
 }

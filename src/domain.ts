@@ -879,6 +879,12 @@ export function applyPocketPlan(data: Data, plan: PocketPlan, month: string, now
     for (let m = pocket.createdMonth; m < month; m = shiftMonth(m, 1)) if (budgets[m] === undefined) budgets[m] = pocket.budget;
     return { ...pocket, name: item.name.trim(), icon: ICONS.includes(item.icon) ? item.icon : pocket.icon, budget: item.amount, budgets };
   });
+  const planned = new Set(plan.items.flatMap((item) => item.pocketId ? [item.pocketId] : []));
+  const renamed = pockets.filter((pocket) => planned.has(pocket.id));
+  for (const pocket of renamed) {
+    const name = pocket.name.trim().toLocaleLowerCase("id-ID");
+    if (pockets.some((other) => other.id !== pocket.id && other.name.trim().toLocaleLowerCase("id-ID") === name)) throw new Error("Each pocket needs its own name");
+  }
   const clash = (name: string) => pockets.some((pocket) => pocket.name.trim().toLocaleLowerCase("id-ID") === name.trim().toLocaleLowerCase("id-ID"));
   for (const item of plan.items.filter((entry) => !entry.pocketId || !data.pockets.some((pocket) => pocket.id === entry.pocketId))) {
     if (clash(item.name)) throw new Error("Each pocket needs its own name");
@@ -909,7 +915,7 @@ export function rollbackPocketPlan(data: Data, planId: string): { data: Data; ke
     if (pocketHasReferences(data, pocket.id)) { kept.push(pocket.name); return [pocket]; }
     return [];
   });
-  for (const pocket of snapshot.pocketsBefore) if (!pockets.some((item) => item.id === pocket.id)) pockets.push(pocket);
+  // A pocket deleted since the plan stays deleted; only pockets that still exist go back to how they were.
   const { monthlyIncome: _income, incomeKind: _kind, pocketPlans: _plans, ...rest } = data;
   return {
     kept,

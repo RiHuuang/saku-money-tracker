@@ -194,7 +194,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           let local: ReturnType<typeof parseStatementPage> = null;
           let totals = known.totals;
           if (page.content.kind === "text") {
-            bank = detectBank(page.content.text) || bank;
+            // Only the first page has the header; later pages may merely mention another bank.
+            bank = bank || detectBank(page.content.text);
             if (!bank) throw new Error("unsupported_bank");
             const printed = statementTotals(page.content.text);
             totals = { opening: totals?.opening ?? printed.opening, closing: printed.closing ?? totals?.closing };
