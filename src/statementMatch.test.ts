@@ -213,3 +213,9 @@ test("equal amounts with no sign of a transfer are asked about, never paired", (
   const out = verdict(analyzeStatement(rows, { ...data, transactions: [] }), "out");
   assert.equal(out?.kind, "look");
 });
+
+test("balance check allows half a rupiah of rounding per row, no more", () => {
+  const rows = Array.from({ length: 40 }, () => ({ amount: 100, direction: "income" as const, activity: "income" as const }));
+  assert.equal(balanceMismatch(rows, { opening: 0, closing: 4015 }), false, "15 off over 40 rounded rows is rounding");
+  assert.equal(balanceMismatch(rows, { opening: 0, closing: 4025 }), true, "25 off is a misread");
+});

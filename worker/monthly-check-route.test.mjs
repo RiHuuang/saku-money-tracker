@@ -55,6 +55,12 @@ try {
   response = await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "bca", text: "PT Bank Jago Tbk\n10/10/2026 Synthetic cafe 28.000" });
   assert.equal((await response.json()).error, "not_bca", "2.4.0 clients keep the BCA-only answer");
   assert.equal((await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "mandiri", text: "x".repeat(100) })).status, 400);
+  // Only the first page prints a header: a later page keeps the bank the app already settled on.
+  calls = [];
+  response = await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "gopay", text: "10/10/2026 Synthetic cafe 28.000" });
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.equal((await response.json()).bank, "gopay");
+  assert.match(calls[0].messages[0].content, /GoPay wallet history/);
 
   // A screenshot with no account guess: the first pass names the bank and doubles as the reading.
   calls = [];

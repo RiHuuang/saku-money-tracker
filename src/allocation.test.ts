@@ -114,3 +114,29 @@ test("the new ledger fields are validated", () => {
   assert.throws(() => validateData({ ...planned(), pocketPlans: [{ id: "x" }] }), /pocket plan/);
   assert.throws(() => validateData({ ...planned(), pocketPlans: [1, 2, 3, 4].map((n) => ({ id: `${n}`, appliedAt: "", month: "2026-11", pocketsBefore: [], createdPocketIds: [] })) }), /pocket plan/);
 });
+
+test("only running instalments come off the income before pockets are planned", () => {
+  const withInstalment = (nextDueMonth: string, paymentsLeft: number) => {
+    const data = fresh();
+    data.existingInstallments = [{ id: "i", cardId: "c", name: "Laptop", monthlyAmount: 1_000_000, nextDueMonth, paymentsLeft }];
+    return planTotal(baselinePlan(10_000_000, "fixed", pockets("Makan", "Kos", "Tabungan"), data, "2026-11"));
+  };
+  assert.equal(withInstalment("2026-01", 3), 10_000_000, "paid off in March: nothing to set aside");
+  assert.equal(withInstalment("2027-03", 3), 10_000_000, "starts next March: not yet");
+  assert.equal(withInstalment("2026-10", 3), 9_000_000, "running now: Rp1 jt is already spoken for");
+});
+
+test("a plan can't rename a pocket onto another existing pocket's name", () => {
+  const data = planned();
+  data.pockets.push({ id: "bills", name: "Tagihan", color: "#15786e", icon: "home", budget: 500_000, budgets: {}, createdMonth: "2026-08" });
+  assert.throws(() => applyPocketPlan(data, { income: 5_000_000, kind: "fixed", items: [{ pocketId: "food", name: "tagihan", icon: "utensils", amount: 1 }] }, "2026-11"), /own name/);
+});
+
+test("rolling back doesn't bring back a pocket deleted after the plan", () => {
+  const data = planned();
+  data.pockets.push({ id: "old", name: "Lama", color: "#15786e", icon: "home", budget: 100_000, budgets: {}, createdMonth: "2026-08" });
+  const applied = applyPocketPlan(data, { income: 5_000_000, kind: "fixed", items: [{ pocketId: "food", name: "Makan", icon: "utensils", amount: 2_000_000 }] }, "2026-11", "2026-11-02T00:00:00Z", "plan-1");
+  const afterDelete = { ...applied, pockets: applied.pockets.filter((pocket) => pocket.id !== "old") };
+  const { data: back } = rollbackPocketPlan(afterDelete, "plan-1");
+  assert.deepEqual(back.pockets.map((pocket) => pocket.id), ["food"]);
+});
