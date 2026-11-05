@@ -79,8 +79,8 @@ A bank stays `beta: true` in `worker/banks.js` until its fixtures pass on stage.
 | Jago | `jago.json` | ✓ | to run | beta |
 | SeaBank | `seabank.json` | ✓ (sen rounded per row) | to run | beta |
 | blu by BCA | `blu.json` | ✓ | to run | beta |
-| GoPay | `gopay.json` | no balance column, so AI | to run | beta |
-| DANA | `dana.json` | no balance column, so AI | to run | beta |
+| GoPay | `gopay.json` | no balance column, so AI | on a phone, 2026-11-05 (not the gate): 3/3 rows, dates, amounts and directions right; 2/3 names (the top-up row showed as "BCA", fixture "Isi saldo") | beta |
+| DANA | `dana.json` | no balance column, so AI | on a phone, 2026-11-05 (not the gate): 2/2 rows read; names and amounts not inspected (no DANA account to review them under) | beta |
 
 **Run the gate** with `scripts/fixtures/statements/bench.mjs`. It sends every bank's fixture page through stage `/v1/import/extract` with `source: "auto"`, as the app does for a page it can't prove locally, and exits non-zero on a miss:
 
