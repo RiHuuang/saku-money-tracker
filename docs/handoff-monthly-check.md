@@ -1,6 +1,6 @@
 # Handoff: Monthly check 3.0 and pocket planning
 
-Last updated 2026-11-03. Read this first if you're picking up this work. The design decisions and their reasons are in [monthly-check-3.0.md](monthly-check-3.0.md).
+Last updated 2026-11-05 (see "2026-11-05 follow-up" below). Read this first if you're picking up this work. The design decisions and their reasons are in [monthly-check-3.0.md](monthly-check-3.0.md).
 
 **Delete this file before merging the branch into `main`.** It is for agents working on the branch, not part of the product docs.
 
@@ -71,6 +71,23 @@ If the branch has been merged by the time you read this, start follow-up work fr
 | Strings | `src/locales/en.ts` and `src/locales/id.ts` |
 | Styles | End of `src/styles.css` (`.monthly-*`, `.onboarding-*`, `.allocation-*`, `.planner-*`, `.plan-hint`) |
 | Tests | `src/statementMatch.test.ts`, `src/allocation.test.ts`, `worker/monthly-check-route.test.mjs`, `scripts/statement-bench.test.mjs` |
+
+## 2026-11-05 follow-up
+
+A review of the branch and a pass on a real phone (Xiaomi, USB, isolated `id.saku.money.stage` debug build) changed these things:
+
+- **Later pages keep their bank.** The Worker trusts `input.source` for text pages instead of re-detecting it, and the app keeps the bank from page 1 (`src/CatchUp.tsx`). Before, page 2 of a GoPay or DANA PDF failed with `unsupported_bank`.
+- **Transfers need evidence.** Two rows with equal amounts are only auto-paired when something else links them (activity, a named bank, the owner's name). Otherwise they go to "Needs a look" (`src/statementMatch.ts`).
+- **Plans.** Only running instalments come off income. Rollback no longer brings back pockets deleted since the plan. A plan can't rename a pocket onto another pocket's name.
+- **Balance check** allows half a rupiah of rounding per row.
+- **Layout.** The planner and allocation editor no longer run past the screen edge, and the four Catch up tabs are a 2x2 grid on phones.
+- **Tests.** Each fix has a regression test (127 passing).
+
+Checked on the phone: Pockets, Plan with Saku (income to suggested split), and the Monthly check screen. Checked in a 375px browser harness: the four setup steps and the data they produce. **Not checked:** a statement run through Monthly check on the device (it stops at the one-time Cloudflare AI consent, which the owner answers), and the accuracy gate below.
+
+Known and left alone: an `auto` BCA screenshot costs three AI passes instead of two, because the bank is learned from a general first pass; rollback restores a pocket's name, icon and budgets as they were, so edits made after a plan are undone with it.
+
+Building for a phone: Gradle needs JDK 21 (Android Studio's bundled one works), `android/local.properties` with `sdk.dir`, and for an isolated stage build the steps in `RELEASE.md` (`--mode staging`, then `-PSAKU_ISOLATED_STAGE_DEBUG=true`, then `npm run android:sync` to restore production assets).
 
 ## Open item: the per-bank accuracy gate
 

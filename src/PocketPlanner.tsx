@@ -69,7 +69,7 @@ export default function PocketPlanner({ data, month, userId, busy, onApply, onRo
       </section>}
       <div className="form-footer planner-footer">
         <button type="button" className="button secondary" onClick={onClose}>{t("keepMyPockets")}</button>
-        <button type="button" className="button primary" disabled={busy || !incomeValue || !plan.rows.length || plan.state === "thinking"} onClick={() => void apply()}>{changes ? t("applyChanges", { count: changes }) : t("applyPlan")}</button>
+        <button type="button" className="button primary" disabled={busy || !incomeValue || !plan.rows.length || plan.state === "thinking"} onClick={() => void apply()}>{changes && incomeValue ? t("applyChanges", { count: changes }) : t("applyPlan")}</button>
       </div>
     </div>
   </Modal>;
