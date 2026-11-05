@@ -1,14 +1,14 @@
 # Handoff: Monthly check 3.0 and pocket planning
 
-Last updated 2026-11-05 (see "2026-11-05 follow-up" below). Read this first if you're picking up this work. The design decisions and their reasons are in [monthly-check-3.0.md](monthly-check-3.0.md).
+Last updated 2026-11-06 (see "2026-11-05 follow-up" below). Read this first if you're picking up this work. The design decisions and their reasons are in [monthly-check-3.0.md](monthly-check-3.0.md).
 
 **Delete this file before merging the branch into `main`.** It is for agents working on the branch, not part of the product docs.
 
 ## Where the work is
 
 - **Repository:** `RiHuuang/saku-money-tracker` on GitHub.
-- **Branch:** `claude/nice-sagan-p8ykyo`. It's pushed and up to date.
-- **Base:** `main` at `a7c2399` (release 2.4.1). The branch is 9 commits ahead, counting this handoff.
+- **Branch:** `claude/nice-sagan-p8ykyo`. Pushed on 2026-11-06 (through `9046aa5` plus this handoff update).
+- **Base:** `main` at `a7c2399` (release 2.4.1). The branch is 18 commits ahead, counting this handoff.
 - **Pull request:** none yet. Don't open one until the open item below is done or the owner says to ship with beta banks.
 
 ```bash
@@ -33,7 +33,7 @@ npm test
 npm run build
 ```
 
-`npm test` should report 122 passing plus the Worker and script checks. `npm run build` needs `VITE_SAKU_API_URL`, which `.env.production` already provides.
+`npm test` should report 128 passing plus the Worker and script checks. `npm run build` needs `VITE_SAKU_API_URL`, which `.env.production` already provides.
 
 If the branch has been merged by the time you read this, start follow-up work from the latest `main`.
 
@@ -91,7 +91,9 @@ Building for a phone: Gradle needs JDK 21 (Android Studio's bundled one works), 
 
 ## Open item: the per-bank accuracy gate
 
-**Status: not run.** Jago, GoPay, SeaBank, DANA and blu by BCA are still `beta: true` in `worker/banks.js`. Their AI accuracy on real statements is unmeasured. The cloud session that built this couldn't reach `stage.sakumoney.my.id`, so `docs/monthly-check-3.0.md` lists them as "to run".
+Also unverified: the GoPay hint change in `9046aa5` (top-ups named "Isi saldo"). Run the GoPay bench; revert the hint if it scores worse. On-device checks of Jago, GoPay and DANA are recorded in `docs/monthly-check-3.0.md`; unsaved test drafts may remain in the phone's Monthly check.
+
+**Status: not run** (as of 2026-11-06; no `SAKU_BENCH_TOKEN`/`SAKU_BENCH_UID` was available). Jago, GoPay, SeaBank, DANA and blu by BCA are still `beta: true` in `worker/banks.js`. Their AI accuracy on real statements is unmeasured. The cloud session that built this couldn't reach `stage.sakumoney.my.id`, so `docs/monthly-check-3.0.md` lists them as "to run".
 
 **What beta means for users:** a new row from these banks that wasn't proven by the running balance always waits in "Needs a look". Links to rows already in Saku still work.
 
