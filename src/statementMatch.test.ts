@@ -219,3 +219,11 @@ test("balance check allows half a rupiah of rounding per row, no more", () => {
   assert.equal(balanceMismatch(rows, { opening: 0, closing: 4015 }), false, "15 off over 40 rounded rows is rounding");
   assert.equal(balanceMismatch(rows, { opening: 0, closing: 4025 }), true, "25 off is a misread");
 });
+
+test("a person's name next to a bank is not a move between your own accounts", () => {
+  const stranger = row({ id: "in", account: "Jago", direction: "income", activity: "income", amount: 500_000, name: "Transfer masuk dari RINA WULANDARI BCA" });
+  const alone = analyzeStatement([stranger], { ...data, name: "Budi Santoso", accounts: ["BCA", "Jago"], transactions: [] });
+  assert.equal(verdict(alone, "in")?.kind, "new", "BCA here is only the sender's bank");
+  const mine = analyzeStatement([{ ...stranger, name: "Transfer masuk dari BCA Utama" }], { ...data, name: "Budi Santoso", accounts: ["BCA Utama", "Jago"], transactions: [] });
+  assert.equal(verdict(mine, "in")?.kind, "transfer", "naming the account itself still counts");
+});

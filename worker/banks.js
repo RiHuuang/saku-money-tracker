@@ -76,10 +76,16 @@ export function accountForBank(accounts, id) {
   const matches = (accounts || []).filter((name) => bankOfAccount(name) === id);
   return matches.length === 1 ? matches[0] : "";
 }
-// Whether a transaction description names the bank or wallet behind an account (or the account itself).
+// Whether a description names the account itself ("BCA Utama"), not just its bank.
+export function namesAccount(text, account) {
+  if (typeof text !== "string" || typeof account !== "string" || !account.trim()) return false;
+  const own = account.trim().toLocaleLowerCase("id-ID").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}])${own}(?:$|[^\\p{L}\\p{N}])`, "u").test(text.toLocaleLowerCase("id-ID"));
+}
+// Whether a transaction description names the bank or wallet behind an account (or the account itself). A bank
+// alone proves little: statements print the other party's bank on every transfer.
 export function mentionsAccount(text, account) {
   if (typeof text !== "string" || typeof account !== "string" || !account.trim()) return false;
   const bank = bankById(bankOfAccount(account));
-  const own = account.trim().toLocaleLowerCase("id-ID").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return (!!bank && bank.keyword.test(text)) || new RegExp(`(?:^|[^\\p{L}\\p{N}])${own}(?:$|[^\\p{L}\\p{N}])`, "u").test(text.toLocaleLowerCase("id-ID"));
+  return (!!bank && bank.keyword.test(text)) || namesAccount(text, account);
 }

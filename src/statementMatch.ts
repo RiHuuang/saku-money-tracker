@@ -1,4 +1,4 @@
-import { bankOfAccount, mentionsAccount } from "../worker/banks.js";
+import { bankById, bankOfAccount, mentionsAccount, namesAccount } from "../worker/banks.js";
 import { validAmount, validDate, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { merchantKey } from "./merchants";
@@ -39,6 +39,9 @@ export function nameScore(row: Pick<MatchRow, "name" | "cleanName">, transaction
   if (clean.length >= 4 && target.length >= 4 && (clean.includes(target) || target.includes(clean))) return 3;
   return shared >= 2 ? 3 : shared === 1 ? 2 : 0;
 }
+
+// An account called just "BCA" says nothing beyond its bank; "BCA Utama" does.
+const distinctive = (account: string) => account.replace(bankById(bankOfAccount(account) || "")?.keyword || /$^/, "").replace(/[^\p{L}\p{N}]+/gu, "").length >= 3;
 
 const eligible = (row: MatchRow) => !!row.account && validDate(row.date) && validAmount(row.amount) && row.direction !== "unknown" && !["pending", "failed", "reward", "unknown"].includes(row.activity);
 
@@ -139,7 +142,9 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   for (const row of transferable) {
     if (verdicts.has(row.id) || row.activity === "card_payment") continue;
     const text = `${row.name} ${row.cleanName || ""}`;
-    const others = data.accounts.filter((account) => account !== row.account && !uploaded.has(account) && bankOfAccount(account) && mentionsAccount(text, account));
+    // A bank's name alone is just the other party's bank, so it takes more: a top-up, the account's own name or yours.
+    const ownerPrinted = owner.some((part) => text.toLocaleLowerCase("id-ID").includes(part));
+    const others = data.accounts.filter((account) => account !== row.account && !uploaded.has(account) && bankOfAccount(account) && mentionsAccount(text, account) && (row.activity === "topup" || ownerPrinted || (namesAccount(text, account) && distinctive(account))));
     if (others.length === 1) verdicts.set(row.id, { kind: "transfer", counterparty: others[0] });
   }
 
