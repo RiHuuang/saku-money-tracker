@@ -10,7 +10,7 @@
   --surface: #fff;
   letter-spacing: 0;
 }
-.check-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: min(100%, 540px); gap: 4px; padding: 4px; margin-bottom: 22px; border-radius: 14px; background: var(--surface-muted); }
+.check-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: min(100%, 640px); gap: 4px; padding: 4px; margin-bottom: 22px; border-radius: 14px; background: var(--surface-muted); }
 .check-tabs button { min-height: 44px; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; }
 .check-tabs button.selected { background: var(--surface); color: var(--teal); box-shadow: 0 4px 20px #122f2410; font-weight: 700; }
 .catchup { color: var(--ink, #173e40); padding-bottom: 92px; }
@@ -4163,7 +4163,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .plans-tabs button { flex: 1; justify-content: center; min-width: 0; }
   .credit-card-item, .credit-card-top, .credit-card-values { min-width: 0; max-width: 100%; }
   .check-tabs, .catchup-hero, .catchup-panel { width: 100%; min-width: 0; max-width: 100%; }
-  .check-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .check-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .check-tabs button { min-width: 0; padding-inline: 6px; line-height: 1.3; }
   .catchup-hero h2 { max-width: 100%; overflow-wrap: anywhere; }
   .catchup-panel-head > div { min-width: 0; }
