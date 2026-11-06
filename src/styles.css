@@ -3659,6 +3659,9 @@ main {
 .card-purchases { margin-top: 18px; padding-top: 12px; border-top: 1px solid #e8eeec; font-size: 12px; }
 .card-purchases summary { cursor: pointer; color: #1a6760; }
 .card-purchases > div { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eef2f1; }
+.owed-entry-details { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.owed-entry-details > span { overflow-wrap: anywhere; }
+.owed-entry-details small { color: var(--muted); }
 .card-purchases strong { text-align: right; }
 .muted-action { margin-top: 12px; font-size: 11px; }
 .plans-form, .due-list { border-top: 1px solid #dce7e4; padding-top: 18px; }

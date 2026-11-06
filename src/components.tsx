@@ -412,7 +412,7 @@ export function TransactionList({
                 )}
               </strong>
               <span>
-                {t.kind === "account_transfer" ? translate("accountTransfer") : t.kind === "balance_adjustment" ? translate("balanceAdjustmentLabel") : t.kind === "opening_balance" ? translate("openingBalance") : t.kind === "card_payment" ? translate("cardPayment") : t.kind === "reimbursement" ? translate("repaidByFriend") : t.type === "income" ? translate("income") : p?.name || translate("unassigned")}{" "}
+                {t.kind === "account_transfer" ? translate("accountTransfer") : t.kind === "balance_adjustment" ? translate("balanceAdjustmentLabel") : t.kind === "opening_balance" ? translate("openingBalance") : t.kind === "card_payment" ? translate("cardPayment") : t.kind === "loan_given" ? translate("lentTo", { name: t.person || "" }) : t.kind === "loan_received" ? translate("borrowedFrom", { name: t.person || "" }) : t.kind === "reimbursement" ? translate(t.type === "expense" ? "repaidLoan" : "repaidByFriend") : t.type === "income" ? translate("income") : p?.name || translate("unassigned")}{" "}
                 <span className="dot">·</span> {t.account}
               </span>
             </span>
