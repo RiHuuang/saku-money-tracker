@@ -18,9 +18,9 @@ const CURRENT_AGREEMENT = "2026-10-26";
 const agreementVersions = new Set(["2026-09-28", "2026-09-29", "2026-10-03", CURRENT_AGREEMENT]);
 const maxBody = 150_000;
 const chunkBytes = 250_000;
-const sheetNames = ["Transactions", "Pockets", "Accounts", "Cards", "Recurring", "Quick_entries", "Pocket_transfers", "Existing_installments"];
-const sheetWidths = { Transactions: 18, Pockets: 7, Accounts: 1, Cards: 5, Recurring: 12, Quick_entries: 7, Pocket_transfers: 5, Existing_installments: 6 };
-const sheetRowLimits = { Transactions: 100001, Pockets: 1001, Accounts: 101, Cards: 31, Recurring: 501, Quick_entries: 31, Pocket_transfers: 10001, Existing_installments: 101 };
+const sheetNames = ["Transactions", "Pockets", "Accounts", "Cards", "Recurring", "Quick_entries", "Pocket_transfers", "Existing_installments", "Goals"];
+const sheetWidths = { Transactions: 18, Pockets: 7, Accounts: 1, Cards: 5, Recurring: 12, Quick_entries: 7, Pocket_transfers: 5, Existing_installments: 6, Goals: 7 };
+const sheetRowLimits = { Transactions: 100001, Pockets: 1001, Accounts: 101, Cards: 31, Recurring: 501, Quick_entries: 31, Pocket_transfers: 10001, Existing_installments: 101, Goals: 101 };
 const cookieOptions = "Secure; HttpOnly; SameSite=Lax; Path=/";
 const legacyAndroidBuild = 7;
 const liveRoom = async (env, uid) => env.LIVE_UPDATES.get(env.LIVE_UPDATES.idFromName(await hashToken(uid)));
@@ -844,7 +844,17 @@ async function route(request, env) {
     const accessToken = await refreshGoogle(env, user.googleRefreshToken);
     const params = new URLSearchParams({ valueRenderOption: "UNFORMATTED_VALUE" });
     for (const name of sheetNames) params.append("ranges", `'${name}'!A:R`);
-    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(user.spreadsheetId)}/values:batchGet?${params}`, { headers: { authorization: `Bearer ${accessToken}` } });
+    const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(user.spreadsheetId)}`;
+    let response = await fetch(`${base}/values:batchGet?${params}`, { headers: { authorization: `Bearer ${accessToken}` } });
+    if (response.status === 400) {
+      const metadata = await googleJson(`${base}?fields=sheets(properties(title))`, accessToken);
+      const titles = new Set((metadata.sheets || []).map(({ properties }) => properties.title));
+      if (!titles.has("Goals") && sheetNames.every((name) => name === "Goals" || titles.has(name))) {
+        const legacy = new URLSearchParams({ valueRenderOption: "UNFORMATTED_VALUE" });
+        for (const name of sheetNames.filter((name) => name !== "Goals")) legacy.append("ranges", `'${name}'!A:R`);
+        response = await fetch(`${base}/values:batchGet?${legacy}`, { headers: { authorization: `Bearer ${accessToken}` } });
+      }
+    }
     if (!response.ok) throw fault(502, `Google Sheet read failed (${response.status})`);
     return new Response(response.body, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", ...cors } });
   }
@@ -889,13 +899,25 @@ async function route(request, env) {
     const input = await readBody(request), job = await getSheetJob(env, auth.uid);
     if (!job?.target_path || input.targetRevision !== job.target_revision || job.total < 0 || !user.spreadsheetId || !user.googleRefreshToken) throw fault(409, "Sheet mirror is not ready");
     const rows = input.rows;
-    if (!rows || typeof rows !== "object" || Object.keys(rows).length !== sheetNames.length || sheetNames.some((name) => !Number.isSafeInteger(rows[name]) || rows[name] < 1 || rows[name] > sheetRowLimits[name])) throw fault(400, "Invalid Sheet row counts");
+    const names = rows && Object.hasOwn(rows, "Goals") ? sheetNames : sheetNames.filter((name) => name !== "Goals");
+    if (!rows || typeof rows !== "object" || Object.keys(rows).length !== names.length || names.some((name) => !Number.isSafeInteger(rows[name]) || rows[name] < 1 || rows[name] > sheetRowLimits[name])) throw fault(400, "Invalid Sheet row counts");
     const accessToken = await refreshGoogle(env, user.googleRefreshToken);
     const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(user.spreadsheetId)}`;
     const metadata = await googleJson(`${base}?fields=sheets(properties(sheetId,title,gridProperties(rowCount)))`, accessToken);
     const existing = new Map((metadata.sheets || []).map(({ properties }) => [properties.title, properties]));
-    if (sheetNames.some((name) => !existing.has(name))) throw fault(409, "The Saku Sheet tabs have changed");
-    const requests = sheetNames.filter((name) => rows[name] > existing.get(name).gridProperties.rowCount).map((name) => ({ updateSheetProperties: {
+    if (names.some((name) => name !== "Goals" && !existing.has(name))) throw fault(409, "The Saku Sheet tabs have changed");
+    if (names.includes("Goals") && !existing.has("Goals")) {
+      try {
+        await googleJson(`${base}:batchUpdate`, accessToken, { method: "POST", body: JSON.stringify({ requests: [{ addSheet: { properties: { title: "Goals" } } }] }) });
+      } catch (error) {
+        // Another device may have added this tab while we were reading metadata.
+        const latest = await googleJson(`${base}?fields=sheets(properties(sheetId,title,gridProperties(rowCount)))`, accessToken);
+        if (!(latest.sheets || []).some(({ properties }) => properties.title === "Goals")) throw error;
+      }
+      const latest = await googleJson(`${base}?fields=sheets(properties(sheetId,title,gridProperties(rowCount)))`, accessToken);
+      for (const { properties } of latest.sheets || []) existing.set(properties.title, properties);
+    }
+    const requests = names.filter((name) => rows[name] > existing.get(name).gridProperties.rowCount).map((name) => ({ updateSheetProperties: {
       properties: { sheetId: existing.get(name).sheetId, gridProperties: { rowCount: rows[name] } }, fields: "gridProperties.rowCount",
     } }));
     if (requests.length) await googleJson(`${base}:batchUpdate`, accessToken, { method: "POST", body: JSON.stringify({ requests }) });

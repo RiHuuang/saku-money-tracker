@@ -19,6 +19,7 @@ export function sheetTables(data: Data) {
     Recurring: table(["id", "name", "direction", "amount_idr", "pocket_id", "account", "card_id", "installments", "skipped_months", "day", "start_month", "active"], data.recurring.map((r) => [r.id, r.name, r.type, r.amount, r.pocketId, r.account, r.cardId, r.installments, r.skippedMonths, r.day, r.startMonth, r.active])),
     Quick_entries: table(["id", "name", "direction", "amount_idr", "pocket_id", "account", "card_id"], data.favorites.map((f) => [f.id, f.name, f.type, f.amount, f.pocketId, f.account, f.cardId])),
     Pocket_transfers: table(["id", "month", "from_pocket_id", "to_pocket_id", "amount_idr"], data.pocketTransfers.map((m) => [m.id, m.month, m.fromPocketId, m.toPocketId, m.amount])),
+    Goals: table(["id", "name", "target_idr", "target_month", "pocket_id", "created_month", "starting_funding_idr"], data.goals.map((goal) => [goal.id, goal.name, goal.target, goal.targetDate, goal.pocketId, goal.createdMonth, goal.startingFunding])),
     Existing_installments: table(["id", "card_id", "description", "monthly_amount_idr", "next_due_month", "payments_left"], data.existingInstallments.map((i) => [i.id, i.cardId, i.name, i.monthlyAmount, i.nextDueMonth, i.paymentsLeft])),
   };
 }

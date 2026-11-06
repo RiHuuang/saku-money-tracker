@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import { localeTag } from "./i18n";
+import type { SavingsGoal } from "./goals";
 
 export type Pocket = {
   id: string;
@@ -73,6 +74,7 @@ export type Data = {
   recurring: RecurringRule[];
   favorites: Favorite[];
   pocketTransfers: PocketTransfer[];
+  goals: SavingsGoal[];
   existingInstallments: ExistingInstallment[];
   checkedDays: string[];
   merchantRules: MerchantRule[];
@@ -326,6 +328,7 @@ export function emptyData(): Data {
     recurring: [],
     favorites: [],
     pocketTransfers: [],
+    goals: [],
     existingInstallments: [],
     checkedDays: [],
     merchantRules: [],
@@ -398,6 +401,7 @@ export function demoData(month = today().slice(0, 7)): Data {
     recurring: [],
     favorites: [],
     pocketTransfers: [],
+    goals: [],
     existingInstallments: [],
     checkedDays: [],
     merchantRules: [],
@@ -412,7 +416,7 @@ export function validateData(input: unknown): Data {
   const v3 = (v2?.version === 2
     ? { ...v2, version: 3, pocketTransfers: [], existingInstallments: [] }
     : v2) as Data;
-  const d = (v3 && typeof v3 === "object" ? { ...v3, checkedDays: v3.checkedDays ?? [], merchantRules: v3.merchantRules ?? [] } : v3) as Data;
+  const d = (v3 && typeof v3 === "object" ? { ...v3, checkedDays: v3.checkedDays ?? [], merchantRules: v3.merchantRules ?? [], goals: v3.goals ?? [] } : v3) as Data;
   if (
     !d ||
     d.version !== 3 ||
@@ -432,6 +436,7 @@ export function validateData(input: unknown): Data {
     !Array.isArray(d.recurring) ||
     !Array.isArray(d.favorites) ||
     !Array.isArray(d.pocketTransfers) ||
+    !Array.isArray(d.goals) ||
     !Array.isArray(d.existingInstallments) ||
     !Array.isArray(d.checkedDays) ||
     d.checkedDays.length > 3660 ||
@@ -447,6 +452,7 @@ export function validateData(input: unknown): Data {
     d.recurring.length > 500 ||
     d.favorites.length > 30 ||
     d.pocketTransfers.length > 10000 ||
+    d.goals.length > 100 ||
     d.existingInstallments.length > 100
   )
     throw new Error("This is not a valid Saku backup.");
@@ -479,6 +485,19 @@ export function validateData(input: unknown): Data {
     )
       throw new Error("The backup contains an invalid pocket.");
     ids.add(p.id);
+  }
+  const goalIds = new Set<string>();
+  for (const goal of d.goals) {
+    const pocket = d.pockets.find((item) => item.id === goal?.pocketId);
+    if (!goal || typeof goal.id !== "string" || !goal.id || goalIds.has(goal.id) ||
+      typeof goal.name !== "string" || !goal.name.trim() || goal.name.length > 60 ||
+      !Number.isSafeInteger(goal.target) || goal.target <= 0 || goal.target > 1e12 ||
+      !pocket || typeof goal.createdMonth !== "string" || !validDate(`${goal.createdMonth}-01`) ||
+      goal.createdMonth < pocket.createdMonth ||
+      (goal.targetDate !== undefined && (typeof goal.targetDate !== "string" || !validDate(`${goal.targetDate}-01`) || goal.targetDate < goal.createdMonth)) ||
+      !Number.isSafeInteger(goal.startingFunding))
+      throw new Error("The backup contains an invalid savings goal.");
+    goalIds.add(goal.id);
   }
   const txIds = new Set<string>();
   const cardIds = new Set<string>();
