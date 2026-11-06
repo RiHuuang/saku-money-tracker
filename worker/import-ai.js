@@ -44,6 +44,7 @@ export function importMessages(input) {
 // statements Saku can't read yet.
 function bankRules(input) {
   const bank = bankById(input.bank || (input.source !== "auto" ? input.source : ""));
+  if (bank?.id === "bca" && input.source === "auto") return " This is a BCA e-statement. Descriptions may continue on the line after the dated amount row. Attach that continuation to the same transaction: if it names the recipient or merchant, use that name for cleanName rather than the generic TRSF E-BANKING or E-Banking label.";
   if (bank?.hint) return ` ${bank.hint}`;
   if (input.source === "auto" && !input.bank) return ` Also return bank at the top level of the JSON object: one of ${BANK_IDS.join(", ")} for the bank or wallet whose app or statement this is, or other.`;
   return "";

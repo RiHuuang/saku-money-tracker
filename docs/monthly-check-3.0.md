@@ -68,6 +68,7 @@ The tiebreak runs only when the user taps "Ask Saku to compare names", and only 
 
 The gate is the same bar as `docs/catchup-bca-2.4.0.md`:
 - 100% of amounts and directions;
+- 100% of dates;
 - at least 95% of names;
 - no invented rows on the bank's synthetic fixtures.
 
@@ -75,12 +76,12 @@ A bank stays `beta: true` in `worker/banks.js` until its fixtures pass on stage.
 
 | Bank | Fixture | Local proof (no AI) | AI benchmark on stage | Status |
 | --- | --- | --- | --- | --- |
-| BCA | `scripts/fixtures/statements/bca.json`, `scripts/fixtures/bca/` | ✓ running balance | screenshots 12/12 (2.4.0) | not beta |
-| Jago | `jago.json` | ✓ | to run | beta |
-| SeaBank | `seabank.json` | ✓ (sen rounded per row) | to run | beta |
-| blu by BCA | `blu.json` | ✓ | to run | beta |
-| GoPay | `gopay.json` | no balance column, so AI | on a phone, 2026-11-05 (not the gate): 3/3 rows, dates, amounts and directions right; 2/3 names (the top-up row showed as "BCA", fixture "Isi saldo") | beta |
-| DANA | `dana.json` | no balance column, so AI | on a phone, 2026-11-05 (not the gate): 2/2 rows read; names and amounts not inspected (no DANA account to review them under) | beta |
+| BCA | `scripts/fixtures/statements/bca.json`, `scripts/fixtures/bca/` | ✓ running balance | 4/4 synthetic text rows on stage, 2026-11-06; screenshots 12/12 (2.4.0) | not beta |
+| Jago | `jago.json` | ✓ | 3/3 synthetic text rows on stage, 2026-11-06 | beta |
+| SeaBank | `seabank.json` | ✓ (sen rounded per row) | 4/4 synthetic text rows on stage, 2026-11-06 | beta |
+| blu by BCA | `blu.json` | ✓ | 2/2 synthetic text rows on stage, 2026-11-06 | beta |
+| GoPay | `gopay.json` | no balance column, so AI | 3/3 synthetic text rows on stage, 2026-11-06 (including "Isi saldo"); phone 2026-11-05: 2/3 names before the hint change | beta |
+| DANA | `dana.json` | no balance column, so AI | 2/2 synthetic text rows on stage, 2026-11-06; phone 2026-11-05: 2/2 rows read but names and amounts not inspected | beta |
 
 **Run the gate** with `scripts/fixtures/statements/bench.mjs`. It sends every bank's fixture page through stage `/v1/import/extract` with `source: "auto"`, as the app does for a page it can't prove locally, and exits non-zero on a miss:
 
@@ -88,7 +89,9 @@ A bank stays `beta: true` in `worker/banks.js` until its fixtures pass on stage.
 SAKU_BENCH_TOKEN=… SAKU_BENCH_UID=… node scripts/fixtures/statements/bench.mjs --out=statement-bench.json
 ```
 
-`--bank=jago` runs one bank. `--local` only checks the scorer offline and measures nothing. The 2026-11-02 build session could not run it, because its network policy refused `stage.sakumoney.my.id` and `api.cloudflare.com`. That is why the AI column below still says "to run".
+`--bank=jago` runs one bank. `--local` only checks the scorer offline and measures nothing. The 2026-11-02 build session could not run it because its network policy refused `stage.sakumoney.my.id` and `api.cloudflare.com`.
+
+On 2026-11-06, the complete synthetic text fixture gate passed on Stage Worker version `2d355cff-7743-48f5-a654-f8b61d2e6094`: all 18 rows had the expected amount, direction, date and name, with zero invented rows. A prior run exposed SeaBank sen rounding and a BCA continuation-name miss; the bank prompts were corrected and both focused checks and the complete gate then passed. `node scripts/fixtures/statements/stage-bench.mjs` creates and removes its own synthetic Stage account/session, so no personal Stage session is needed. These text fixtures are a narrow test. Representative screenshots and real-format pages, per-bank neuron measurements, and the owner's phone checks remain open; the five newer banks remain beta.
 
 **To graduate a bank:**
 1. Add synthetic screenshots and pages for its real formats next to the JSON fixture.

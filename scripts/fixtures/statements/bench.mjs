@@ -7,7 +7,7 @@
 //
 //   node scripts/fixtures/statements/bench.mjs [--origin=https://stage.sakumoney.my.id] [--bank=jago] [--out=result.json]
 //   node scripts/fixtures/statements/bench.mjs --local     # offline: scores the expected rows themselves (checks the scorer)
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -21,13 +21,16 @@ export function loadFixture(bank) {
   return { ...fixture, expectedRows: rows.map(([date, amount, direction], index) => ({ date, amount, direction, name: fixture.names[index] || "" })) };
 }
 
-// Each expected row claims the first unclaimed reading with its amount; whatever is left over was invented.
+// Match repeat amounts to their closest date/direction so row order cannot hide a bad reading.
 export function score(expected, actual) {
   const left = [...actual];
   const passed = { amount: 0, direction: 0, date: 0, name: 0 };
   const misses = [];
   for (const want of expected) {
-    const index = left.findIndex((row) => row.amount === want.amount);
+    const candidates = left.map((row, index) => ({ row, index })).filter(({ row }) => row.amount === want.amount);
+    candidates.sort((a, b) => Number(b.row.date === want.date) - Number(a.row.date === want.date)
+      || Number(b.row.direction === want.direction) - Number(a.row.direction === want.direction));
+    const index = candidates[0]?.index ?? -1;
     if (index < 0) { misses.push({ missing: want }); continue; }
     const [got] = left.splice(index, 1);
     const checks = { amount: true, direction: got.direction === want.direction, date: got.date === want.date, name: norm(`${got.cleanName || ""} ${got.name || ""}`).includes(norm(want.name)) };
@@ -36,7 +39,8 @@ export function score(expected, actual) {
     if (wrong.length) misses.push({ want, wrong, got: { date: got.date, amount: got.amount, direction: got.direction, name: got.cleanName || got.name } });
   }
   const total = expected.length;
-  const gate = passed.amount === total && passed.direction === total && passed.name >= Math.ceil(total * 0.95) && left.length === 0;
+  const gate = passed.amount === total && passed.direction === total && passed.date === total
+    && passed.name >= Math.ceil(total * 0.95) && left.length === 0;
   return { total, passed, invented: left.length, gate, misses };
 }
 
@@ -68,6 +72,9 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   }
   console.log(JSON.stringify(results.map(({ bank, total, passed, invented, gate, misses }) => ({ bank, gate: gate ? "PASS" : "FAIL", amount: `${passed.amount}/${total}`, direction: `${passed.direction}/${total}`, date: `${passed.date}/${total}`, name: `${passed.name}/${total}`, invented, misses })), null, 1));
   const out = arg("out", "");
-  if (out) writeFileSync(out, JSON.stringify({ origin: local ? "local" : origin, at: new Date().toISOString(), results }, null, 1));
+  if (out) {
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, JSON.stringify({ origin: local ? "local" : origin, at: new Date().toISOString(), results }, null, 1));
+  }
   if (results.some((result) => !result.gate)) process.exitCode = 1;
 }

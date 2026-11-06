@@ -25,7 +25,7 @@ export const BANKS = [
     signature: /\bsea\s?bank\b|\bbank\s+seabank\s+indonesia\b/i,
     account: /\bsea\s?bank\b/i,
     keyword: /\bsea\s?bank\b|\bbank\s+kesejahteraan\s+ekonomi\b|\bbke\b/i,
-    hint: "This is a SeaBank account history. Interest (Bunga) is income; tax on interest (Pajak) is a fee. ShopeePay top-ups are topup.",
+    hint: "This is a SeaBank account history. Interest (Bunga) is income; tax on interest (Pajak) is a fee. ShopeePay top-ups are topup. Some amounts have sen: round each printed transaction amount to the nearest whole rupiah, with .50 or more rounded up (1,234.56 becomes 1235; 246.91 becomes 247). Keep Bunga and Pajak as separate transactions.",
   },
   {
     id: "gopay", name: "GoPay", beta: true,

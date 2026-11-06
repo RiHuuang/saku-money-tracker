@@ -91,24 +91,23 @@ Building for a phone: Gradle needs JDK 21 (Android Studio's bundled one works), 
 
 ## Open item: the per-bank accuracy gate
 
-Also unverified: the GoPay hint change in `9046aa5` (top-ups named "Isi saldo"). Run the GoPay bench; revert the hint if it scores worse. On-device checks of Jago, GoPay and DANA are recorded in `docs/monthly-check-3.0.md`; unsaved test drafts may remain in the phone's Monthly check.
+The GoPay hint change in `9046aa5` passed its synthetic Stage fixture (3/3 names, including "Isi saldo"). On-device checks of Jago, GoPay and DANA are recorded in `docs/monthly-check-3.0.md`; unsaved test drafts may remain in the phone's Monthly check.
 
-**Status: not run** (as of 2026-11-06; no `SAKU_BENCH_TOKEN`/`SAKU_BENCH_UID` was available). Jago, GoPay, SeaBank, DANA and blu by BCA are still `beta: true` in `worker/banks.js`. Their AI accuracy on real statements is unmeasured. The cloud session that built this couldn't reach `stage.sakumoney.my.id`, so `docs/monthly-check-3.0.md` lists them as "to run".
+**Status: synthetic text fixtures passed on Stage on 2026-11-06.** Worker version `2d355cff-7743-48f5-a654-f8b61d2e6094` passed all 18 rows across six banks for amount, direction, date and name, with no invented rows. An earlier run failed BCA's continuation name and SeaBank's sen rounding; bank-specific prompt corrections passed focused and full reruns. Jago, GoPay, SeaBank, DANA and blu by BCA remain `beta: true` in `worker/banks.js`. Their accuracy on representative real formats and per-statement neuron costs is unmeasured.
 
 **What beta means for users:** a new row from these banks that wasn't proven by the running balance always waits in "Needs a look". Links to rows already in Saku still work.
 
 **To finish it,** on a machine that can reach stage:
 
-1. Deploy this branch to stage, following the staging steps in `worker/README.md` and `RELEASE.md`.
-2. Sign in to stage with a throwaway account. Put its session in `SAKU_BENCH_TOKEN` and its user id in `SAKU_BENCH_UID`, and never print them.
-3. Run the benchmark. Use `--bank=jago` to run one bank.
+1. Deploy this branch to stage, following the staging steps in `worker/README.md` and `RELEASE.md`. Rebuild Stage assets first with `npm run build -- --mode staging`.
+2. Run the benchmark with a disposable synthetic account/session that the wrapper removes. Use `--bank=jago` to run one bank.
    ```bash
-   SAKU_BENCH_TOKEN=… SAKU_BENCH_UID=… node scripts/fixtures/statements/bench.mjs --out=statement-bench.json
+   node scripts/fixtures/statements/stage-bench.mjs --out=output/statement-bench.json
    ```
-   The gate is: every amount and direction right, at least 95% of names, and nothing invented. The script exits non-zero on a miss.
-4. The owner checks one real statement per bank in the app on their own phone. Never commit real statements or real names.
-5. For each bank that passes both checks, record its scores and neurons per statement in the table in `docs/monthly-check-3.0.md`, then set `beta: false` for it in `worker/banks.js`.
-6. Commit and push. Delete this handoff file, then open the PR into `main`.
+   The gate is: every amount, direction and date right, at least 95% of names, and nothing invented. The script exits non-zero on a miss.
+3. Add representative synthetic screenshots and text pages for each bank's actual layouts, then rerun the gate. The owner checks one real statement per bank in the app on their own phone. Never commit real statements or real names.
+4. For each bank that passes those checks, record its scores and neurons per statement in the table in `docs/monthly-check-3.0.md`, then set `beta: false` for it in `worker/banks.js`.
+5. Commit and push. Delete this handoff file, then open the PR into `main`.
 
 If a bank fails, look at the `misses` in the output. Adjust that bank's `hint` in `worker/banks.js` (or its fixture, if the fixture is wrong), then rerun.
 

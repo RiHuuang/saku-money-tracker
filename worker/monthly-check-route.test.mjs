@@ -3,6 +3,7 @@ import nodeCrypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs/promises";
 import { build } from "esbuild";
+import { importMessages } from "./import-ai.js";
 
 const bundle = await build({ entryPoints: ["worker/index.js"], bundle: true, platform: "node", format: "esm", write: false });
 const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].contents).toString("base64")}`);
@@ -47,6 +48,10 @@ try {
   assert.equal((await response.json()).bank, "jago");
   assert.equal(calls.length, 2);
   assert.match(calls[0].messages[0].content, /Bank Jago account history/, "the bank's own conventions reach the prompt");
+  assert.match(calls[1].messages[0].content, /Bank Jago account history/);
+  const bcaInput = { kind: "text", source: "auto", bank: "bca", month: "2026-10", text: "PT BANK CENTRAL ASIA Tbk" };
+  assert.match(importMessages(bcaInput)[0].content, /Attach that continuation/);
+  assert.doesNotMatch(importMessages({ ...bcaInput, source: "bca" })[0].content, /Attach that continuation/, "older BCA clients retain their prompt");
   calls = [];
   response = await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "auto", text: "Bank Mandiri\n10/10/2026 Synthetic cafe 28.000" });
   assert.equal(response.status, 422);
