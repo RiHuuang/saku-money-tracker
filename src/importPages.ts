@@ -1,16 +1,17 @@
 // The legacy build carries polyfills for older Android System WebViews (e.g. no global Iterator).
 import { getDocument, GlobalWorkerOptions, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { parseBcaStatement, parseSeaBankStatement, parseBcaCardStatement, parseGoPayStatement, parseJagoStatement, parseStatementPage, type PageResult } from "./statementLines";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
-export type ImportPage = { kind: "text"; text: string } | { kind: "image"; image: string };
+export type ImportPage = { kind: "text"; text: string; reading?: PageResult } | { kind: "image"; image: string };
 const rasterOps = new Set([
   OPS.paintImageXObject, OPS.paintImageXObjectRepeat,
   OPS.paintInlineImageXObject, OPS.paintInlineImageXObjectGroup,
   OPS.paintImageMaskXObject, OPS.paintImageMaskXObjectGroup, OPS.paintImageMaskXObjectRepeat,
 ]);
 
-export async function openImportPages(file: File, password = ""): Promise<{ count: number; pages: AsyncGenerator<{ number: number; content: ImportPage }> }> {
+export async function openImportPages(file: File, password = "", reviewMonth = ""): Promise<{ count: number; pages: AsyncGenerator<{ number: number; content: ImportPage }> }> {
   if (file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(file.name)) {
     if (file.size > 12_000_000) throw new Error("Use an image smaller than 12 MB");
     return { count: 1, pages: (async function* () { yield { number: 1, content: { kind: "image" as const, image: await downsizeImage(file) } }; })() };
@@ -23,24 +24,48 @@ export async function openImportPages(file: File, password = ""): Promise<{ coun
     if (pdf.numPages > 50) throw new Error("Use a PDF with 50 pages or fewer");
   } catch (error) { await task.destroy(); throw error; }
   const count = pdf.numPages;
+  const textCache = new Map<number, string>();
+  const readText = async (page: Awaited<ReturnType<typeof pdf.getPage>>) => {
+    const content = await page.getTextContent();
+    const parts = content.items.filter((item): item is typeof item & { str: string; transform: number[]; width: number } => "str" in item && "transform" in item && "width" in item);
+    const rows = new Map<number, { x: number; right: number; text: string }[]>();
+    for (const part of parts) {
+      const y = Math.round(part.transform[5] / 4) * 4;
+      rows.set(y, [...(rows.get(y) || []), { x: part.transform[4], right: part.transform[4] + part.width, text: part.str }]);
+    }
+    const text = [...rows.entries()].sort((a, b) => b[0] - a[0]).map(([, line]) => {
+      let right = -Infinity;
+      return line.sort((a, b) => a.x - b.x).map((item) => { const gap = item.x - right; right = Math.max(right, item.right); return `${gap > 2 ? " " : ""}${item.text}`; }).join("").trim();
+    }).filter(Boolean).join("\n");
+    return text;
+  };
+  let documentReading: PageResult[] | null = null;
+  try {
+    const first = await pdf.getPage(1);
+    const text = await readText(first);
+    textCache.set(1, text);
+    if ((/Monthly Statements/.test(text) && /PERSONAL POCKETS/.test(text)) || /E-statement[\s\S]*Total Coins/.test(text) || /^REKENING (?:KARTU KREDIT|TAHAPAN)/m.test(text) || /SEABANK ACCOUNT|NO\. REKENING SEABANK/i.test(text)) {
+      for (let n = 2; n <= count; n++) textCache.set(n, await readText(await pdf.getPage(n)));
+      documentReading = parseJagoStatement([...textCache.values()], reviewMonth) || parseGoPayStatement([...textCache.values()], reviewMonth) || parseBcaCardStatement([...textCache.values()], reviewMonth) || parseBcaStatement([...textCache.values()], reviewMonth) || parseSeaBankStatement([...textCache.values()], reviewMonth);
+    }
+  } catch (error) { await task.destroy(); throw error; }
+
   const pages = (async function* () {
     try { for (let n = 1; n <= count; n++) {
       const page = await pdf.getPage(n);
-      const content = await page.getTextContent();
-      const parts = content.items.filter((item): item is typeof item & { str: string; transform: number[]; width: number } => "str" in item && "transform" in item && "width" in item);
-      const rows = new Map<number, { x: number; right: number; text: string }[]>();
-      for (const part of parts) {
-        const y = Math.round(part.transform[5] / 4) * 4;
-        rows.set(y, [...(rows.get(y) || []), { x: part.transform[4], right: part.transform[4] + part.width, text: part.str }]);
+      const text = textCache.get(n) ?? await readText(page);
+      if (documentReading) {
+        yield { number: n, content: { kind: "text" as const, text, reading: documentReading[n - 1] } };
+        page.cleanup(); continue;
       }
-      const text = [...rows.entries()].sort((a, b) => b[0] - a[0]).map(([, line]) => {
-        let right = -Infinity;
-        return line.sort((a, b) => a.x - b.x).map((item) => { const gap = item.x - right; right = Math.max(right, item.right); return `${gap > 2 ? " " : ""}${item.text}`; }).join("").trim();
-      }).filter(Boolean).join("\n");
       // A selectable text layer can omit a scanned transaction table of any size.
       // Send mixed pages as images so the review does not silently miss those rows.
       const hasRaster = (await page.getOperatorList()).fnArray.some((op) => rasterOps.has(op));
-      if (text.length > 80 && text.length <= 24000 && !hasRaster) yield { number: n, content: { kind: "text" as const, text } };
+      // Complete debit and credit totals prove that no positive transaction
+      // is missing from its text layer, even when decorative images are present.
+      const completeTotalsTable = ((/LAPORAN TRANSAKSI FINANSIAL/i.test(text) && /Britama|BRImo/i.test(text))
+        || (/Remaining Balance/i.test(text) && /bluAccount/i.test(text))) && !!parseStatementPage(text, reviewMonth);
+      if (text.length > 80 && text.length <= 24000 && (!hasRaster || completeTotalsTable)) yield { number: n, content: { kind: "text" as const, text } };
       else {
         const viewport = page.getViewport({ scale: Math.min(2, 1900 / page.getViewport({ scale: 1 }).width) });
         const canvas = document.createElement("canvas");

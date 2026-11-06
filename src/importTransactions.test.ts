@@ -327,3 +327,11 @@ test("rows another screenshot in the draft already has are left out", () => {
   assert.deepEqual(result.rows.map((row) => row.id), ["b"]);
   assert.equal(result.dropped, 1);
 });
+
+test("overlap preserves account identity and repeated-row multiplicity", () => {
+  const earlier = [{...base,id:"old",name:"Shop",account:"BCA",amount:50000,date:"2026-10-01"}];
+  const next = [{...earlier[0],id:"same"},{...earlier[0],id:"second"},{...earlier[0],id:"other-account",account:"Jago"},{...earlier[0],id:"other-pocket",statementAccount:"Savings"},{...earlier[0],id:"foreign",currency:"SGD"}];
+  const result=withoutOverlap(next,earlier);
+  assert.equal(result.dropped,1);
+  assert.deepEqual(result.rows.map(r=>r.id),["second","other-account","other-pocket","foreign"]);
+});

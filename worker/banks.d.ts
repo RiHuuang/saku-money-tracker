@@ -1,4 +1,4 @@
-export type BankId = "bca" | "jago" | "gopay" | "seabank" | "dana" | "blu";
+export type BankId = "bca" | "bri" | "jago" | "gopay" | "seabank" | "dana" | "blu";
 export type Bank = { id: BankId; name: string; beta: boolean; signature: RegExp; account: RegExp; keyword: RegExp; hint: string };
 export const BANKS: Bank[];
 export const BANK_IDS: BankId[];

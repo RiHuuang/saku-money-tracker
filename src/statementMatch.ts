@@ -13,10 +13,10 @@ export const MATCH_DAYS = 2;
 export type Verdict =
   | { kind: "linked"; transactionId: string; auto: boolean; alias?: { from: string; to: string } }
   | { kind: "transfer"; counterparty: string; partnerRowId?: string }
-  | { kind: "look"; reason: "ambiguous" | "other_account" | "transfer_tie" | "check"; candidates: string[]; partnerRowIds?: string[] }
+  | { kind: "look"; reason: "ambiguous" | "other_account" | "transfer_tie" | "duplicate_source" | "check"; candidates: string[]; partnerRowIds?: string[] }
   | { kind: "new" };
 
-export type MatchRow = Pick<ImportRow, "id" | "sourceId" | "date" | "amount" | "direction" | "name" | "cleanName" | "activity" | "matchId" | "unlinked" | "unpaired" | "pairRowId" | "confirmedSeparate" | "userDecided" | "proven"> & { account: string };
+export type MatchRow = Pick<ImportRow, "id" | "sourceId" | "date" | "amount" | "direction" | "name" | "cleanName" | "activity" | "matchId" | "unlinked" | "unpaired" | "pairRowId" | "confirmedSeparate" | "userDecided" | "proven" | "currency"> & { account: string };
 
 export type Analysis = { verdicts: Map<string, Verdict>; onlyInSaku: Transaction[] };
 
@@ -43,7 +43,7 @@ export function nameScore(row: Pick<MatchRow, "name" | "cleanName">, transaction
 // An account called just "BCA" says nothing beyond its bank; "BCA Utama" does.
 const distinctive = (account: string) => account.replace(bankById(bankOfAccount(account) || "")?.keyword || /$^/, "").replace(/[^\p{L}\p{N}]+/gu, "").length >= 3;
 
-const eligible = (row: MatchRow) => !!row.account && validDate(row.date) && validAmount(row.amount) && row.direction !== "unknown" && !["pending", "failed", "reward", "unknown"].includes(row.activity);
+const eligible = (row: MatchRow) => (!row.currency || row.currency === "IDR") && !!row.account && validDate(row.date) && validAmount(row.amount) && row.direction !== "unknown" && !["pending", "failed", "reward", "unknown"].includes(row.activity);
 
 /**
  * rows: the draft's statement rows not yet saved, with their resolved Saku account.
@@ -96,6 +96,27 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   }
 
   // 3. Moves between the user's own accounts, across the uploaded statements.
+  // A card payment also appears as a credit on the card statement. Both that
+  // credit and the bank's debit may verify the same existing payment.
+  const cardCredits = usable.filter((row) => !verdicts.has(row.id) && !row.unlinked && !row.confirmedSeparate && row.direction === "income" && row.activity === "card_payment");
+  const cardCandidates = (row: MatchRow) => {
+    const card = data.creditCards.find((item) => item.name === row.account);
+    return card ? ledger.filter((transaction) => transaction.kind === "card_payment" && transaction.cardId === card.id
+      && transaction.amount === row.amount && gap(transaction.date, row.date) <= MATCH_DAYS) : [];
+  };
+  for (const row of cardCredits) {
+    const candidates = cardCandidates(row);
+    if (candidates.length !== 1) {
+      if (candidates.length) verdicts.set(row.id, { kind: "look", reason: "ambiguous", candidates: candidates.map((item) => item.id) });
+      continue;
+    }
+    const transaction = candidates[0];
+    if (cardCredits.some((other) => other.id !== row.id && cardCandidates(other).some((candidate) => candidate.id === transaction.id))) {
+      verdicts.set(row.id, { kind: "look", reason: "ambiguous", candidates: [transaction.id] });
+      continue;
+    }
+    verdicts.set(row.id, { kind: "linked", transactionId: transaction.id, auto: true });
+  }
   const transferable = usable.filter((row) => !verdicts.has(row.id) && !row.unpaired && data.accounts.includes(row.account));
   const owner = (options.ownerName ?? data.name).toLocaleLowerCase("id-ID").split(/\s+/).filter((part) => part.length >= 4);
   // Evidence beyond equal value and a close date; without any, two rows are only a coincidence.
@@ -158,6 +179,11 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   // 6. Everything else is new; a source Saku may have misread sends its new rows for a look.
   for (const row of usable) {
     if (verdicts.has(row.id)) continue;
+    const overlaps = usable.filter((other) => other.id !== row.id && other.sourceId !== row.sourceId && other.account === row.account && other.date === row.date && other.amount === row.amount && other.direction === row.direction);
+    if (overlaps.length && !row.confirmedSeparate) {
+      verdicts.set(row.id, { kind: "look", reason: "duplicate_source", candidates: [], partnerRowIds: overlaps.map((other) => other.id) });
+      continue;
+    }
     verdicts.set(row.id, options.flagged?.has(row.sourceId) && !row.proven && !row.userDecided && !row.confirmedSeparate ? { kind: "look", reason: "check", candidates: [] } : { kind: "new" });
   }
 

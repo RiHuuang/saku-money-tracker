@@ -95,6 +95,8 @@ export function importMatchesNeedSourceDateCheck(draft: ImportDraft | null, matc
 }
 
 export function importRowReviewIssue(row: ImportRow, account: string, data: Data, duplicate: boolean, currentDay = today()): string {
+  if (row.currency && row.currency !== "IDR") return t("statementForeignCurrency", { currency: row.currency });
+  if (row.check === "card_statement") return t("reviewCardStatement");
   if (row.check === "amount") return t("reviewBcaAmount");
   if (row.check) return t("reviewBcaRecheck");
   if (row.activity === "pending") return t("reviewPending");
@@ -136,6 +138,7 @@ export function importRowsWaiting(drafts: readonly ImportDraft[], data: Data): n
 }
 
 export function importRowReady(row: ImportRow, account: string, data: Data, currentDay = today()): boolean {
+  if (row.currency && row.currency !== "IDR") return false;
   if (row.decision !== "ready" || !validDate(row.date) || row.date > currentDay || !validAmount(row.amount) || !row.name.trim() || row.direction === "unknown") return false;
   if (["pending", "failed", "reward", "unknown"].includes(row.activity)) return false;
   if (["transfer", "topup"].includes(row.activity)) return data.accounts.includes(account) && !!row.counterparty && row.counterparty !== account && data.accounts.includes(row.counterparty);
@@ -212,10 +215,16 @@ export function prepareImportRow(row: ImportRow, data: Data, account: string, op
 }
 
 // Overlapping screenshots repeat rows; a row another source in the draft already has is left out.
-const overlapKey = (row: Pick<ImportRow, "date" | "amount" | "direction" | "name">) =>
-  [row.date, row.amount, row.direction, row.name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim()].join("|");
-export function withoutOverlap<T extends Pick<ImportRow, "date" | "amount" | "direction" | "name">>(rows: readonly T[], otherSources: readonly ImportRow[]): { rows: T[]; dropped: number } {
-  const seen = new Set(otherSources.map(overlapKey));
-  const kept = rows.filter((row) => !seen.has(overlapKey(row)));
+type OverlapRow = Pick<ImportRow, "date" | "amount" | "direction" | "name" | "account" | "statementAccount" | "paymentMethod" | "currency">;
+const overlapKey = (row: OverlapRow) =>
+  [row.account || "", row.statementAccount || "", row.paymentMethod || "", row.currency || "IDR", row.date, row.amount, row.direction, row.name.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]+/g, " ").trim()].join("|");
+export function withoutOverlap<T extends OverlapRow>(rows: readonly T[], otherSources: readonly ImportRow[]): { rows: T[]; dropped: number } {
+  const seen = new Map<string, number>();
+  for (const row of otherSources) { const key = overlapKey(row); seen.set(key, (seen.get(key) || 0) + 1); }
+  const kept = rows.filter((row) => {
+    const key = overlapKey(row), count = seen.get(key) || 0;
+    if (!count) return true;
+    seen.set(key, count - 1); return false;
+  });
   return { rows: kept, dropped: rows.length - kept.length };
 }

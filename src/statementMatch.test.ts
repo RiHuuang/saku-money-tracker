@@ -20,6 +20,9 @@ test("banks: statements, accounts and descriptions resolve to the right bank", (
   assert.equal(detectBank("PT Bank Jago Tbk\nTransfer ke BCA"), "jago", "the header decides, not a transfer line");
   assert.equal(detectBank("PT Bank SeaBank Indonesia"), "seabank");
   assert.equal(detectBank("Riwayat transaksi GoPay"), "gopay");
+  assert.equal(detectBank("E-statement Halaman 1 dari 3 Periode transaksi\nTotal Coins didapatkan Total Coins dipakai\nTabungan by Jago\nGoPay Tabungan top up"), "gopay", "funding bank does not replace the wallet statement identity");
+  assert.equal(detectBank("REKENING TAHAPAN XPRESI\nTransfer BANK JAGO"), "bca", "the BCA title identifies a statement without a text logo");
+  assert.equal(detectBank("bluAccount\nDana masuk BANK JAGO\nBCA Digital"), "blu", "blu's header wins over a transfer bank");
   assert.equal(detectBank("PT Espay Debit Indonesia Koe"), "dana");
   assert.equal(detectBank("Bank Mandiri rekening koran"), "");
   assert.equal(bankOfAccount("BCA Utama"), "bca");
@@ -226,4 +229,207 @@ test("a person's name next to a bank is not a move between your own accounts", (
   assert.equal(verdict(alone, "in")?.kind, "new", "BCA here is only the sender's bank");
   const mine = analyzeStatement([{ ...stranger, name: "Transfer masuk dari BCA Utama" }], { ...data, name: "Budi Santoso", accounts: ["BCA Utama", "Jago"], transactions: [] });
   assert.equal(verdict(mine, "in")?.kind, "transfer", "naming the account itself still counts");
+});
+
+test("BRI separate columns require every running balance and both transaction totals", () => {
+  const statement = `LAPORAN TRANSAKSI FINANSIAL
+Nama Produk : Britama Digital
+08/10/26 15:04:00 Incoming 1234567 0.00 100,000.00 100,000.00
+08/10/26 15:08:04 Top Up DANA via BRImo 1234567 20,000.00 0.00 80,000.00
+Opening Balance Total Debit Transaction Total Credit Transaction Closing Balance
+0.00 20,000.00 100,000.00 80,000.00`;
+  assert.equal(detectBank(statement), "bri");
+  const read = parseStatementPage(statement, "2026-10");
+  assert.deepEqual(read?.rows.map(({date,amount,direction}) => ({date,amount,direction})), [
+    {date:"2026-10-08",amount:100000,direction:"income"},
+    {date:"2026-10-08",amount:20000,direction:"expense"},
+  ]);
+  assert.equal(parseStatementPage(statement.replace("20,000.00 0.00", "21,000.00 0.00"), "2026-10"), null);
+  assert.equal(parseStatementPage(statement.replace("0.00 20,000.00 100,000.00 80,000.00", "0.00 21,000.00 100,000.00 80,000.00"), "2026-10"), null);
+  assert.equal(parseStatementPage(statement.replace(/08\/10\/26 15:08:04[^\n]+\n/, ""), "2026-10"), null, "omitted text rows cannot pass the printed totals");
+});
+
+test("blu multiline rows require exact balances and both printed totals", () => {
+  const text = `bluAccount
+Date & Time Detail Transaksi | Ref Amount Remaining Balance
+14 Oct 2026
+Dana Masuk
+200.000,00 201.393,91
+14 Oct 2026 Transaksi Debit di Shop
+- 155.200,00 46.193,91
+31 Oct 2026
+Bunga
+11,60 46.205,51
+Saldo Awal / Initial Balance 1.393,91
+Total Pemasukan / Total Income 200.011,60
+Total Pengeluaran / Total Expense -155.200,00
+Saldo Akhir / Ending Balance 46.205,51`;
+  const result = parseStatementPage(text,"2026-10");
+  assert.deepEqual(result?.rows.map((r) => r.amount),[200000,155200,12]);
+  assert.equal(result?.balance,4620551);
+  assert.equal(parseStatementPage(text.replace("11,60 46.205,51","12,60 46.205,51"),"2026-10"),null);
+  assert.equal(parseStatementPage(text.replace("200.011,60","200.012,60"),"2026-10"),null);
+});
+
+test("SeaBank carries integer-rupiah balances across English and Indonesian pages", () => {
+  const first = `BANK STATEMENT
+SAVINGS 58 0 1.000.069 1.000.127
+DATE TRANSACTION OUTGOING (IDR) INCOMING (IDR) END BALANCE (IDR)
+DANA
+24 OCT 1.000.000 1.000.058
+Transfer`;
+  const read = parseStatementPage(first,"2026-10");
+  assert.equal(read?.rows[0].amount,1000000);
+  const second = `REKENING KORAN
+TANGGAL TRANSAKSI KELUAR (IDR) MASUK (IDR) SALDO AKHIR (IDR)
+Bunga Tabungan
+25 OCT 69 1.000.127
+Bunga`;
+  assert.equal(parseStatementPage(second,"2026-10",read?.balance)?.rows[0].amount,69);
+  assert.equal(parseStatementPage(second,"2026-10"),null);
+  assert.equal(parseStatementPage(second.replace("69 1.000.127","70 1.000.127"),"2026-10",read?.balance),null);
+});
+
+test("BCA CR takes precedence over the BI-FAST TRANSFER DR description", () => {
+  const text = `REKENING TAHAPAN XPRESI
+01/10 SALDO AWAL 100,000.00
+05/10 BI-FAST CR BIF TRANSFER DR 50,000.00
+501
+SYNTHETIC OWNER
+05/10 KR OTOMATIS LLG-BNI 0938 20,000.00
+05/10 SETORAN PEMINDAHAN 0998 30,000.00 200,000.00
+SALDO AWAL : 100,000.00
+SALDO AKHIR : 200,000.00`;
+  assert.deepEqual(parseStatementPage(text,"2026-10")?.rows.map((r) => r.direction),["income","income","income"]);
+  assert.equal(parseStatementPage(text.replace("30,000.00 200,000.00","31,000.00 200,000.00"),"2026-10"),null);
+  assert.equal(parseStatementPage(`MATA UANG : SGD\n${text}`,"2026-10"),null,"foreign-currency amounts cannot be read as rupiah");
+});
+
+test("Jago document proof retains pocket identity across pages and rejects incomplete totals", async () => {
+  const { parseJagoStatement } = await import("./statementLines");
+  const first = `Monthly Statements October 2026
+PERSONAL POCKETS
+Main Pocket Previous Balance 100,00
+Total Incoming +50,00
+Total Outgoing -10,00
+Pocket is created on 01 Sep 2021 Currency In IDR Closing Balance 140,00
+01 Oct 2026 Other Pocket Pocket Money In +50,00 150,00
+10:00 Movement between Pockets ID# synthetic`;
+  const second = `Monthly Statements October 2026 Page 2
+02 Oct 2026 Shop Payment -10,00 140,00
+10:00 Main Pocket
+Previous Balance 1,00
+Small pocket
+Total Incoming +0,45
+Total Outgoing -0,09
+Pocket is created on 01 Sep 2021 Currency In IDR Closing Balance 1,36
+03 Oct 2026 Interest Interest +0,45 1,45
+03 Oct 2026 Tax on Interest Tax on Interest -0,09 1,36`;
+  const read = parseJagoStatement([first,second],"2026-10");
+  assert.deepEqual(read?.map((p) => p.rows.length),[1,3]);
+  assert.equal(read?.[0].rows[0].activity,"transfer");
+  assert.equal(read?.[1].rows[0].statementAccount,"Main Pocket");
+  assert.equal(read?.[1].rows[1].statementAccount,"Small pocket");
+  assert.equal(read?.[1].rows[1].exactAmount,0.45);
+  assert.equal(parseJagoStatement([first],"2026-10"),null);
+  assert.equal(parseJagoStatement([first,second.replace("-10,00 140,00","-11,00 140,00")],"2026-10"),null);
+  assert.equal(parseJagoStatement([first,second.replace("Total Incoming +0,45","Total Incoming +0,46")],"2026-10"),null);
+});
+
+test("GoPay document totals distinguish Coins, refunds and funding sources", async () => {
+  const {parseGoPayStatement} = await import("./statementLines");
+  const first = `E-statement Halaman 1 dari 2
+Total Coins didapatkan Total Coins dipakai Total pemasukan Total pengeluaran
+10 8 Rp5.000 Rp20.000
+01/10/2026 Synthetic Shop A120261001123456ABC Tabungan by Jago -Rp20.000
+12:00 abcdefID
+01/10/2026 Cashback 0120261001123456ABC GoPay Coins 10
+12:00 abcdefID`;
+  const second = `E-statement Halaman 2 dari 2
+02/10/2026 Refund 0120261002123456ABC xx-1234 Rp5.000
+12:00 abcdefID
+02/10/2026 Shop 0120261002123457ABC GoPay Coins -8
+12:00 abcdefID`;
+  const read = parseGoPayStatement([first,second],"2026-10");
+  assert.deepEqual(read?.map(p=>p.rows.length),[2,2]);
+  assert.equal(read?.[0].rows[0].statementAccount,"Tabungan by Jago");
+  assert.equal(read?.[0].rows[1].activity,"reward");
+  assert.equal(read?.[1].rows[0].activity,"refund");
+  assert.equal(read?.[1].rows[0].paymentMethod,"xx-1234");
+  assert.equal(parseGoPayStatement([first],"2026-10"),null);
+  assert.equal(parseGoPayStatement([first,second.replace("Rp5.000\n12:00","Rp6.000\n12:00")],"2026-10"),null);
+  assert.equal(parseGoPayStatement([first.replace("Coins 10","Coins 11"),second],"2026-10"),null);
+});
+
+test("BCA card reading reconciles debt and uses transaction dates before posting dates", async () => {
+  const {parseBcaCardStatement}=await import("./statementLines");
+  const pages=[`REKENING KARTU KREDIT
+TANGGAL REKENING : 08 OKTOBER 2026
+VISA CARD
+SALDO SEBELUMNYA 100.000
+1111-11XX-XXXX-1234 Synthetic
+07-SEP 09-SEP Shop 50.000
+07-SEP 09-SEP REVERSAL Shop 10.000 CR
+SUBTOTAL TRANSAKSI 40.000`, `REKENING KARTU KREDIT
+08-OKT 08-OKT PEMBAYARAN - MYBCA 60.000 CR
+SUBTOTAL 80.000
+TOTAL 80.000`];
+  const read=parseBcaCardStatement(pages,"2026-10");
+  assert.deepEqual(read?.map(p=>p.rows.length),[2,1]);
+  assert.equal(read?.[0].rows[0].date,"2026-09-07");
+  assert.equal(read?.[0].rows[0].statementAccount,"VISA CARD · 1234");
+  assert.equal(read?.[0].rows[1].activity,"refund");
+  assert.equal(read?.[1].rows[0].activity,"card_payment");
+  assert.equal(read?.[1].rows[0].direction,"income");
+  assert.equal(read?.[1].rows[0].check,"card_statement");
+  assert.equal(parseBcaCardStatement([pages[0]],"2026-10"),null);
+  assert.equal(parseBcaCardStatement([pages[0].replace("50.000","51.000"),pages[1]],"2026-10"),null);
+  assert.equal(parseBcaCardStatement([pages[0],pages[1].replace("TOTAL 80.000","TOTAL 81.000")],"2026-10"),null);
+});
+
+test("bank debit and card credit both recognize one existing card payment", () => {
+  const ledger = emptyData();
+  ledger.accounts = ["BCA"];
+  ledger.creditCards = [{id:"card", name:"VISA"}] as typeof ledger.creditCards;
+  ledger.transactions = [tx({id:"payment",kind:"card_payment",cardId:"card",account:"BCA",amount:60000,date:"2026-10-08"})];
+  const debit = row({id:"debit",amount:60000,date:"2026-10-08",activity:"card_payment"});
+  const credit = row({id:"credit",sourceId:"card-pdf",account:"VISA",amount:60000,date:"2026-10-08",direction:"income",activity:"card_payment"});
+  const result=analyzeStatement([debit,credit],ledger);
+  for(const id of ["debit","credit"]) assert.equal((verdict(result,id) as {transactionId?:string})?.transactionId,"payment");
+  assert.notEqual(verdict(analyzeStatement([credit,{...credit,id:"repeated"}],ledger),"credit")?.kind,"linked","duplicate credits require review");
+  ledger.transactions.push(tx({...ledger.transactions[0],id:"second-payment"}));
+  assert.notEqual(verdict(analyzeStatement([credit],ledger),"credit")?.kind,"linked","equal candidate payments require review");
+});
+
+test("BCA document keeps FX and fractional pockets separate from the rupiah account", async () => {
+  const {parseBcaStatement}=await import("./statementLines");
+  const section=(currency:string,amount:string)=>`REKENING TAHAPAN XPRESI
+MATA UANG : ${currency}
+FASILITAS : POKET
+01/10 SALDO AWAL 10.00
+02/10 BUNGA POKET ${amount} ${amount==='0.15'?'10.15':'12.00'}
+SALDO AWAL : 10.00
+MUTASI CR : ${amount} 1
+MUTASI DB : 0.00 0
+SALDO AKHIR : ${amount==='0.15'?'10.15':'12.00'}`;
+  const read=parseBcaStatement([section("IDR","0.15"),section("SGD","2.00")],"2026-10");
+  assert.equal(read?.[0].rows[0].exactAmount,0.15);
+  assert.equal(read?.[1].rows[0].currency,"SGD");
+  assert.equal(read?.[1].rows[0].check,"currency");
+  assert.equal(parseBcaStatement([section("IDR","0.15").replace("MUTASI CR : 0.15 1","MUTASI CR : 0.15 2")],"2026-10"),null);
+  const foreign=row({currency:"SGD",amount:50000});
+  assert.equal(analyzeStatement([foreign],{...data,transactions:[tx({})]}).verdicts.has(foreign.id),false);
+});
+
+test("different-language sources cannot silently add the same new account movement twice", () => {
+  const first=row({id:"en",sourceId:"english",name:"Savings Interest",amount:69,direction:"income",activity:"interest",proven:true});
+  const second={...first,id:"id",sourceId:"indonesian",name:"Bunga Tabungan"};
+  const result=analyzeStatement([first,second],{...data,transactions:[]});
+  for(const r of [first,second]){
+    assert.equal((verdict(result,r.id) as {reason?:string})?.reason,"duplicate_source");
+    assert.equal(applyVerdict({...r,page:1,pocketId:"",decision:"ready"},verdict(result,r.id)).decision,"later");
+  }
+  const confirmed=analyzeStatement([{...first,confirmedSeparate:true,userDecided:true},second],{...data,transactions:[]});
+  assert.equal(verdict(confirmed,"en")?.kind,"new");
+  assert.equal(verdict(analyzeStatement([first,{...second,account:"Cash"}],{...data,transactions:[]}),"en")?.kind,"new");
 });

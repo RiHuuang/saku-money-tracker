@@ -6,9 +6,16 @@
 
 export const BANKS = [
   {
+    id: "bri", name: "BRI", beta: true,
+    signature: /\bLAPORAN TRANSAKSI FINANSIAL\b(?=[\s\S]{0,2000}\b(?:Britama|BRImo)\b)|\bbank\s+rakyat\s+indonesia\b|\bBRImo\b/i,
+    account: /\bbri\b|\bbritama\b/i,
+    keyword: /\bbri\b|\bbrimo\b/i,
+    hint: "This is a BRI statement. Its table has separate Debet, Kredit and Saldo columns: a positive Debet is expense and a positive Kredit is income. Saldo is the resulting balance, never a transaction. Teller/User ID values are references, not amounts. Use the transaction date before the time, not the report date.",
+  },
+  {
     id: "blu", name: "blu by BCA", beta: true,
     // Checked before BCA: blu statements also print "BCA".
-    signature: /\bblu\s*by\s*bca\b|\bbank\s+digital\s+bca\b|\bbca\s+digital\b/i,
+    signature: /\bbluAccount\b|\bblu\s*by\s*bca\b|\bbank\s+digital\s+bca\b|\bbca\s+digital\b/i,
     account: /\bblu\b/i,
     keyword: /\bblu\b|\bbca\s*digital\b|\bbank\s+digital\s+bca\b/i,
     hint: "This is a blu by BCA (PT Bank Digital BCA) account history. Money moved to or from the user's own BCA account is still a transfer, not a purchase. bluSaving and bluDeposito moves inside blu are internal transfers.",
@@ -29,7 +36,7 @@ export const BANKS = [
   },
   {
     id: "gopay", name: "GoPay", beta: true,
-    signature: /\bgo-?pay\b.*\b(?:riwayat|history|transaksi|transactions?)\b|\b(?:riwayat|history)\b.*\bgo-?pay\b|\bgojek\b/i,
+    signature: /\bE-statement\b(?=[\s\S]{0,300}\bTotal Coins\b)|\bgo-?pay\b.*\b(?:riwayat|history|transaksi|transactions?)\b|\b(?:riwayat|history)\b.*\bgo-?pay\b|\bgojek\b/i,
     account: /\bgo-?pay\b/i,
     keyword: /\bgo-?pay\b|\bgojek\b/i,
     hint: "This is a GoPay wallet history. Top ups (Isi saldo) are money in from a bank and are topup; name them 'Isi saldo', not the bank they came from. GoPay Coins are rewards, not rupiah. GoPay Later is pay_later.",
@@ -44,7 +51,7 @@ export const BANKS = [
   },
   {
     id: "bca", name: "BCA", beta: false,
-    signature: /\bbank\s+central\s+asia\b|\bbca\b/i,
+    signature: /\bREKENING\s+TAHAPAN(?:\s+XPRESI)?\b|\bbank\s+central\s+asia\b|\bbca\b/i,
     account: /\bbca\b/i,
     keyword: /\bbca\b|\bbank\s+central\s+asia\b/i,
     hint: "",

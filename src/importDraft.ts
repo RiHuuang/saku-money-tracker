@@ -2,6 +2,10 @@ export type ImportRow = {
   id: string;
   sourceId: string;
   account?: string;
+  // The bank's pocket/account label, retained separately from the user's Saku account mapping.
+  statementAccount?: string;
+  exactAmount?: number;
+  currency?: string;
   page: number;
   date: string;
   dateEvidence?: string;

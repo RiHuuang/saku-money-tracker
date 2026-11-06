@@ -1,5 +1,7 @@
 # Monthly check 3.0 and pocket planning
 
+Current supplied-format results and matching scope are in [the 2026-11-06 real-format benchmark](monthly-check-real-format-benchmark.md). Its private corpus extends the original six-bank work with BRI and BCA credit-card statements.
+
 The owner asked for two things, decided on 2026-11-02:
 
 1. **Monthly check** reads statements from several banks at once. It works out where each row belongs, links rows already in Activity (even when the user's wording differs from the bank's), and pairs moves between the user's own accounts.

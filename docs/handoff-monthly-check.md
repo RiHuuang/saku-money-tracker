@@ -1,5 +1,9 @@
 # Handoff: Monthly check 3.0 and pocket planning
 
+## Codex real-format follow-up, 2026-11-06
+
+Continuation is on `codex/monthly-check-stage-test` because the Claude branch is attached to another worktree. Read [the real-format benchmark](monthly-check-real-format-benchmark.md) for the current results: eight private PDFs, 36 pages, 320 rows; measured amounts/dates/directions/source descriptors all 320/320. Seeded existing-entry checks pass 309/309; three selected combined-corpus transfers pair correctly. Stage is updated to `ca48e3a6-0c72-4935-b257-0d5d5a4c968f`. The older open-item notes below describe the prior synthetic gate. Bank beta flags remain; foreign-currency rows and special card rows retain explicit review boundaries. No live ledger was modified.
+
 Last updated 2026-11-06 (see "2026-11-05 follow-up" below). Read this first if you're picking up this work. The design decisions and their reasons are in [monthly-check-3.0.md](monthly-check-3.0.md).
 
 **Delete this file before merging the branch into `main`.** It is for agents working on the branch, not part of the product docs.
