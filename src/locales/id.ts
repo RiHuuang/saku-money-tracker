@@ -1,6 +1,28 @@
 import type { en } from "./en";
 
 export const id = {
+  statementCoverageHelp: "Konfirmasi hanya periode tercetak yang seluruh detail transaksinya tersedia. Ringkasan atau daftar terpotong saja belum membuktikan kelengkapan.",
+  statementPeriodFrom: "Awal periode tercetak",
+  statementPeriodTo: "Akhir periode tercetak",
+  statementConfirmCoverage: "Saya sudah memeriksa seluruh detail transaksi periode ini tersedia",
+
+  statementConfirmRoute: "Konfirmasi penggantian alur tercatat",
+  statementReviewedFields: "Saya sudah memeriksa kolom bermasalah dengan bukti",
+  statementBalanceReview: "Periksa saldo pada tanggal tertentu",
+  statementBalanceReviewHelp: "Masukkan saldo yang dicek terpisah. Selesaikan transaksi dan alur yang belum jelas sebelum menyesuaikan sisa selisih.",
+  statementClosingBalance: "Saldo terverifikasi pada tanggal pilihan (Rp)",
+  statementCurrentBalance: "Saldo hari ini yang dicek terpisah (Rp)",
+  statementBalanceEffect: "Tanggal pilihan: {before} → {after}. Hari ini: {currentBefore} → {currentAfter}.",
+  statementBalanceBlocked: "Penyesuaian diblokir: saldo hari ini tidak akan sesuai, atau tidak ada selisih.",
+  statementConfirmAdjustment: "Konfirmasi penyesuaian saldo",
+
+  statementRouteConflict: "Rekening transfer di bukti berbeda dari catatan. Periksa alurnya dahulu.",
+  statementTotalsMatched: "Total transaksi sesuai ringkasan.",
+  statementTotalsIncomplete: "Detail transaksi belum sesuai ringkasan.",
+  statementObservedTotals: "Terbaca: masuk {incoming}, keluar {outgoing}.",
+  statementExpectedTotals: "Ringkasan: masuk {incoming}, keluar {outgoing}.",
+  statementBalanceUnknown: "Total ini belum memverifikasi saldo akhir atau tujuan setiap transfer.",
+
   duplicateStatementSource: "Berkas lain memuat tanggal dan nominal yang sama di akun ini. Cek apakah keduanya transaksi yang sama sebelum menambahkannya.",
   cloudPageConsentNeeded: "Halaman ini perlu dibaca lewat cloud. Izinkan Cloudflare AI untuk melanjutkan, atau periksa halaman yang sudah dibaca di perangkat ini.",
   readStatementFiles: "Baca laporan",

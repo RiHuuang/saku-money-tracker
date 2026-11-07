@@ -335,3 +335,19 @@ test("overlap preserves account identity and repeated-row multiplicity", () => {
   assert.equal(result.dropped,1);
   assert.deepEqual(result.rows.map(r=>r.id),["second","other-account","other-pocket","foreign"]);
 });
+
+
+test("unresolved extraction flags cannot pass the save barrier", () => {
+  for (const check of ["amount", "card_statement", "direction"]) {
+    const row = { ...base, check };
+    assert.equal(importRowReady(row, "BCA", ledger), false);
+    assert.throws(() => importedTransactions(row, "BCA", "test.pdf", ledger));
+  }
+});
+test("paired transfers preserve October debit and November credit dates", () => {
+  const row: ImportRow = { ...base, activity: "transfer", counterparty: "GoPay", date: "2026-10-31" };
+  const parts = importedTransactions(row, "BCA", "test.pdf", ledger, "incoming", "2026-11-01");
+  assert.equal(parts[0].date, "2026-10-31");
+  assert.equal(parts[1].date, "2026-11-01");
+  validateData({ ...ledger, transactions: parts });
+});

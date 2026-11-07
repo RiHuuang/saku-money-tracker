@@ -62,7 +62,12 @@ export type Favorite = {
   account: string;
   cardId?: string;
 };
+export type ReconciliationChange = { id: string; before?: string; after?: string };
+export type ReconciliationBatch = { id: string; createdAt: string; undone?: boolean; evidence: string[]; transactions: ReconciliationChange[]; merchantRules: ReconciliationChange[]; balanceObservations?: ReconciliationChange[]; accountMappings?: ReconciliationChange[] };
 export type Data = {
+  reconciliationBatches?: ReconciliationBatch[];
+  statementBalanceObservations?: { id: string; account: string; date: string; balance: number; evidence: string }[];
+  statementAccountMappings?: { id: string; bank: string; statementAccount: string; account: string }[];
   version: 3;
   demo: boolean;
   name: string;
@@ -457,6 +462,24 @@ export function validateData(input: unknown): Data {
     d.existingInstallments.length > 100
   )
     throw new Error("This is not a valid Saku backup.");
+  if (d.statementBalanceObservations !== undefined) {
+    const observations = d.statementBalanceObservations;
+    if (!Array.isArray(observations) || observations.length > 10000 || new Set(observations.map(item => item?.id)).size !== observations.length || observations.some(item => !item || typeof item.id !== "string" || !item.id || item.id.length > 150 || !d.accounts.includes(item.account) || !validDate(item.date) || !Number.isSafeInteger(item.balance) || item.balance < 0 || item.balance > 1e12 || typeof item.evidence !== "string" || !item.evidence.trim() || item.evidence.length > 250)) throw new Error("The backup contains invalid statement balance observations.");
+  }
+  if (d.statementAccountMappings !== undefined) {
+    const mappings = d.statementAccountMappings;
+    if (!Array.isArray(mappings) || mappings.length > 500 || new Set(mappings.map(item => item?.id)).size !== mappings.length || mappings.some(item => !item || typeof item.id !== "string" || !item.id || item.id.length > 150 || !["bca", "jago", "gopay", "dana", "blu", "seabank", "bri"].includes(item.bank) || typeof item.statementAccount !== "string" || !item.statementAccount.trim() || item.statementAccount.length > 150 || typeof item.account !== "string" || !d.accounts.concat(d.creditCards.map(card => card.name)).includes(item.account))) throw new Error("The backup contains invalid statement account mappings.");
+  }
+  if (d.reconciliationBatches !== undefined) {
+    const batches = d.reconciliationBatches;
+    const fingerprint = (value: unknown, key: string) => {
+      if (value === undefined) return true;
+      if (typeof value !== "string" || value.length > 5000) return false;
+      try { const item = JSON.parse(value); return !!item && typeof item === "object" && !Array.isArray(item) && typeof item[key] === "string" && item[key].length > 0; } catch { return false; }
+    };
+    const changes = (items: unknown, key: string) => Array.isArray(items) && items.length <= 10000 && new Set(items.map(item => item?.id)).size === items.length && items.every(item => item && typeof item.id === "string" && item.id.length > 0 && item.id.length <= 150 && (item.before !== undefined || item.after !== undefined) && fingerprint(item.before, key) && fingerprint(item.after, key) && [item.before, item.after].every(value => value === undefined || JSON.parse(value)[key] === item.id));
+    if (!Array.isArray(batches) || batches.length > 100 || new Set(batches.map(batch => batch?.id)).size !== batches.length || batches.some(batch => !batch || typeof batch.id !== "string" || !batch.id || batch.id.length > 150 || typeof batch.createdAt !== "string" || !Number.isFinite(Date.parse(batch.createdAt)) || batch.createdAt.length > 40 || batch.undone !== undefined && typeof batch.undone !== "boolean" || !Array.isArray(batch.evidence) || batch.evidence.length > 10000 || batch.evidence.some(item => typeof item !== "string" || !item || item.length > 250) || !changes(batch.transactions, "id") || !changes(batch.merchantRules, "key") || batch.balanceObservations !== undefined && !changes(batch.balanceObservations, "id") || batch.accountMappings !== undefined && !changes(batch.accountMappings, "id"))) throw new Error("The backup contains invalid reconciliation history.");
+  }
   const ids = new Set<string>();
   for (const p of d.pockets) {
     if (
@@ -548,7 +571,7 @@ export function validateData(input: unknown): Data {
     const group = transferGroups.get(t.transferId!) || [];
     group.push(t); transferGroups.set(t.transferId!, group);
   }
-  if ([...transferGroups.values()].some((group) => group.length !== 2 || group[0].amount !== group[1].amount || group[0].date !== group[1].date || group[0].account === group[1].account || new Set(group.map((t) => t.type)).size !== 2))
+  if ([...transferGroups.values()].some((group) => group.length !== 2 || group[0].amount !== group[1].amount || group[0].account === group[1].account || new Set(group.map((t) => t.type)).size !== 2))
     throw new Error("A bank transfer must have one matching money-out and money-in entry.");
   for (const t of d.transactions.filter((t) => t.kind === "reimbursement")) {
     const source = d.transactions.find((x) => x.id === t.forTransactionId);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { DAILY_CAP, RESERVATION, aiImportAvailable, dateFromPrintedEvidence, importMessages, importVerificationMessages, mergeImportPasses, neuronsUsed, parseImportAnswer, validateImportInput } from "./import-ai.js";
+import { DAILY_CAP, RESERVATION, aiImportAvailable, dateFromPrintedEvidence, importMessages, importVerificationMessages, mergeImportPasses, neuronsUsed, parseImportAnswer, parseImportSummary, validateImportInput } from "./import-ai.js";
 
 assert.equal(aiImportAvailable({ AI_IMPORT_ENABLED: "true", AI: {} }), true);
 assert.equal(aiImportAvailable({ AI_IMPORT_ENABLED: "false", AI: {} }), false);
@@ -116,3 +116,17 @@ assert.deepEqual(mergeImportPasses(cleanFirst, cleanSecond), cleanSecond, "rows 
 assert.deepEqual(mergeImportPasses([...cleanFirst, cleanFirst[0]], [cleanSecond[0], { ...cleanFirst[0], cleanName: "Other" }]).map((row) => row.cleanName), ["Alfamart Jakarta", "Other"], "duplicate rows pair one-to-one even when cleanName differs");
 console.log("Import AI cleanName: validation fallbacks and cleanName-insensitive pass merging passed");
 
+
+// Synthetic evidence: summaries never become transactions, including when a model invents total rows.
+const summary = { from: "2026-10-01", to: "2026-10-31", incoming: 120000, outgoing: 100000, categories: { topup: 120000, sendMoney: 80000, merchant: 20000 } };
+const summaryAnswer = (value, rows = []) => ({ response: JSON.stringify({ summary: value, rows }) });
+assert.deepEqual(parseImportSummary(summaryAnswer(summary)), summary);
+assert.deepEqual(parseImportAnswer(summaryAnswer(summary, [{ name: "Total expense", amount: 100000, direction: "expense", activity: "purchase" }])), []);
+assert.equal(parseImportSummary({ response: JSON.stringify({ rows: [] }) }), undefined);
+assert.throws(() => parseImportSummary(summaryAnswer({ ...summary, from: "2026-02-30" })));
+assert.throws(() => parseImportSummary(summaryAnswer({ ...summary, incoming: -1 })));
+assert.throws(() => parseImportSummary(summaryAnswer({ ...summary, categories: { sendMoney: 100001 } })));
+assert.throws(() => parseImportSummary(summaryAnswer({ ...summary, categories: { sendMoney: 80000, merchant: 30000 } })));
+assert.equal(parseImportSummary(summaryAnswer({ ...summary, closing: 20000 })).closing, undefined, "net movement cannot invent a closing balance");
+assert.deepEqual(parseImportAnswer({ response: JSON.stringify({ rows: [{ name: "Connect to GOOGLE", amount: 0 }, { name: "Synthetic merchant", dateEvidence: "30 Oct 2026", amount: 20000, direction: "expense", activity: "purchase" }] }) }, "image").map(row => row.name), ["Synthetic merchant"]);
+console.log("Import summaries: bounded period totals, zero generated rows, and nonmonetary DANA events passed");

@@ -8,7 +8,7 @@ import { CLEAN_RESERVATION, cleanMessages, parseCleanAnswer, validateCleanInput 
 import { BANK_IDS, detectBank } from "./banks.js";
 import { MATCH_RESERVATION, matchMessages, parseMatchAnswer, validateMatchInput } from "./import-match.js";
 import { BUDGET_RESERVATION, budgetMessages, parseBudgetAnswer, validateBudgetInput } from "./budget-ai.js";
-import { aiImportAvailable, answerBank, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
+import { aiImportAvailable, answerBank, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, parseImportSummary, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
 import { bcaCheckMessages, bcaMessages, jakartaToday, looksLikeBcaStatement, mergeBcaReads, parseBcaAnswer } from "./import-bca.js";
 import { withSecurityHeaders } from "./security-headers.js";
 export { UserLiveUpdates } from "./live.js";
@@ -678,9 +678,14 @@ async function route(request, env) {
       const sourceText = input.kind === "text" ? input.text : "";
       const read = { ...input, ...(bank ? { bank } : {}) };
       try {
-        const firstRows = first || parseImportAnswer(await runPass(importMessages(read)), input.kind, input.month, sourceText);
-        const verifiedRows = parseImportAnswer(await runPass(importVerificationMessages(read, firstRows)), input.kind, input.month, sourceText);
-        return reply({ rows: mergeImportPasses(firstRows, verifiedRows), ...(bank ? { bank } : {}) }, 200, cors);
+        const firstAnswer = first ? undefined : await runPass(importMessages(read));
+        const firstRows = first?.rows || parseImportAnswer(firstAnswer, input.kind, input.month, sourceText);
+        const firstSummary = first ? first.summary : parseImportSummary(firstAnswer);
+        const verifiedAnswer = await runPass(importVerificationMessages(read, firstRows));
+        const verifiedRows = parseImportAnswer(verifiedAnswer, input.kind, input.month, sourceText);
+        const summary = parseImportSummary(verifiedAnswer);
+        if (JSON.stringify(firstSummary) !== JSON.stringify(summary)) throw new Error("Summary totals disagreed between reads; retry this source");
+        return reply({ rows: summary ? [] : mergeImportPasses(firstRows, verifiedRows), ...(bank ? { bank } : {}), ...(summary ? { summary } : {}) }, 200, cors);
       } catch (error) { unreadable(error); }
     };
     // 2.4.0 clients ask for BCA only.
@@ -707,7 +712,7 @@ async function route(request, env) {
     let firstRows;
     try { firstRows = parseImportAnswer(answer, input.kind, input.month, ""); }
     catch (error) { unreadable(error); }
-    return general(bank, firstRows);
+    return general(bank, { rows: firstRows, summary: parseImportSummary(answer) });
   }
   if (request.method === "POST" && (path === "/v1/import/match" || path === "/v1/budget/suggest")) {
     if (expectedUid !== auth.uid) throw fault(403, "Account identity is required");

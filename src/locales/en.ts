@@ -1,4 +1,26 @@
 export const en = {
+  statementCoverageHelp: "Confirm only the printed period whose complete transaction details are present. A summary or cropped list alone cannot prove complete coverage.",
+  statementPeriodFrom: "Printed period starts",
+  statementPeriodTo: "Printed period ends",
+  statementConfirmCoverage: "I checked that all transaction details for this period are present",
+
+  statementConfirmRoute: "Confirm replacement of the recorded route",
+  statementReviewedFields: "I checked the flagged fields against the source",
+  statementBalanceReview: "Review a dated balance",
+  statementBalanceReviewHelp: "Enter independently checked balances. Resolve missing transactions and routes before adjusting a remaining difference.",
+  statementClosingBalance: "Verified balance on the selected date (Rp)",
+  statementCurrentBalance: "Independently verified balance today (Rp)",
+  statementBalanceEffect: "Selected date: {before} → {after}. Today: {currentBefore} → {currentAfter}.",
+  statementBalanceBlocked: "Adjustment blocked: it would not match the verified current balance, or there is no difference.",
+  statementConfirmAdjustment: "Confirm balance adjustment",
+
+  statementRouteConflict: "The statement names a different transfer account from the recorded route. Resolve the route before linking or adding this entry.",
+  statementTotalsMatched: "Statement transaction totals matched.",
+  statementTotalsIncomplete: "Transaction details do not yet match the summary.",
+  statementObservedTotals: "Observed: in {incoming}, out {outgoing}.",
+  statementExpectedTotals: "Summary: in {incoming}, out {outgoing}.",
+  statementBalanceUnknown: "These totals do not verify the closing balance or individual transfer destinations.",
+
   duplicateStatementSource: "Another file shows the same date and amount on this account. Check whether these are the same transaction before adding it.",
   cloudPageConsentNeeded: "This page needs cloud reading. Allow Cloudflare AI to continue, or keep reviewing the pages read on this device.",
   readStatementFiles: "Read statements",

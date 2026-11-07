@@ -1,3 +1,4 @@
+import { compareStatementSummary } from "./statementEvidence";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { accountForBank, bankOfAccount, detectBank, mentionsAccount } from "../worker/banks.js";
@@ -432,4 +433,57 @@ test("different-language sources cannot silently add the same new account moveme
   const confirmed=analyzeStatement([{...first,confirmedSeparate:true,userDecided:true},second],{...data,transactions:[]});
   assert.equal(verdict(confirmed,"en")?.kind,"new");
   assert.equal(verdict(analyzeStatement([first,{...second,account:"Cash"}],{...data,transactions:[]}),"en")?.kind,"new");
+});
+
+
+test("a DANA observation cannot verify an existing route to Jago", () => {
+  const transactions = [tx({ id: "out", kind: "account_transfer", transferId: "move", name: "Transfer to Jago" }), tx({ id: "in", kind: "account_transfer", transferId: "move", account: "Jago", type: "income" })];
+  const result = analyzeStatement([row({ activity: "topup", name: "Topup DANA" })], { ...data, transactions });
+  assert.deepEqual(result.verdicts.get("r1"), { kind: "look", reason: "route_conflict", candidates: ["out"] });
+});
+test("an unrelated partial DANA upload does not hide an unobserved transfer leg", () => {
+  const transfer = row({ activity: "topup", name: "Topup DANA" });
+  const partial = row({ id: "partial", account: "DANA", date: "2026-10-01", name: "Coffee" });
+  const result = analyzeStatement([transfer, partial], { ...data, transactions: [] }, { coverage: [] });
+  assert.equal(result.verdicts.get("r1")?.kind, "transfer");
+  const applied = applyVerdict({ ...transfer, page: 1, decision: "later", pocketId: "" }, result.verdicts.get("r1"));
+  assert.equal(applied.decision, "later");
+  assert.deepEqual(result.onlyInSaku, []);
+});
+
+test("DANA summary validates details without inventing balances or entries", () => {
+ const summary = { from: "2026-10-01", to: "2026-10-31", incoming: 15500000, outgoing: 15326120 };
+ const amounts = [8000000,1000000,500000,6000000,-8000000,-1000000,-6000000,-287390,-990,-37740];
+ const details = amounts.map((amount,i) => ({ ...row({ id: `dana-${i}`, amount: Math.abs(amount), direction: amount > 0 ? "income" : "expense" }), page: 1, decision: "later" as const, pocketId: "" }));
+ assert.deepEqual(compareStatementSummary(summary, details), { incoming:15500000, outgoing:15326120, matches:true });
+ assert.equal(compareStatementSummary(summary, []).matches,false);
+ assert.equal(compareStatementSummary(summary, details.slice(1)).matches,false);
+ assert.equal(details.length,10);
+});
+
+test("proven internal Jago pocket moves have no new financial effect", () => {
+ const rows = [row({ id:"out", account:"Jago", statementAccount:"Main", activity:"transfer", proven:true, name:"Movement between Pockets" }), row({id:"in",account:"Jago",statementAccount:"Savings",activity:"transfer",proven:true,name:"Pocket Money In",direction:"income"})];
+ const result=analyzeStatement(rows,{...data,transactions:[]},{coverage:[]});
+ assert.equal(result.verdicts.get("out")?.kind,"internal");
+ assert.equal(result.verdicts.get("in")?.kind,"internal");
+ assert.equal(applyVerdict({...rows[0],page:1,pocketId:"",decision:"later"},result.verdicts.get("out")).decision,"skip");
+});
+test("outside observations naming DANA do not collapse into a direct bank route",()=>{
+ const rows=[row({name:"Topup DANA",activity:"topup"}),row({id:"jago-in",account:"Jago",direction:"income",name:"Incoming from DANA",activity:"transfer"})];
+ const result=analyzeStatement(rows,{...data,transactions:[]},{coverage:[]});
+ for(const v of result.verdicts.values()) assert.ok(v.kind!=="transfer" || !v.partnerRowId);
+});
+
+test("two internal debits cannot consume the same Jago pocket credit", () => {
+ const a=row({id:"a",account:"Jago",statementAccount:"Main",activity:"transfer",proven:true,name:"Movement between Pockets"});
+ const rows=[a,{...a,id:"b"},{...a,id:"c",statementAccount:"Savings",direction:"income" as const}];
+ const result=analyzeStatement(rows,{...data,transactions:[]},{coverage:[]});
+ assert.ok([...result.verdicts.values()].every(v=>v.kind!=="internal"));
+});
+
+test("Only in Saku respects explicit disjoint periods and zero-transaction statements",()=>{
+ const transactions=[tx({id:"start",date:"2026-10-01"}),tx({id:"gap",date:"2026-10-15"}),tx({id:"end",date:"2026-10-31"})];
+ const coverage=[{account:"BCA",from:"2026-10-01",to:"2026-10-03",complete:true},{account:"BCA",from:"2026-10-28",to:"2026-10-31",complete:true}];
+ assert.deepEqual(analyzeStatement([],{...data,transactions},{coverage}).onlyInSaku.map(t=>t.id),["start","end"]);
+ assert.deepEqual(analyzeStatement([],{...data,transactions},{coverage:coverage.map(p=>({...p,complete:false}))}).onlyInSaku,[]);
 });

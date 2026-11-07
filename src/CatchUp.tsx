@@ -1,11 +1,14 @@
+import { recordReconciliationBatch, undoReconciliationBatch } from "./reconciliationBatches";
+import { previewStatementAdjustment, statementBalanceAdjustment } from "./statementBalances";
+import { compareStatementSummary } from "./statementEvidence";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, ArrowRight, Check, FileImage, FileText, Link2, LockKeyhole, RotateCcw, Sparkles, Unlink, Upload, X } from "lucide-react";
 import { compareImportNames, extractImportPage } from "./cloud";
-import { accountForBank, bankById, bankOfAccount, detectBank } from "../worker/banks.js";
+import { accountForBank, bankById, bankOfAccount, detectBank, mentionsAccount } from "../worker/banks.js";
 import { analyzeStatement, applyVerdict, balanceMismatch, type Verdict } from "./statementMatch";
 import { parseStatementPage, statementTotals, statementCurrency } from "./statementLines";
 import { money, today, uid, validAmount, validDate, type Data, type Transaction } from "./domain";
-import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, type ImportDraft, type ImportRow } from "./importDraft";
+import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, type ImportDraft, type ImportRow, type StatementSummary } from "./importDraft";
 import { runImportSources } from "./importFlow";
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { openImportPages } from "./importPages";
@@ -39,6 +42,27 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   busy: boolean; notify: (message: string) => void; statementMode?: boolean;
 }) {
   const owner = userId || "local";
+  const monthlyCommit = async (next: Data, message: string) => {
+    if (!statementMode) return commit(next, message);
+    return commit(recordReconciliationBatch(data, next, { id: `monthly:${draftRef.current?.id || "balance"}:${uid()}`, createdAt: new Date().toISOString(), evidence: (draftRef.current?.sources || []).map((source) => source.hash || source.id) }), message);
+  };
+  const undoBatch = async (id: string) => {
+    if (savingRef.current || busy || processingRef.current) return;
+    savingRef.current = true; setSaving(true);
+    try {
+      if (await commit(undoReconciliationBatch(data, id), t("undoEntries"))) {
+        const batch = data.reconciliationBatches?.find((item) => item.id === id);
+        const owned = new Set(batch?.transactions.map((item) => item.id) || []);
+        const current = draftRef.current;
+        if (current) await save({ ...current, saved: current.saved.filter((item) => !owned.has(item.id)), verified: current.verified?.filter((item) => !owned.has(item)), moved: current.moved?.filter((item) => !owned.has(item.id)), rows: current.rows.map((item) => owned.has(item.id) ? { ...item, decision: "later", alreadyInSaku: false } : item) });
+      }
+    }
+    catch (error) { setInfo(error instanceof Error ? error.message : t("checkThisRow")); }
+    finally { savingRef.current = false; setSaving(false); }
+  };
+  const [balanceReview, setBalanceReview] = useState({ account: "", date: `${month}-01`, target: "", current: "", reason: "" });
+  useEffect(() => { setBalanceReview((value) => ({ ...value, date: `${month}-01`, target: "", current: "", reason: "" })); }, [month]);
+  const balancePreview = (() => { try { return balanceReview.target !== "" && balanceReview.current !== "" ? previewStatementAdjustment(data, { account: balanceReview.account, date: balanceReview.date, balance: Number(balanceReview.target) }, [...(data.statementBalanceObservations || []), { account: balanceReview.account, date: today(), balance: Number(balanceReview.current) }]) : null; } catch { return null; } })();
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
   const [draft, setDraft] = useState<ImportDraft | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -104,17 +128,22 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [preview?.file]);
-  const accountForRow = (row: ImportRow) => importRowAccount(row, draft?.sources.find((source) => source.id === row.sourceId), data);
+  const accountForRow = (row: ImportRow) => {
+    const source = draft?.sources.find((source) => source.id === row.sourceId);
+    const mapping = row.statementAccount && data.statementAccountMappings?.find((item) => item.bank === source?.bank && item.statementAccount === row.statementAccount);
+    return importRowAccount(mapping && !row.account ? { ...row, account: mapping.account } : row, source, data);
+  };
   const rowSaved = (row: ImportRow) => importRowAlreadySaved(row, draft, data);
   const sourceHasSavedRows = (sourceId: string) => (draft?.rows || []).some((row) => row.sourceId === sourceId && rowSaved(row));
   // Monthly check (3.0): statementMatch links rows already in Saku, pairs moves between the user's own accounts and
   // decides what still needs the user; the draft keeps only what was read and what the user chose.
   const analysis = useMemo(() => {
     if (!statementMode || !draft) return null;
-    const flagged = new Set(draft.sources.filter((source) => bankById(source.bank || "")?.beta || balanceMismatch(draft.rows.filter((row) => row.sourceId === source.id), source.totals)).map((source) => source.id));
+    const flagged = new Set(draft.sources.filter((source) => source.error || source.processedPages !== source.pageCount || bankById(source.bank || "")?.beta || balanceMismatch(draft.rows.filter((row) => row.sourceId === source.id), source.totals)).map((source) => source.id));
     const draftIds = new Set([...draft.rows.map((row) => row.id), ...draft.saved.map((item) => item.id)]);
-    const open = draft.rows.filter((row) => row.decision !== "skip" && !importRowAlreadySaved(row, draft, data)).map((row) => ({ ...row, account: importRowAccount(row, draft.sources.find((source) => source.id === row.sourceId), data) }));
-    return analyzeStatement(open, data, { flagged, draftIds });
+    const open = draft.rows.filter((row) => row.decision !== "skip" && !importRowAlreadySaved(row, draft, data)).map((row) => ({ ...row, account: accountForRow(row) }));
+    const coverage = draft.sources.flatMap((source) => source.coverage ? [{ account: confirmedImportAccount(source, data), from: source.coverage.from, to: source.coverage.to, complete: source.coverage.confirmed && !source.error && source.pageCount > 0 && source.processedPages === source.pageCount && !source.mixedAccounts && !source.summary }] : []);
+    return analyzeStatement(open, data, { flagged, draftIds, coverage });
   }, [statementMode, draft, data]);
   const verdictOf = (row: ImportRow): Verdict | undefined => analysis?.verdicts.get(row.id);
   const rowsView = useMemo(() => (draft?.rows || []).map((row) => analysis?.verdicts.has(row.id) ? applyVerdict(row, analysis.verdicts.get(row.id)) : row), [draft, analysis]);
@@ -122,7 +151,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const needsSeparateConfirmation = (row: ImportRow) => duplicateRows.has(row.id);
   const ready = rowsView.filter((row) => importRowReady(row, accountForRow(row), data) && !rowSaved(row) && (!needsSeparateConfirmation(row) || row.confirmedSeparate));
   // Screenshots crop and scroll, so their rows are compared once by eye; statement pages are complete documents.
-  const uncheckedDateSources = (draft?.sources || []).filter((source) => !source.datesChecked && isImage(source.name) && ready.some((row) => row.sourceId === source.id));
+  const uncheckedDateSources = (draft?.sources || []).filter((source) => !source.datesChecked && isImage(source.name) && (ready.some((row) => row.sourceId === source.id) || rowsView.some((row) => row.sourceId === source.id && verdictOf(row)?.kind === "linked")));
   const needsReview = rowsView.filter((row) => !rowSaved(row) && (row.decision === "later" || (row.decision === "ready" && !ready.includes(row))));
   const undatedSources = (draft?.sources || []).filter((source) => draft?.rows.some((row) => row.sourceId === source.id && !row.date && row.decision !== "skip" && !rowSaved(row)));
   const setAside = rowsView.filter((row) => !rowSaved(row) && row.decision === "skip" && verdictOf(row)?.kind !== "linked");
@@ -154,7 +183,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     const skipped = chosen.length - accepted.length;
     // A file named after a bank ("Jago_Okt.pdf") preselects that account; otherwise screenshots keep the 2.4.0 BCA
     // default. Either guess is replaced by the bank the page itself names.
-    const guess = (file: File) => accountForBank(data.accounts, bankOfAccount(file.name.replace(/[_.\-]+/g, " "))) || (isImage(file.name) ? bcaAccount(data) : "");
+    const guess = (file: File) => accountForBank(data.accounts, bankOfAccount(file.name.replace(/[_.\-]+/g, " "))) || (!statementMode && isImage(file.name) ? bcaAccount(data) : "");
     const sources = accepted.map((file) => ({ id: uid(), name: file.name, hash: hashes[picked.indexOf(file)], account: guess(file), accountConfirmed: !!guess(file), accountDetected: !!guess(file), file, processedPages: 0, pageCount: 0 }));
     if (!sources.length) { setInfo(repeated ? t("duplicateFilesSkipped", { count: repeated }) : next.sources.length >= 10 ? t("draftFull") : t("chooseValidFiles")); return; }
     try { await save({ ...next, sources: [...next.sources, ...sources] }); }
@@ -208,8 +237,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           }
           const guessed = bank ? accountForBank(data.accounts, bank) : "";
           const userChose = known.accountConfirmed && !known.accountDetected;
-          const account = userChose ? confirmedImportAccount(known, data) : guessed || confirmedImportAccount(known, data) || (isImage(known.name) ? bcaAccount(data) : "");
-          let read: { rows: Omit<ImportRow, "id" | "sourceId" | "page" | "pocketId" | "decision">[]; bank?: string };
+          const account = userChose ? confirmedImportAccount(known, data) : guessed || confirmedImportAccount(known, data) || (!statementMode && isImage(known.name) ? bcaAccount(data) : "");
+          let read: { rows: Omit<ImportRow, "id" | "sourceId" | "page" | "pocketId" | "decision">[]; bank?: string; summary?: StatementSummary };
           if (local) read = { rows: local.rows, bank };
           else {
             if (!consentGiven) { setConsentAsk(true); throw new Error(t("cloudPageConsentNeeded")); }
@@ -224,7 +253,8 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
             const remembered = suggestMerchant(data, result.name) || (result.cleanName ? suggestMerchant(data, result.cleanName) : null);
             const row = { ...result, ...(remembered ? { cleanName: remembered.name } : {}), ...(local ? { proven: true } : {}), id: uid(), sourceId: current.id, page: page.number, pocketId: remembered?.pocketId || "" } as Omit<ImportRow, "decision">;
             const names = result.statementAccount ? data.accounts.filter((name) => [result.statementAccount!.toLowerCase(), `${bank} ${result.statementAccount}`.toLowerCase()].includes(name.toLowerCase())) : [];
-            const mapped = names.length === 1 ? names[0] : undefined;
+            const rememberedAccount = data.statementAccountMappings?.find((item) => item.bank === bank && item.statementAccount === result.statementAccount)?.account;
+            const mapped = rememberedAccount || (names.length === 1 ? names[0] : undefined);
             return prepareImportRow({ ...row, ...(mapped ? { account: mapped } : {}), decision: suggestImportDecision(row, reviewMonth) } as ImportRow, data, hasStatementAccounts ? mapped || "" : settled, { checkLedger: !statementMode });
           });
           const latest = draftRef.current;
@@ -232,7 +262,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           const sourceRows = [...latest.rows, ...fresh].filter((row) => row.sourceId === current.id);
           await save({ ...latest, rows: [...latest.rows, ...fresh], sources: latest.sources.map((item) => {
             if (item.id !== current.id) return item;
-            const progress = { ...item, ...(hasStatementAccounts ? { mixedAccounts: true } : {}), processedPages: page.number, pageCount: documentPages.count, datesChecked: false, error: undefined, ...(bank ? { bank } : {}), ...(totals ? { totals } : {}), carry: local?.balance, localPages: (item.localPages || 0) + (local ? 1 : 0) };
+            const progress = { ...item, ...(read.summary ? { summary: read.summary } : {}), ...(hasStatementAccounts ? { mixedAccounts: true } : {}), processedPages: page.number, pageCount: documentPages.count, datesChecked: false, error: undefined, ...(bank ? { bank } : {}), ...(totals ? { totals } : {}), carry: local?.balance, localPages: (item.localPages || 0) + (local ? 1 : 0) };
             if (item.accountConfirmed && !item.accountDetected) return progress;
             const detected = (bank && accountForBank(data.accounts, bank)) || detectImportAccount(sourceRows, item, data) || (item.mixedAccounts ? "" : settled);
             return detected ? { ...progress, account: detected, accountConfirmed: true, accountDetected: true } : item.accountDetected ? { ...progress, account: "", accountConfirmed: false, accountDetected: false } : progress;
@@ -253,6 +283,11 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   async function updateRow(id: string, patch: Partial<ImportRow>) {
     if (!draftRef.current || savingRef.current) return;
     const row = draftRef.current.rows.find((item) => item.id === id);
+    const bank = draftRef.current.sources.find((source) => source.id === row?.sourceId)?.bank;
+    if (row?.statementAccount && patch.account && bank) {
+      const mapping = { id: `${bank}:${row.statementAccount}`, bank, statementAccount: row.statementAccount, account: patch.account };
+      if (!(await monthlyCommit({ ...data, statementAccountMappings: [...(data.statementAccountMappings || []).filter((item) => item.id !== mapping.id), mapping] }, t("importBatchSaved")))) return;
+    }
     try { await save({ ...draftRef.current, sources: importPatchNeedsSourceRecheck(patch) && row ? draftRef.current.sources.map((source) => source.id === row.sourceId ? { ...source, datesChecked: false } : source) : draftRef.current.sources, rows: draftRef.current.rows.map((item) => item.id === id ? { ...item, ...patch, confirmedSeparate: patch.confirmedSeparate ?? ("date" in patch || "amount" in patch || "direction" in patch || "name" in patch || "paymentMethod" in patch || "account" in patch || "activity" in patch ? false : item.confirmedSeparate) } : item) }); }
     catch { /* save explains the local storage problem */ }
   }
@@ -301,6 +336,47 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     try { await save({ ...draftRef.current, sources: draftRef.current.sources.map((source) => source.id === id ? { ...source, mixedAccounts } : source), rows: draftRef.current.rows.map((row) => row.sourceId === id ? { ...row, confirmedSeparate: false } : row) }); }
     catch { /* save explains the local storage problem */ }
   }
+  function routeProposal(row: ImportRow, transactionId: string) {
+    const old = data.transactions.find((item) => item.id === transactionId && item.kind === "account_transfer");
+    const oldParts = old?.transferId ? data.transactions.filter((item) => item.transferId === old.transferId) : [];
+    const from = oldParts.find((item) => item.type === "expense"), to = oldParts.find((item) => item.type === "income");
+    if (!from || !to) return null;
+    const text = `${row.name} ${row.cleanName || ""}`;
+    const middle = data.accounts.filter((account) => account !== from.account && account !== to.account && mentionsAccount(text, account));
+    if (middle.length !== 1) return null;
+    const near = rowsView.filter((item) => {
+      const verdict = verdictOf(item);
+      return item.decision !== "skip" && !rowSaved(item) && !(verdict?.kind === "linked" && !oldParts.some((part) => part.id === verdict.transactionId)) && !item.check && item.amount === row.amount && Math.abs(Date.parse(item.date) - Date.parse(row.date)) <= 2 * 86400000;
+    });
+    const pick = (account: string, direction: ImportRow["direction"]) => near.filter((item) => accountForRow(item) === account && item.direction === direction);
+    const parts = [pick(from.account, "expense"), pick(middle[0], "income"), pick(middle[0], "expense"), pick(to.account, "income")];
+    if (parts.some((items) => items.length !== 1)) return null;
+    const adjacent = [middle[0], from.account, to.account, middle[0]];
+    if (parts.some((items, index) => data.accounts.some((account) => account !== accountForRow(items[0]) && account !== adjacent[index] && mentionsAccount(`${items[0].name} ${items[0].cleanName || ""}`, account)))) return null;
+    return { from: from.account, middle: middle[0], to: to.account, oldParts, rows: parts.map((items) => items[0]) };
+  }
+  async function confirmRoute(row: ImportRow, transactionId: string) {
+    if (busy || savingRef.current || processingRef.current) return;
+    const proposal = routeProposal(row, transactionId);
+    if (!proposal) return;
+    savingRef.current = true; setSaving(true);
+    try {
+      const [a,b,c,d] = proposal.rows;
+      const additions = [...importedTransactions({ ...a, activity: "transfer", counterparty: proposal.middle, decision: "ready" }, proposal.from, "route evidence", data, b.id, b.date), ...importedTransactions({ ...c, activity: "transfer", counterparty: proposal.to, decision: "ready" }, proposal.middle, "route evidence", data, d.id, d.date)];
+      const removed = new Set(proposal.oldParts.map((item) => item.id));
+      await monthlyCommit({ ...data, transactions: [...data.transactions.filter((item) => !removed.has(item.id)), ...additions.map((item) => ({ ...item, note: `${item.note} · Replaces recorded route: ${proposal.oldParts.map((part) => part.note).filter(Boolean).join("; ")}`.slice(0,500) }))] }, t("importBatchSaved"));
+    } catch (error) { setInfo(error instanceof Error ? error.message : t("checkThisRow")); }
+    finally { savingRef.current = false; setSaving(false); }
+  }
+  async function saveBalanceAdjustment() {
+    if (savingRef.current || busy || processingRef.current) return;
+    savingRef.current = true; setSaving(true);
+    try {
+      const entry = statementBalanceAdjustment(data, { account: balanceReview.account, date: balanceReview.date, balance: Number(balanceReview.target) }, [...(data.statementBalanceObservations || []), { account: balanceReview.account, date: today(), balance: Number(balanceReview.current) }], balanceReview.reason);
+      if (await monthlyCommit({ ...data, transactions: [...data.transactions, entry], statementBalanceObservations: [...(data.statementBalanceObservations || []), { id: uid(), account: balanceReview.account, date: balanceReview.date, balance: Number(balanceReview.target), evidence: balanceReview.reason }, { id: uid(), account: balanceReview.account, date: today(), balance: Number(balanceReview.current), evidence: balanceReview.reason }] }, t("importBatchSaved"))) setBalanceReview((value) => ({ ...value, target: "", current: "", reason: "" }));
+    } catch (error) { setInfo(error instanceof Error ? error.message : t("checkThisRow")); }
+    finally { savingRef.current = false; setSaving(false); }
+  }
   async function saveReady() {
     if (!draftRef.current || busy || processingRef.current || savingRef.current || (!ready.length && !toVerify.length) || uncheckedDateSources.length) return;
     const draftId = draftRef.current.id;
@@ -317,7 +393,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
         : ["transfer", "topup"].includes(row.activity)
         ? ready.find((candidate) => candidate.id !== row.id && !paired.has(candidate.id) && ["transfer", "topup"].includes(candidate.activity) && candidate.date === row.date && candidate.amount === row.amount && candidate.direction !== row.direction && accountForRow(candidate) === row.counterparty && candidate.counterparty === accountForRow(row))
         : undefined;
-      additions.push(...importedTransactions(row, accountForRow(row), draftRef.current.sources.find((source) => source.id === row.sourceId)?.name || "source", data, other?.id));
+      additions.push(...importedTransactions(row, accountForRow(row), draftRef.current.sources.find((source) => source.id === row.sourceId)?.name || "source", data, other?.id, other?.date));
       if (other) { paired.add(other.id); pairedByTransfer.set(row.id, other.id); }
     }
     const learned = ready.reduce((rules, row) => row.direction === "expense" && ["purchase", "pay_later"].includes(row.activity) ? learnMerchant({ ...data, merchantRules: rules }, row.name, { name: importRowName(row), pocketId: row.pocketId }) : rules, data.merchantRules);
@@ -329,7 +405,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     }, learned);
     const verify = new Set(toVerify.map((verdict) => verdict.transactionId));
     const transactions = data.transactions.map((transaction) => verify.has(transaction.id) ? { ...transaction, verified: true } : transaction);
-    if (!(await commit({ ...data, transactions: [...transactions, ...additions], merchantRules }, additions.length ? t("importBatchSaved") : t("statementMatchesChecked", { count: verify.size })))) return;
+    if (!(await monthlyCommit({ ...data, transactions: [...transactions, ...additions], merchantRules }, additions.length ? t("importBatchSaved") : t("statementMatchesChecked", { count: verify.size })))) return;
     if (draftRef.current?.id !== draftId) return;
     const saved = additions.map((transaction) => ({ id: transaction.id, fingerprint: JSON.stringify(transaction), pairedRowId: transaction.transferId ? pairedByTransfer.get(transaction.transferId) : undefined }));
     try { await save({ ...draftRef.current, rows: draftRef.current.rows.map((row) => paired.has(row.id) ? { ...row, decision: "skip" } : row), saved: [...draftRef.current.saved, ...saved], verified: [...new Set([...(draftRef.current.verified || []), ...verify])] }); }
@@ -337,6 +413,11 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     } finally { savingRef.current = false; setSaving(false); }
   }
   async function undo() {
+    if (statementMode) {
+      const batch = [...(data.reconciliationBatches || [])].reverse().find((item) => !item.undone && item.id.startsWith(`monthly:${draftRef.current?.id}:`));
+      if (batch) { await undoBatch(batch.id); return; }
+      if (data.reconciliationBatches?.some((item) => item.id.startsWith(`monthly:${draftRef.current?.id}:`))) return;
+    }
     if ((!draftRef.current?.saved.length && !draftRef.current?.verified?.length && !draftRef.current?.moved?.length) || busy || processingRef.current || savingRef.current) return;
     const draftId = draftRef.current.id;
     savingRef.current = true; setSaving(true);
@@ -357,7 +438,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       const placed = move && move.to === transaction.account ? { ...transaction, account: move.from } : transaction;
       return unverify.has(placed.id) ? (({ verified: _, ...rest }) => rest)(placed) : placed;
     });
-    if (!(await commit({ ...data, transactions: kept }, t("importedUndone", { count: ids.size + unverify.size + movedBack })))) return;
+    if (!(await monthlyCommit({ ...data, transactions: kept }, t("importedUndone", { count: ids.size + unverify.size + movedBack })))) return;
     if (draftRef.current?.id !== draftId) return;
     const transferIds = new Set(removable.map((transaction) => transaction.transferId).filter(Boolean));
     const pairedRowIds = new Set(draftRef.current.saved.filter((item) => ids.has(item.id)).map((item) => item.pairedRowId).filter(Boolean));
@@ -376,7 +457,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     const entry = data.transactions.find((transaction) => transaction.id === transactionId);
     const account = accountForRow(row);
     if (!entry || !account || busy || savingRef.current) return;
-    if (!(await commit({ ...data, transactions: data.transactions.map((transaction) => transaction.id === transactionId ? { ...transaction, account } : transaction) }, t("movedToAccount", { account })))) return;
+    if (!(await monthlyCommit({ ...data, transactions: data.transactions.map((transaction) => transaction.id === transactionId ? { ...transaction, account } : transaction) }, t("movedToAccount", { account })))) return;
     if (draftRef.current) {
       try { await save({ ...draftRef.current, moved: [...(draftRef.current.moved || []).filter((item) => item.id !== transactionId), { id: transactionId, from: entry.account, to: account }] }); }
       catch { /* save explains the local storage problem */ }
@@ -386,7 +467,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   async function removeOnlyInSaku(transaction: Transaction) {
     if (busy || savingRef.current) return;
     const ids = new Set(transaction.transferId ? data.transactions.filter((item) => item.transferId === transaction.transferId).map((item) => item.id) : [transaction.id]);
-    if (await commit({ ...data, transactions: data.transactions.filter((item) => !ids.has(item.id)) }, t("removedFromSaku"))) setConfirmRemove("");
+    if (await monthlyCommit({ ...data, transactions: data.transactions.filter((item) => !ids.has(item.id)) }, t("removedFromSaku"))) setConfirmRemove("");
   }
   // One bounded call for the rows Saku can't tell apart; the answer is a hint the user still taps.
   async function askCompare() {
@@ -468,6 +549,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
                 {row.activity === "card_payment" && <ChoiceField className="catchup-field" label={t("paidCard")} value={row.cardId || ""} disabled={alreadySaved || saving} onValueChange={(value) => void updateRow(row.id, { cardId: value })} placeholder={t("chooseCard")} options={data.creditCards.map((item) => ({ value: item.id, label: item.name }))} />}
                 {card && ["purchase", "pay_later"].includes(row.activity) && <label className="catchup-field">{t("firstDueMonth")}<input type="month" min={row.date.slice(0, 7)} value={row.firstDueMonth || ""} readOnly={alreadySaved || saving} onChange={(event) => void updateRow(row.id, { firstDueMonth: event.target.value })} /></label>}
                 {row.direction === "expense" && !card && !["transfer", "topup", "card_payment"].includes(row.activity) && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={row.pocketId} disabled={alreadySaved || saving} onValueChange={(value) => void updateRow(row.id, { pocketId: value })} options={[{ value: "", label: t("noPocket"), description: t("categorizeLater") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
+                {row.check && <button type="button" className="button secondary" disabled={alreadySaved || saving} onClick={() => void updateRow(row.id, { check: undefined, decision: "later" })}>{t("statementReviewedFields")}</button>}
                 <p className="catchup-row-note">{t("fromPage", { page: row.page })}{importRowName(row) !== row.name.trim() ? ` · ${t("printedAs", { name: row.name })}` : ""}{row.dateEvidence ? ` · ${t("printedDate", { date: row.dateEvidence })}` : ""}{alreadySaved ? ` · ${t("savedEditActivity")}` : ""}{row.date && !row.date.startsWith(draft.month) && !alreadySaved ? ` · ${t("outsideMonth")}` : ""}{pair && !alreadySaved ? ` · ${t("possibleTransfer", { account: accountForRow(pair) })}` : ""}{duplicate && !alreadySaved ? ` · ${t("possibleDuplicate")}` : ""}</p>
                 {duplicate && !alreadySaved && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => void updateRow(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
                 {row.decision === "ready" && !rowReady && !alreadySaved && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
@@ -489,6 +571,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const renderLook = (row: ImportRow) => {
     const verdict = verdictOf(row);
     const choices = verdict?.kind === "look" ? (() => {
+      if (verdict.reason === "route_conflict") { const proposal = routeProposal(row, verdict.candidates[0]); return <><p role="alert">{t("statementRouteConflict")}</p>{proposal && <><p>{proposal.from} → {proposal.middle} → {proposal.to} · {money(row.amount)}</p><button type="button" className="button secondary" disabled={saving || processing || busy} onClick={() => void confirmRoute(row, verdict.candidates[0])}>{t("statementConfirmRoute")}</button></>}</>; }
       if (verdict.reason === "duplicate_source") return <><p>{t("duplicateStatementSource")}</p><ul>{(verdict.partnerRowIds || []).map((id) => { const other = rowsView.find((item) => item.id === id); return other ? <li key={id}>{draft?.sources.find((source) => source.id === other.sourceId)?.name} · {importRowName(other)}</li> : null; })}</ul><div className="monthly-choice-row"><button type="button" className="button secondary" disabled={saving || processing} onClick={() => decide(row.id, "skip")}>{t("dontImport")}</button><button type="button" className="text-button" disabled={saving || processing} onClick={() => decide(row.id, "ready")}>{t("itsDifferentOne")}</button></div></>;
       if (verdict.reason === "ambiguous") return <><p>{t("whichOneIsIt")}</p><div className="monthly-choice-list">{verdict.candidates.flatMap((id) => { const item = entry(id); return item ? [<button type="button" key={id} className={row.aiPick === id ? "is-suggested" : undefined} disabled={saving || processing} onClick={() => void patchRows({ [row.id]: { matchId: id, unlinked: false, userDecided: true } }, "decisions")}><Link2 size={14} aria-hidden="true" /><span><strong>{item.name}</strong><small>{friendlyDate(item.date)} · {item.account}</small></span>{row.aiPick === id && <em><Sparkles size={12} aria-hidden="true" /> {t("sakuThinks")}</em>}</button>] : []; })}</div><button type="button" className="text-button" disabled={saving || processing} onClick={() => void patchRows({ [row.id]: { confirmedSeparate: true, userDecided: true, decision: "ready" } }, "decisions")}>{t("itsNewOne")}</button></>;
       if (verdict.reason === "other_account") { const item = entry(verdict.candidates[0]); return item ? <><p>{t("loggedElsewhere", { name: item.name, account: item.account, statement: accountForRow(row) })}</p><div className="monthly-choice-row"><button type="button" className="button secondary" disabled={saving || busy} onClick={() => void moveAndLink(row, item.id)}>{t("moveToAccount", { account: accountForRow(row) })}</button><button type="button" className="text-button" disabled={saving} onClick={() => void patchRows({ [row.id]: { confirmedSeparate: true, userDecided: true, decision: "ready" } }, "decisions")}>{t("itsDifferentOne")}</button></div></> : null; }
@@ -545,6 +628,25 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       {draft && deleteConfirmationId === draft.id && <div className="catchup-delete-confirm" role="group" aria-label={t("confirmDraftRemoval")}><p>{t("removeDraftQuestion")}</p><div><button className="button secondary" type="button" onClick={() => setDeleteConfirmationId("")}>{t("keepDraft")}</button><button className="button danger" type="button" disabled={processing || saving} onClick={() => void deleteDraft()}>{t("removeThisDraft")}</button></div></div>}
       {!userId && <p className="catchup-message">{t("signInExtract")}</p>}{info && <p className="catchup-message" role="status">{info}</p>}
     </section>
+    {statementMode && draft?.sources.map((source) => <section className="catchup-panel" key={`coverage-${source.id}`}><h3>{source.name}</h3><p>{t("statementCoverageHelp")}</p>
+      <label>{t("statementPeriodFrom")}<input type="date" value={source.coverage?.from || ""} disabled={saving || processing} onChange={(event) => void save({ ...draft, sources: draft.sources.map((item) => item.id === source.id ? { ...item, coverage: { from: event.target.value, to: item.coverage?.to || "", confirmed: false } } : item) })} /></label>
+      <label>{t("statementPeriodTo")}<input type="date" value={source.coverage?.to || ""} disabled={saving || processing} onChange={(event) => void save({ ...draft, sources: draft.sources.map((item) => item.id === source.id ? { ...item, coverage: { from: item.coverage?.from || "", to: event.target.value, confirmed: false } } : item) })} /></label>
+      <label><input type="checkbox" checked={source.coverage?.confirmed || false} disabled={saving || processing || !!source.error || source.processedPages !== source.pageCount || !source.pageCount || source.mixedAccounts || !!source.summary || !validDate(source.coverage?.from || "") || !validDate(source.coverage?.to || "") || (source.coverage?.from || "") > (source.coverage?.to || "")} onChange={(event) => void save({ ...draft, sources: draft.sources.map((item) => item.id === source.id ? { ...item, coverage: { ...item.coverage!, confirmed: event.target.checked } } : item) })} />{t("statementConfirmCoverage")}</label>
+    </section>)}
+    {statementMode && (data.reconciliationBatches || []).filter((batch) => !batch.undone).map((batch) => <section className="catchup-panel" key={batch.id}><p>{batch.createdAt}</p><button className="button secondary" disabled={busy || saving || processing} onClick={() => void undoBatch(batch.id)}>{t("undoEntries")}</button></section>)}
+    {statementMode && <section className="catchup-panel"><h3>{t("statementBalanceReview")}</h3><p>{t("statementBalanceReviewHelp")}</p>
+      <ChoiceField label={t("sakuAccount")} value={balanceReview.account} options={data.accounts.map((account) => ({ value: account, label: account }))} onValueChange={(account) => setBalanceReview((value) => ({ ...value, account }))} />
+      <label>{t("date")}<input type="date" max={today()} value={balanceReview.date} onChange={(event) => setBalanceReview((value) => ({ ...value, date: event.target.value }))} /></label>
+      <label>{t("statementClosingBalance")}<input type="number" min="0" step="1" value={balanceReview.target} onChange={(event) => setBalanceReview((value) => ({ ...value, target: event.target.value }))} /></label>
+      <label>{t("statementCurrentBalance")}<input type="number" min="0" step="1" value={balanceReview.current} onChange={(event) => setBalanceReview((value) => ({ ...value, current: event.target.value }))} /></label>
+      <label>{t("description")}<input value={balanceReview.reason} maxLength={250} onChange={(event) => setBalanceReview((value) => ({ ...value, reason: event.target.value }))} /></label>
+      {balancePreview && <p role="status">{t("statementBalanceEffect", { before: money(balancePreview.before), after: money(balancePreview.target), currentBefore: money(balancePreview.currentBefore), currentAfter: money(balancePreview.currentAfter) })} {!balancePreview.canApply && t("statementBalanceBlocked")}</p>}
+      <button className="button secondary" disabled={!balancePreview?.canApply || !balanceReview.reason.trim() || busy || saving || processing} onClick={() => void saveBalanceAdjustment()}>{t("statementConfirmAdjustment")}</button>
+    </section>}
+    {statementMode && draft?.sources.filter((source) => source.summary).map((source) => {
+      const result = compareStatementSummary(source.summary!, draft.rows.filter((row) => accountForRow(row) === confirmedImportAccount(source, data)));
+      return <section className="catchup-panel" key={`summary-${source.id}`}><h3>{source.name}</h3><p>{source.summary!.from} - {source.summary!.to}</p><p role="status">{t(result.matches ? "statementTotalsMatched" : "statementTotalsIncomplete")}</p><p>{t("statementObservedTotals", { incoming: money(result.incoming), outgoing: money(result.outgoing) })}</p><p>{t("statementExpectedTotals", { incoming: money(source.summary!.incoming), outgoing: money(source.summary!.outgoing) })}</p><p>{t("statementBalanceUnknown")}</p></section>;
+    })}
     {statementMode && groups && !!draft?.rows.length && monthlyReview}
     {!statementMode && !!draft?.rows.length && <section className="catchup-panel catchup-review"><div className="catchup-panel-head"><div><h3>{t("reviewTitle")}</h3><p>{t("reviewHelp")}</p></div><span className="catchup-private"><LockKeyhole size={13} /> {t("savedDevice")}</span></div>
       <div className="catchup-review-overview"><div><strong>{ready.length}</strong><span>{t("toAdd")}</span></div><div><strong>{needsReview.length}</strong><span>{t("needLook")}</span></div><div><strong>{setAside.length}</strong><span>{t("notImported")}</span></div></div><div className="catchup-bulk"><p className="catchup-swipe-hint">{t("swipeHint")}</p><div><button type="button" className="text-button" disabled={processing || saving || !draft.rows.some((row) => !rowSaved(row) && !row.alreadyInSaku && row.decision !== "ready")} onClick={() => void decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={processing || saving || !draft.rows.some((row) => !rowSaved(row) && row.decision !== "skip")} onClick={() => void decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>

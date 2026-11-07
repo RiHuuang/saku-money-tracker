@@ -11,12 +11,13 @@ import { merchantKey } from "./merchants";
 export const MATCH_DAYS = 2;
 
 export type Verdict =
+  | { kind: "internal" }
   | { kind: "linked"; transactionId: string; auto: boolean; alias?: { from: string; to: string } }
   | { kind: "transfer"; counterparty: string; partnerRowId?: string }
-  | { kind: "look"; reason: "ambiguous" | "other_account" | "transfer_tie" | "duplicate_source" | "check"; candidates: string[]; partnerRowIds?: string[] }
+  | { kind: "look"; reason: "ambiguous" | "other_account" | "transfer_tie" | "duplicate_source" | "route_conflict" | "check"; candidates: string[]; partnerRowIds?: string[] }
   | { kind: "new" };
 
-export type MatchRow = Pick<ImportRow, "id" | "sourceId" | "date" | "amount" | "direction" | "name" | "cleanName" | "activity" | "matchId" | "unlinked" | "unpaired" | "pairRowId" | "confirmedSeparate" | "userDecided" | "proven" | "currency"> & { account: string };
+export type MatchRow = Pick<ImportRow, "id" | "sourceId" | "date" | "amount" | "direction" | "name" | "cleanName" | "activity" | "matchId" | "unlinked" | "unpaired" | "pairRowId" | "confirmedSeparate" | "userDecided" | "proven" | "currency" | "statementAccount"> & { account: string };
 
 export type Analysis = { verdicts: Map<string, Verdict>; onlyInSaku: Transaction[] };
 
@@ -50,16 +51,36 @@ const eligible = (row: MatchRow) => (!row.currency || row.currency === "IDR") &&
  * flagged: sources whose balance doesn't add up, or whose bank is still beta; their new rows go to "look".
  * draftIds: ids the draft already wrote, so a statement row never "links" to a row it created itself.
  */
-export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "transactions" | "accounts" | "merchantRules" | "name" | "creditCards">, options: { flagged?: ReadonlySet<string>; draftIds?: ReadonlySet<string>; ownerName?: string } = {}): Analysis {
+export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "transactions" | "accounts" | "merchantRules" | "name" | "creditCards">, options: { flagged?: ReadonlySet<string>; draftIds?: ReadonlySet<string>; ownerName?: string; coverage?: readonly { account: string; from: string; to: string; complete: boolean }[] } = {}): Analysis {
   const verdicts = new Map<string, Verdict>();
   const usable = rows.filter(eligible);
   const draftIds = options.draftIds || new Set<string>();
   const ledger = data.transactions.filter((transaction) => !draftIds.has(transaction.id) && !draftIds.has(transaction.transferId || "") && !["opening_balance", "balance_adjustment"].includes(transaction.kind || ""));
   const claimed = new Set<string>();
+  const namedOtherAccounts = (row: MatchRow) => data.accounts.filter((account) => account !== row.account && mentionsAccount(`${row.name} ${row.cleanName || ""}`.replace(/\bdana\s+(?:masuk|keluar|darurat)\b/gi, ""), account));
+  const routeConflict = (row: MatchRow, transaction: Transaction) => {
+    if (transaction.kind !== "account_transfer") return false;
+    const named = namedOtherAccounts(row);
+    const partner = ledger.find((item) => item.transferId === transaction.transferId && item.id !== transaction.id);
+    return named.length > 0 && (!partner || !named.includes(partner.account));
+  };
 
+  for (const row of usable) {
+    const conflicts = ledger.filter((transaction) => transaction.account === row.account && transaction.type === row.direction && transaction.amount === row.amount && gap(transaction.date, row.date) <= MATCH_DAYS && routeConflict(row, transaction));
+    if (conflicts.length) verdicts.set(row.id, { kind: "look", reason: "route_conflict", candidates: conflicts.map((item) => item.id) });
+  }
+
+  for (const row of usable) {
+    if (!row.proven || !row.statementAccount || bankOfAccount(row.account) !== "jago" || !/Movement between Pockets|Pocket Money In/i.test(`${row.name} ${row.cleanName || ""}`)) continue;
+    const partners = usable.filter((other) => other.id !== row.id && other.proven && other.account === row.account && other.statementAccount && other.statementAccount !== row.statementAccount && other.amount === row.amount && other.date === row.date && other.direction !== row.direction && /Movement between Pockets|Pocket Money In/i.test(`${other.name} ${other.cleanName || ""}`));
+    if (partners.length === 1 && !verdicts.has(row.id) && !verdicts.has(partners[0].id)) {
+      const rivals = usable.filter((other) => other.proven && other.account === row.account && other.statementAccount === row.statementAccount && other.amount === row.amount && other.date === row.date && other.direction === row.direction && /Movement between Pockets|Pocket Money In/i.test(`${other.name} ${other.cleanName || ""}`));
+      if (rivals.length === 1) { verdicts.set(row.id, { kind: "internal" }); verdicts.set(partners[0].id, { kind: "internal" }); }
+    }
+  }
   // 1. Choices the user already made win.
   for (const row of usable) {
-    if (row.matchId && ledger.some((transaction) => transaction.id === row.matchId)) {
+    if (!verdicts.has(row.id) && row.matchId && ledger.some((transaction) => transaction.id === row.matchId)) {
       const transaction = ledger.find((item) => item.id === row.matchId)!;
       claimed.add(transaction.id);
       verdicts.set(row.id, { kind: "linked", transactionId: transaction.id, auto: false, alias: aliasFor(row, transaction) });
@@ -131,6 +152,7 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   const ins = transferable.filter((row) => row.direction === "income");
   const pairs: { out: MatchRow; in: MatchRow; score: number; proof: number }[] = [];
   for (const out of outs) for (const into of ins) {
+    if (namedOtherAccounts(out).some((account) => account !== into.account) || namedOtherAccounts(into).some((account) => account !== out.account)) continue;
     if (out.account === into.account || out.amount !== into.amount || gap(out.date, into.date) > MATCH_DAYS) continue;
     const proof = evidence(out, into);
     pairs.push({ out, in: into, score: proof - gap(out.date, into.date), proof });
@@ -139,7 +161,7 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   for (const row of transferable) {
     if (!row.pairRowId || verdicts.has(row.id)) continue;
     const partner = transferable.find((other) => other.id === row.pairRowId && !verdicts.has(other.id));
-    if (!partner) continue;
+    if (!partner || partner.account === row.account || partner.amount !== row.amount || partner.direction === row.direction || gap(partner.date, row.date) > MATCH_DAYS) continue;
     verdicts.set(row.id, { kind: "transfer", counterparty: partner.account, partnerRowId: partner.id });
     verdicts.set(partner.id, { kind: "transfer", counterparty: row.account, partnerRowId: row.id });
   }
@@ -159,13 +181,12 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   }
 
   // 4. One side only: the row names another of the user's accounts whose statement isn't in this check.
-  const uploaded = new Set(usable.map((row) => row.account));
   for (const row of transferable) {
     if (verdicts.has(row.id) || row.activity === "card_payment") continue;
     const text = `${row.name} ${row.cleanName || ""}`;
     // A bank's name alone is just the other party's bank, so it takes more: a top-up, the account's own name or yours.
     const ownerPrinted = owner.some((part) => text.toLocaleLowerCase("id-ID").includes(part));
-    const others = data.accounts.filter((account) => account !== row.account && !uploaded.has(account) && bankOfAccount(account) && mentionsAccount(text, account) && (row.activity === "topup" || ownerPrinted || (namesAccount(text, account) && distinctive(account))));
+    const others = data.accounts.filter((account) => account !== row.account && !options.coverage?.some((period) => period.complete && period.account === account && row.date >= period.from && row.date <= period.to) && bankOfAccount(account) && mentionsAccount(text, account) && (row.activity === "topup" || ownerPrinted || (namesAccount(text, account) && distinctive(account))));
     if (others.length === 1) verdicts.set(row.id, { kind: "transfer", counterparty: others[0] });
   }
 
@@ -189,15 +210,18 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
 
   // Only in Saku: entries on a checked account, inside the dates the statements cover, with no statement row.
   const ranges = new Map<string, { from: string; to: string }>();
-  for (const row of rows) {
+  for (const row of options.coverage ? [] : rows) {
     if (!row.account || !validDate(row.date)) continue;
     const range = ranges.get(row.account);
     ranges.set(row.account, { from: !range || row.date < range.from ? row.date : range.from, to: !range || row.date > range.to ? row.date : range.to });
   }
+  for (const period of options.coverage || []) {
+    if (period.complete) ranges.set(period.account, { from: period.from, to: period.to });
+  }
   const linked = new Set([...verdicts.values()].flatMap((verdict) => verdict.kind === "linked" ? [verdict.transactionId] : verdict.kind === "look" ? verdict.candidates : []));
   const onlyInSaku = ledger.filter((transaction) => {
     const range = ranges.get(transaction.account);
-    return !!range && transaction.date >= range.from && transaction.date <= range.to && !linked.has(transaction.id) && transaction.kind !== "card_purchase";
+    return (options.coverage ? options.coverage.some((period) => period.complete && period.account === transaction.account && transaction.date >= period.from && transaction.date <= period.to) : !!range && transaction.date >= range.from && transaction.date <= range.to) && !linked.has(transaction.id) && transaction.kind !== "card_purchase";
   }).sort((a, b) => a.date.localeCompare(b.date));
   return { verdicts, onlyInSaku };
 }
@@ -211,8 +235,9 @@ function aliasFor(row: Pick<MatchRow, "name" | "cleanName">, transaction: Pick<T
 // their other account, and rows that still need the user wait as "later".
 export function applyVerdict(row: ImportRow, verdict: Verdict | undefined): ImportRow {
   if (!verdict) return row;
+  if (verdict.kind === "internal") return { ...row, decision: "skip", alreadyInSaku: false };
   if (verdict.kind === "linked") return { ...row, decision: "skip", alreadyInSaku: true };
-  if (verdict.kind === "transfer") return { ...row, activity: "transfer", counterparty: verdict.counterparty, decision: row.userDecided ? row.decision : "ready", alreadyInSaku: false };
+  if (verdict.kind === "transfer") return { ...row, activity: "transfer", counterparty: verdict.counterparty, decision: row.userDecided ? row.decision : verdict.partnerRowId ? "ready" : "later", alreadyInSaku: false };
   if (verdict.kind === "look") return { ...row, decision: row.userDecided && verdict.reason === "check" ? row.decision : "later", alreadyInSaku: false };
   // A clean row the statement proves is ready to add: the statement is the truth for amounts, so large amounts and
   // money in don't need a second look once no match, transfer or misread is in question.

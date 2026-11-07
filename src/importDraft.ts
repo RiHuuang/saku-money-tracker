@@ -1,3 +1,4 @@
+export type StatementSummary = { from: string; to: string; incoming: number; outgoing: number; categories?: { topup?: number; sendMoney?: number; merchant?: number } };
 export type ImportRow = {
   id: string;
   sourceId: string;
@@ -55,6 +56,8 @@ export type ImportSource = {
   // balance (in sen) the last proven page ended on, so the next page can continue the proof.
   bank?: string;
   totals?: { opening?: number; closing?: number };
+  summary?: StatementSummary;
+  coverage?: { from: string; to: string; confirmed: boolean };
   carry?: number;
   // Pages read without AI, for the neuron budget notes in docs/monthly-check-3.0.md.
   localPages?: number;

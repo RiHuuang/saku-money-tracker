@@ -138,6 +138,7 @@ export function importRowsWaiting(drafts: readonly ImportDraft[], data: Data): n
 }
 
 export function importRowReady(row: ImportRow, account: string, data: Data, currentDay = today()): boolean {
+  if (row.check) return false;
   if (row.currency && row.currency !== "IDR") return false;
   if (row.decision !== "ready" || !validDate(row.date) || row.date > currentDay || !validAmount(row.amount) || !row.name.trim() || row.direction === "unknown") return false;
   if (["pending", "failed", "reward", "unknown"].includes(row.activity)) return false;
@@ -156,7 +157,7 @@ export function importRowReady(row: ImportRow, account: string, data: Data, curr
   return row.direction === "income" || !row.pocketId || data.pockets.some((pocket) => pocket.id === row.pocketId && pocket.createdMonth <= row.date.slice(0, 7));
 }
 
-export function importedTransactions(row: ImportRow, account: string, sourceName: string, data: Data, pairedRowId?: string): Transaction[] {
+export function importedTransactions(row: ImportRow, account: string, sourceName: string, data: Data, pairedRowId?: string, partnerDate?: string): Transaction[] {
   if (!importRowReady(row, account, data)) throw new Error("Review this row before saving");
   const name = importRowName(row);
   const note = `${row.note ? `${row.note} · ` : ""}${name !== row.name.trim() ? `${row.name.trim()} · ` : ""}Imported from ${/\.pdf$/i.test(sourceName) ? "PDF statement" : "screenshot"}, page ${row.page}`;
@@ -165,8 +166,8 @@ export function importedTransactions(row: ImportRow, account: string, sourceName
     const to = row.direction === "expense" ? row.counterparty! : account;
     const oppositeId = pairedRowId && pairedRowId !== row.id ? pairedRowId : `${row.id}:pair`;
     const bothSidesShown = !!pairedRowId && pairedRowId !== row.id;
-    const outgoing: Transaction = { id: row.direction === "expense" ? row.id : oppositeId, transferId: row.id, kind: "account_transfer", name: `Transfer to ${to}`.slice(0, 100), amount: row.amount, type: "expense", date: row.date, pocketId: "", account: from, note, verified: row.direction === "expense" || bothSidesShown };
-    const incoming: Transaction = { id: row.direction === "income" ? row.id : oppositeId, transferId: row.id, kind: "account_transfer", name: `Transfer from ${from}`.slice(0, 100), amount: row.amount, type: "income", date: row.date, pocketId: "", account: to, note, verified: row.direction === "income" || bothSidesShown };
+    const outgoing: Transaction = { id: row.direction === "expense" ? row.id : oppositeId, transferId: row.id, kind: "account_transfer", name: `Transfer to ${to}`.slice(0, 100), amount: row.amount, type: "expense", date: row.direction === "expense" ? row.date : partnerDate || row.date, pocketId: "", account: from, note, verified: row.direction === "expense" || bothSidesShown };
+    const incoming: Transaction = { id: row.direction === "income" ? row.id : oppositeId, transferId: row.id, kind: "account_transfer", name: `Transfer from ${from}`.slice(0, 100), amount: row.amount, type: "income", date: row.direction === "income" ? row.date : partnerDate || row.date, pocketId: "", account: to, note, verified: row.direction === "income" || bothSidesShown };
     return [outgoing, incoming];
   }
   const card = data.creditCards.find((item) => item.name === account);
