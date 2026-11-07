@@ -121,6 +121,8 @@ try {
   const summaryResponse = await request(summaryInput);
   assert.equal(summaryResponse.status, 200, await summaryResponse.clone().text());
   assert.deepEqual(await summaryResponse.json(), { bank: "dana", rows: [], summary }, "auto-detected DANA summaries survive the HTTP route without generated rows");
+  const transactionMode = await request(JSON.stringify({ ...JSON.parse(summaryInput), readingMode: "transactions" }));
+  assert.equal(transactionMode.status, 502, "summary responses cannot silently replace transaction details");
   let summaryCalls = 0;
   env.AI.run = async () => ({ response: JSON.stringify({ bank: "dana", summary: { ...summary, outgoing: summaryCalls++ ? 100001 : 100000 }, rows: [] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } });
   const disagreement = await request(summaryInput);

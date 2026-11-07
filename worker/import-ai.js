@@ -14,12 +14,13 @@ export const aiImportAvailable = (env) => env.AI_IMPORT_ENABLED === "true" && Bo
 export function validateImportInput(input) {
   if (!input || typeof input !== "object" || !["text", "image"].includes(input.kind)) throw new Error("Choose a statement page or screenshot");
   if (typeof input.month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month)) throw new Error("Choose a valid month");
+  if (input.readingMode !== undefined && !["transactions", "summary"].includes(input.readingMode)) throw new Error("Choose transaction details or summary totals");
   if (input.kind === "text") {
     if (typeof input.text !== "string" || !input.text.trim() || input.text.length > 24000) throw new Error("Statement page is too large");
-    return { kind: "text", month: input.month, text: input.text, ...importSource(input.source) };
+    return { kind: "text", month: input.month, text: input.text, ...importSource(input.source), ...(input.readingMode ? { readingMode: input.readingMode } : {}) };
   }
   if (typeof input.image !== "string" || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(input.image) || input.image.length > 3_000_000) throw new Error("Choose a JPG, PNG, or WebP image under 2 MB");
-  return { kind: "image", month: input.month, image: input.image, ...importSource(input.source) };
+  return { kind: "image", month: input.month, image: input.image, ...importSource(input.source), ...(input.readingMode ? { readingMode: input.readingMode } : {}) };
 }
 
 // "bca" keeps the 2.4.0 meaning (BCA only). A bank id is the app's guess from the chosen account; "auto" asks the
@@ -37,7 +38,8 @@ export function importMessages(input) {
     { type: "text", text: "Extract every visible transaction from this screenshot or scanned statement page. Scan top to bottom and include the dated rows below any PEND entry; do not stop at the pending row." },
     { type: "image_url", image_url: { url: input.image, detail: "high" } },
   ];
-  return [{ role: "system", content: rules }, { role: "user", content }];
+  const modeRules = input.readingMode === "transactions" ? " The user selected TRANSACTION DETAILS. Extract dated individual monetary rows only. A monthly heading and its aggregate outgoing figure above an activity list are not a Statement Summary. Never return a summary field in this mode. A totals-only document has rows:[]; do not invent individual transactions from its totals." : input.readingMode === "summary" ? " The user selected SUMMARY TOTALS ONLY. Return summary totals and rows:[], never individual transactions." : "";
+  return [{ role: "system", content: rules + modeRules }, { role: "user", content }];
 }
 
 // A known bank adds its own conventions; an unknown one asks the model to name the bank so the Worker can refuse

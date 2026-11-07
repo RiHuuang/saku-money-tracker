@@ -664,7 +664,12 @@ async function route(request, env) {
       await settleImport(env.DB, day, auth.uid, answer);
       return answer;
     };
-    const unreadable = (error) => { if (error?.status) throw error; throw fault(502, "Could not extract this page. It remains in your local draft for retry."); };
+    const unreadable = (error) => {
+      if (error?.status) throw error;
+      const known = ["A summary cannot replace transaction details","AI returned an unreadable response", "AI response was cut off; split this page and retry", "AI returned incomplete JSON; retry this page", "AI returned an invalid transaction list", "AI returned an invalid transaction", "Check the printed summary dates and totals", "Check summary categories", "Check summary category amount", "Summary categories exceed printed movement totals", "Summary totals disagreed between reads; retry this source"];
+      console.error("Import reading failed", { reason: known.includes(error?.message) ? error.message : "reader_or_model_failure" });
+      throw fault(502, "Could not extract this page. It remains in your local draft for retry.");
+    };
     // BCA screenshots are copied field by field and parsed here (2.4.0).
     const readBcaImage = async (bank) => {
       let first;
@@ -681,9 +686,11 @@ async function route(request, env) {
         const firstAnswer = first ? undefined : await runPass(importMessages(read));
         const firstRows = first?.rows || parseImportAnswer(firstAnswer, input.kind, input.month, sourceText);
         const firstSummary = first ? first.summary : parseImportSummary(firstAnswer);
+        if (input.readingMode === "transactions" && firstSummary) throw new Error("A summary cannot replace transaction details");
         const verifiedAnswer = await runPass(importVerificationMessages(read, firstRows));
         const verifiedRows = parseImportAnswer(verifiedAnswer, input.kind, input.month, sourceText);
         const summary = parseImportSummary(verifiedAnswer);
+        if (input.readingMode === "transactions" && summary) throw new Error("A summary cannot replace transaction details");
         if (JSON.stringify(firstSummary) !== JSON.stringify(summary)) throw new Error("Summary totals disagreed between reads; retry this source");
         return reply({ rows: summary ? [] : mergeImportPasses(firstRows, verifiedRows), ...(bank ? { bank } : {}), ...(summary ? { summary } : {}) }, 200, cors);
       } catch (error) { unreadable(error); }

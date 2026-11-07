@@ -242,7 +242,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           if (local) read = { rows: local.rows, bank };
           else {
             if (!consentGiven) { setConsentAsk(true); throw new Error(t("cloudPageConsentNeeded")); }
-            read = await extractImportPage(userId, { month: reviewMonth, source: bank || bankOfAccount(account) || "auto", ...page.content });
+            read = await extractImportPage(userId, { readingMode: "transactions", month: reviewMonth, source: bank || bankOfAccount(account) || "auto", ...page.content });
           }
           // A pause requested during inference still keeps the completed page.
           if (draftRef.current?.id !== draftId || draftRef.current.owner !== owner) break;
@@ -628,13 +628,13 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       {draft && deleteConfirmationId === draft.id && <div className="catchup-delete-confirm" role="group" aria-label={t("confirmDraftRemoval")}><p>{t("removeDraftQuestion")}</p><div><button className="button secondary" type="button" onClick={() => setDeleteConfirmationId("")}>{t("keepDraft")}</button><button className="button danger" type="button" disabled={processing || saving} onClick={() => void deleteDraft()}>{t("removeThisDraft")}</button></div></div>}
       {!userId && <p className="catchup-message">{t("signInExtract")}</p>}{info && <p className="catchup-message" role="status">{info}</p>}
     </section>
-    {statementMode && draft?.sources.map((source) => <section className="catchup-panel" key={`coverage-${source.id}`}><h3>{source.name}</h3><p>{t("statementCoverageHelp")}</p>
+    {statementMode && draft?.sources.map((source) => <section className="catchup-panel statement-evidence-form" key={`coverage-${source.id}`}><h3>{source.name}</h3><p>{t("statementCoverageHelp")}</p>
       <label>{t("statementPeriodFrom")}<input type="date" value={source.coverage?.from || ""} disabled={saving || processing} onChange={(event) => void save({ ...draft, sources: draft.sources.map((item) => item.id === source.id ? { ...item, coverage: { from: event.target.value, to: item.coverage?.to || "", confirmed: false } } : item) })} /></label>
       <label>{t("statementPeriodTo")}<input type="date" value={source.coverage?.to || ""} disabled={saving || processing} onChange={(event) => void save({ ...draft, sources: draft.sources.map((item) => item.id === source.id ? { ...item, coverage: { from: item.coverage?.from || "", to: event.target.value, confirmed: false } } : item) })} /></label>
       <label><input type="checkbox" checked={source.coverage?.confirmed || false} disabled={saving || processing || !!source.error || source.processedPages !== source.pageCount || !source.pageCount || source.mixedAccounts || !!source.summary || !validDate(source.coverage?.from || "") || !validDate(source.coverage?.to || "") || (source.coverage?.from || "") > (source.coverage?.to || "")} onChange={(event) => void save({ ...draft, sources: draft.sources.map((item) => item.id === source.id ? { ...item, coverage: { ...item.coverage!, confirmed: event.target.checked } } : item) })} />{t("statementConfirmCoverage")}</label>
     </section>)}
     {statementMode && (data.reconciliationBatches || []).filter((batch) => !batch.undone).map((batch) => <section className="catchup-panel" key={batch.id}><p>{batch.createdAt}</p><button className="button secondary" disabled={busy || saving || processing} onClick={() => void undoBatch(batch.id)}>{t("undoEntries")}</button></section>)}
-    {statementMode && <section className="catchup-panel"><h3>{t("statementBalanceReview")}</h3><p>{t("statementBalanceReviewHelp")}</p>
+    {statementMode && <section className="catchup-panel statement-evidence-form"><h3>{t("statementBalanceReview")}</h3><p>{t("statementBalanceReviewHelp")}</p>
       <ChoiceField label={t("sakuAccount")} value={balanceReview.account} options={data.accounts.map((account) => ({ value: account, label: account }))} onValueChange={(account) => setBalanceReview((value) => ({ ...value, account }))} />
       <label>{t("date")}<input type="date" max={today()} value={balanceReview.date} onChange={(event) => setBalanceReview((value) => ({ ...value, date: event.target.value }))} /></label>
       <label>{t("statementClosingBalance")}<input type="number" min="0" step="1" value={balanceReview.target} onChange={(event) => setBalanceReview((value) => ({ ...value, target: event.target.value }))} /></label>

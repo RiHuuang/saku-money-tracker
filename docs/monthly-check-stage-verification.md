@@ -33,3 +33,11 @@ Implementation and verification are on the continuation worktree. Production was
 Private statements, session artifacts and ledger diffs remain ignored and must not be committed. Stage revision advances for test writes and durable Undo history even when financial transactions are restored.
 
 Live browser reached the authenticated owner workspace after owner-authorized agreement acceptance. DANA files were selected into Monthly Check. Cloudflare AI consent click was rejected by automatic approval review pending explicit external-processing authorization. No browser Save was performed. API-level extraction results must not be presented as browser end-to-end completion.
+
+## Owner correction and browser follow-up
+
+The owner explicitly authorized Cloudflare AI processing, then instructed that the DANA activity screenshot is the transaction input and the DANA statement is a separate totals reference. The summary was removed from the browser draft.
+
+Browser testing exposed a real misclassification: the activity list's monthly aggregate heading could produce a summary response. Added validated `readingMode` request metadata, a transaction-only prompt and a server guard rejecting summary responses in transaction mode. Existing clients retain their previous optional-mode behavior. The regression HTTP test rejects summary substitution.
+
+On Stage version 308b10f9-2b0d-4831-ace3-69840d23e846, the supplied activity screenshot alone produced ten monetary observations: two already present, eight requiring review. No summary source was included. No uncertain financial movements were saved. Private screenshots are `output/real-account-stage-test/dana-screenshot-only-light.png` and `dana-screenshot-only-dark.png`. Browser save/reload/Undo of new financial movements remains unproven; the earlier API persistence evidence is separate.

@@ -4439,3 +4439,10 @@ main.onboarding { max-width: none; margin: 0; padding: 0; }
   .onboarding-hero, .onboarding-step, .onboarding-pop, .allocation-row, .onboarding-summary-list li, .plan-hint, .allocation-bar.is-summary i, .onboarding-chips button.is-selected { animation: none; }
   .allocation-pulse { animation: none; opacity: 1; }
 }
+
+.statement-evidence-form { display: grid; gap: 14px; min-width: 0; }
+.statement-evidence-form h3, .statement-evidence-form p { margin: 0; overflow-wrap: anywhere; }
+.statement-evidence-form > label { display: grid; gap: 7px; min-width: 0; color: var(--ink); font-size: 13px; line-height: 1.5; }
+.statement-evidence-form > label:has(input[type="checkbox"]) { grid-template-columns: 20px minmax(0, 1fr); align-items: start; }
+.statement-evidence-form input:not([type="checkbox"]) { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+.statement-evidence-form input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0; }
