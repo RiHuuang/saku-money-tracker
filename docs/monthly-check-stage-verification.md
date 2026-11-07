@@ -51,3 +51,11 @@ The supplied DANA activity screenshot remains the transaction source. Totals-onl
 Stage website update: Worker version `51675d53-b0db-4adc-bc0c-65cf67dd5e23`; `/health`, home and the entry asset return HTTP 200. Served `/assets/index-CMMh2WeN.js` matches the build byte-for-byte (SHA-256 `f3a69cf32cfbe13d7b10e14b24ddb6168381a69c5dfdd7cff2dac66ba5eac46b`).
 
 Isolated Stage Android APK: `output/saku-stage-monthly-check-2026-11-07.apk`, package `id.saku.money.stage`, version 2.4.1/build 16, 57,823,718 bytes. SHA-256 `44ffa4467b7e8f5792d1df4812f118206c03ba0e88c5c98853edb5e26dca8acc`. APK v2 signature verification passed. Both web and native Stage endpoints were confirmed, and the APK entry bundle matches the Stage website build. `assembleDirectDebug` and `testDirectDebugUnitTest` passed. No connected device was available, so installation, sign-in and device-level Monthly Check remain unverified. Production build assets were restored locally after saving the isolated APK; no production deployment or ledger write was performed.
+
+## Actual on-device supplied-corpus run
+
+Native Android selection of eight PDFs plus the DANA activity screenshot completed. All36PDF pages were read locally and the image used the authorized Stage reader. The completed draft retained329observations:319PDF observations exactly matching independent dates/amounts/directions, and10DANA observations with exact dates/amounts/directions. One identical SeaBank row shared by the two translations was intentionally suppressed.
+
+This run found a client preparation bug: an unmapped incoming top-up became purchase. Initial DANA activity accuracy was6/10. The client now preserves top-ups for review;159 app tests, Worker checks, Android build and Android unit tests pass. The fix was deployed to Stage version `82df4f9c-8924-4d9e-87a3-625003546ea4` and the fixed isolated APK was installed and byte-verified. The on-phone DANA re-read after this fix encountered a phone DNS error and screen lock, so corrected on-device activity accuracy remains pending.
+
+All27local Stage transaction rows were checksum-identical before and after testing. No Save/Add was performed. This phone's three-account workspace differs from the eight-account real-account snapshot used in earlier reporting. Private detailed evidence is in `output/phone-corpus-test/RESULTS.md`.

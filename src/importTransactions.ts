@@ -197,7 +197,7 @@ export function prepareImportRow(row: ImportRow, data: Data, account: string, op
   if (next.activity === "topup") {
     const pattern = walletPatterns[(next.paymentMethod || "").toLocaleLowerCase("id-ID").replace(/\s/g, "")];
     const wallets = pattern ? data.accounts.filter((name) => name !== account && pattern.test(name)) : [];
-    next = wallets.length === 1 ? { ...next, counterparty: wallets[0] } : { ...next, activity: "purchase" };
+    next = wallets.length === 1 ? { ...next, counterparty: wallets[0] } : next.direction === "income" || options.checkLedger === false ? next : { ...next, activity: "purchase" };
   }
   if (next.activity === "card_payment") {
     const bank = bankOfAccount(account) || "bca";
