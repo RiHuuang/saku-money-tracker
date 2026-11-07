@@ -41,3 +41,13 @@ The owner explicitly authorized Cloudflare AI processing, then instructed that t
 Browser testing exposed a real misclassification: the activity list's monthly aggregate heading could produce a summary response. Added validated `readingMode` request metadata, a transaction-only prompt and a server guard rejecting summary responses in transaction mode. Existing clients retain their previous optional-mode behavior. The regression HTTP test rejects summary substitution.
 
 On Stage version 308b10f9-2b0d-4831-ace3-69840d23e846, the supplied activity screenshot alone produced ten monetary observations: two already present, eight requiring review. No summary source was included. No uncertain financial movements were saved. Private screenshots are `output/real-account-stage-test/dana-screenshot-only-light.png` and `dana-screenshot-only-dark.png`. Browser save/reload/Undo of new financial movements remains unproven; the earlier API persistence evidence is separate.
+
+## Application and website update — 7 November
+
+Incoming printed Top Up / Isi saldo labels are normalized to topup even when the model returns a generic purchase classification. A contradictory outgoing direction remains flagged. Monthly Check image-source guesses now require explicit account confirmation before matching/saving; a filename account hint may guide reading but cannot authorize a ledger account. This guards the observed DANA-versus-GoPay bank-identification error rather than claiming that generic image bank recognition is always accurate.
+
+The supplied DANA activity screenshot remains the transaction source. Totals-only DANA statements remain separate reference evidence. Production deployment and production APK replacement remain outside this Stage update.
+
+Stage website update: Worker version `51675d53-b0db-4adc-bc0c-65cf67dd5e23`; `/health`, home and the entry asset return HTTP 200. Served `/assets/index-CMMh2WeN.js` matches the build byte-for-byte (SHA-256 `f3a69cf32cfbe13d7b10e14b24ddb6168381a69c5dfdd7cff2dac66ba5eac46b`).
+
+Isolated Stage Android APK: `output/saku-stage-monthly-check-2026-11-07.apk`, package `id.saku.money.stage`, version 2.4.1/build 16, 57,823,718 bytes. SHA-256 `44ffa4467b7e8f5792d1df4812f118206c03ba0e88c5c98853edb5e26dca8acc`. APK v2 signature verification passed. Both web and native Stage endpoints were confirmed, and the APK entry bundle matches the Stage website build. `assembleDirectDebug` and `testDirectDebugUnitTest` passed. No connected device was available, so installation, sign-in and device-level Monthly Check remain unverified. Production build assets were restored locally after saving the isolated APK; no production deployment or ledger write was performed.

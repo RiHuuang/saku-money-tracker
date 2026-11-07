@@ -154,6 +154,11 @@ export function parseImportAnswer(answer, kind = "text", reviewMonth = "", sourc
     const amount = wholeRupiah(row.amount);
     let direction = ["expense", "income"].includes(row.direction) ? row.direction : "unknown";
     let activity = activities.has(row.activity) ? row.activity : "unknown";
+    // A printed top-up label is stronger than a model's generic purchase class.
+    // Contradictory direction stays flagged rather than silently changing money flow.
+    const topupLabel = /^(?:top[ -]?up|isi saldo)(?:\s|$)/i.test(name);
+    const check = topupLabel && direction !== "income" ? "direction" : undefined;
+    if (topupLabel && direction === "income" && !["failed", "pending", "reward", "pay_later"].includes(activity)) activity = "topup";
     if (activity === "card_payment" && /\bqris\b/i.test(name)) activity = "purchase";
     if (["purchase", "unknown"].includes(activity) && /\b(?:expired|kedaluwarsa|kadaluarsa|dibatalkan|cancelled|canceled|gagal)\b/i.test(name)) activity = "failed";
     if (["purchase", "unknown"].includes(activity) && /pay[\s-]?later/i.test(`${name} ${paymentMethod}`)) activity = "pay_later";
@@ -166,7 +171,7 @@ export function parseImportAnswer(answer, kind = "text", reviewMonth = "", sourc
       activity = "pending";
       date = "";
     }
-    return { date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "", dateEvidence, name, cleanName, paymentMethod, amount, direction, activity };
+    return { date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "", dateEvidence, name, cleanName, paymentMethod, amount, direction, activity, ...(check ? { check } : {}) };
   });
 }
 

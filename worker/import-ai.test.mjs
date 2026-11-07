@@ -130,3 +130,7 @@ assert.throws(() => parseImportSummary(summaryAnswer({ ...summary, categories: {
 assert.equal(parseImportSummary(summaryAnswer({ ...summary, closing: 20000 })).closing, undefined, "net movement cannot invent a closing balance");
 assert.deepEqual(parseImportAnswer({ response: JSON.stringify({ rows: [{ name: "Connect to GOOGLE", amount: 0 }, { name: "Synthetic merchant", dateEvidence: "30 Oct 2026", amount: 20000, direction: "expense", activity: "purchase" }] }) }, "image").map(row => row.name), ["Synthetic merchant"]);
 console.log("Import summaries: bounded period totals, zero generated rows, and nonmonetary DANA events passed");
+
+const topupAnswer = (direction) => ({ response: JSON.stringify({ rows: [{ dateEvidence:"28 Oct 2026", name:"Top Up", amount:6000000, direction, activity:"purchase" }] }) });
+assert.equal(parseImportAnswer(topupAnswer("income"),"image","2026-10")[0].activity,"topup");
+assert.equal(parseImportAnswer(topupAnswer("expense"),"image","2026-10")[0].check,"direction");
