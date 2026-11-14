@@ -1,6 +1,6 @@
 # Monthly Check readiness
 
-Updated 14 November 2026. The final signed Android build and phone verification pass. Production publication still requires the merge, ordered release publication and post-deployment checks below.
+Published 14 November 2026. [PR #74](https://github.com/RiHuuang/saku-money-tracker/pull/74) merged into main at `57ad5a7638125b91cb1a01f322f8d07a9b320d88`. Production Worker `33c8c6f6-13a5-4c4b-9af4-726243b5a607` serves Saku 2.5.0 / build 17. The signed Android release and final phone checks pass.
 
 ## Review experience
 
@@ -37,8 +37,11 @@ The list shows the date, name, amount and a short next action. Detailed question
 
 These are scoped results, not a claim that every possible financial route is known. Beta bank labels and explicit review boundaries remain. Supplied DANA evidence establishes movement totals, not the wallet's closing balance. Private input files, screenshots, transaction IDs, revisions, checksums and before/after balance previews remain in ignored local verification artifacts.
 
-## Remaining release gates
+## Completed publication checks
 
-- The signed build 17 candidate passes release lint, unit tests, signature verification and packaged-file comparison. Rebuild it if release code changes.
-- Complete pull-request checks, merge to main, deploy production, and verify public web/download artifacts against the built files.
-- Publish the build 17 APK and manifest with minimum build 17 before deploying the production minimum-build gate. Earlier Android clients do not retain the new reconciliation fields. Their local ledger remains accessible, but they must update before cloud sync resumes. Stage retains its lower test-build gate.
+- Final PR CI passed and the change is merged into main. The production build came from that merged source.
+- Signed build 17 passed release lint, unit tests, signature verification and comparison of all 58 packaged web files with the build. Both public APK routes return the exact signed file: SHA-256 `cdaef7caaa519d5e5a4edd4d0b34e7dc5e3a1a172a7e04649b020931bc4828a2`, 43,259,515 bytes.
+- The APK and minimum-build-17 manifest were published before the production build gate. Live probes return update-required for build 16; build 17 reaches authentication. Earlier Android clients must update before cloud sync resumes; their offline ledger remains accessible. No Play upload was performed.
+- Production health and home return HTTP 200. All 57 public web files match the build; the asset-header configuration is checked through its applied security headers. The public landing page displays version 2.5.0 and the matching release hash.
+- A fresh read-only production baseline contained 208 transactions in eight accounts at revision 132. The new parser's dry-run preserved every transaction, account, pocket, card and merchant rule, including October 31, November 7 and November 14 financial previews. The full production snapshot remains byte-identical after deployment. The earlier owner Stage test remains unchanged at revision 26 / 183 transactions.
+- The actual phone's isolated Stage installation is build 17 and matches its tested APK checksum. All three ledger tables and 27 transactions remain unchanged. This is Stage installation proof; the production phone app was not upgraded by this verification.
