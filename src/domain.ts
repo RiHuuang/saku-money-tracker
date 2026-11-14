@@ -201,6 +201,9 @@ export function accountBalance(data: Data, account: string) {
   return data.transactions.filter((t) => t.account === account && t.kind !== "card_purchase")
     .reduce((sum, t) => sum + (t.type === "income" ? t.amount : -t.amount), 0);
 }
+export function accountIsReferenced(data: Data, account: string) {
+  return data.transactions.some((item) => item.account === account) || data.recurring.some((item) => item.account === account) || data.favorites.some((item) => item.account === account) || !!data.statementBalanceObservations?.some((item) => item.account === account) || !!data.statementAccountMappings?.some((item) => item.account === account);
+}
 // Renames an account everywhere it is referenced, or returns null when the new name is empty or already used.
 export function renameAccount(data: Data, from: string, to: string): Data | null {
   const name = to.trim().slice(0, 50);
@@ -208,7 +211,7 @@ export function renameAccount(data: Data, from: string, to: string): Data | null
   if (name === from) return data;
   if ([...data.accounts, ...data.creditCards.map((card) => card.name)].some((item) => item !== from && item.toLocaleLowerCase("id-ID") === name.toLocaleLowerCase("id-ID"))) return null;
   const swap = <T extends { account: string }>(item: T) => item.account === from ? { ...item, account: name } : item;
-  return { ...data, accounts: data.accounts.map((item) => item === from ? name : item), transactions: data.transactions.map(swap), recurring: data.recurring.map(swap), favorites: data.favorites.map(swap) };
+  return { ...data, accounts: data.accounts.map((item) => item === from ? name : item), transactions: data.transactions.map(swap), recurring: data.recurring.map(swap), favorites: data.favorites.map(swap), ...(data.statementBalanceObservations ? { statementBalanceObservations: data.statementBalanceObservations.map(swap) } : {}), ...(data.statementAccountMappings ? { statementAccountMappings: data.statementAccountMappings.map(swap) } : {}) };
 }
 export function balanceAdjustment(data: Data, account: string, targetBalance: number, date: string, reason: string, existing?: Transaction): Transaction {
   const cleanReason = reason.trim();

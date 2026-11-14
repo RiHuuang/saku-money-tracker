@@ -69,11 +69,12 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
       creditCards: cardDraft?.id ? data.creditCards.map((c) => c.id === next.id ? next : c) : [...data.creditCards, next],
       transactions: previousName && previousName !== next.name ? data.transactions.map((t) => t.cardId === next.id && t.kind === "card_purchase" ? { ...t, account: next.name } : t) : data.transactions,
       recurring: previousName && previousName !== next.name ? data.recurring.map((r) => r.cardId === next.id ? { ...r, account: next.name } : r) : data.recurring,
+      ...(data.statementAccountMappings && previousName && previousName !== next.name ? { statementAccountMappings: data.statementAccountMappings.map((mapping) => mapping.account === previousName ? { ...mapping, account: next.name } : mapping) } : {}),
       favorites: previousName && previousName !== next.name ? data.favorites.map((f) => f.cardId === next.id ? { ...f, account: next.name } : f) : data.favorites,
     }, cardDraft?.id ? translate("cardUpdated") : translate("cardAdded"))) setCardDraft(null);
   }
   async function deleteCard(card: CreditCard) {
-    if (data.transactions.some((t) => t.cardId === card.id) || data.recurring.some((r) => r.cardId === card.id) || data.favorites.some((f) => f.cardId === card.id)) {
+    if (data.transactions.some((t) => t.cardId === card.id) || data.recurring.some((r) => r.cardId === card.id) || data.favorites.some((f) => f.cardId === card.id) || data.statementAccountMappings?.some((mapping) => mapping.account === card.name)) {
       notify(translate("removeCardTransactionsBillsAnd")); return;
     }
     if (await commit({ ...data, creditCards: data.creditCards.filter((c) => c.id !== card.id) }, translate("cardRemoved"))) setDeleteId("");

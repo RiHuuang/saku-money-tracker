@@ -27,3 +27,13 @@ export function statementBalanceAdjustment(data: Data, target: VerifiedAccountBa
   if (!preview.canApply) throw new Error("Review the effect on current and later verified balances before adjusting this statement.");
   return balanceAdjustment(atDate(data, target.date), target.account, target.balance, target.date, reason);
 }
+
+// A review must not spoil a balance that already agrees with retained bank evidence.
+export function assertStatementBalancesPreserved(before: Data, after: Data) {
+  for (const observation of before.statementBalanceObservations || []) {
+    if (!after.statementBalanceObservations?.some((item) => item.id === observation.id && item.balance === observation.balance && item.account === observation.account && item.date === observation.date)) continue;
+    const was = accountBalance(atDate(before, observation.date), observation.account);
+    const next = accountBalance(atDate(after, observation.date), observation.account);
+    if (was === observation.balance && next !== observation.balance) throw new Error(`This change would break the checked ${observation.account} balance on ${observation.date}. Review the entries first.`);
+  }
+}

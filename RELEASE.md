@@ -1,5 +1,9 @@
 # Saku production release
 
+## 2.5.0 candidate — November 14
+
+Build 17 adds Monthly Check across statements, conservative duplicate and transfer review, dated balance protection, reversible reconciliation history, and income-based pocket planning. Review lists use short next actions; details open on demand. DANA summary files validate totals separately from activity screenshots. See [readiness and measured verification](docs/monthly-check-readiness.md) for the current evidence and remaining publication gates. This entry records the candidate, not a completed production publication.
+
 ## Current direct APK release — October 25
 
 Saku 2.3.4 (versionCode 14) removes the translucent rim around Activity's Pocket and Account choice sheets. The sheet now uses the app's opaque surface and border tokens in light and dark themes, including the mobile bottom-sheet layout. A synthetic Activity preview was checked with both themes, without opening a real ledger.

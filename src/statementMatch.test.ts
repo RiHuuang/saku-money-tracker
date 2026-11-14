@@ -487,3 +487,11 @@ test("Only in Saku respects explicit disjoint periods and zero-transaction state
  assert.deepEqual(analyzeStatement([],{...data,transactions},{coverage}).onlyInSaku.map(t=>t.id),["start","end"]);
  assert.deepEqual(analyzeStatement([],{...data,transactions},{coverage:coverage.map(p=>({...p,complete:false}))}).onlyInSaku,[]);
 });
+
+test("generic transfer labels cannot silently pair unrelated incoming and outgoing money",()=>{
+ const rows=[row({id:"out",name:"Transfer to Alice",activity:"transfer"}),row({id:"in",account:"Jago",direction:"income",name:"Transfer from Bob",activity:"transfer"})];
+ const result=analyzeStatement(rows,{...data,transactions:[]},{coverage:[]});
+ assert.equal(result.verdicts.get("out")?.kind,"look");assert.equal(result.verdicts.get("in")?.kind,"look");
+ const confirmed=analyzeStatement([{...rows[0],pairRowId:"in"},rows[1]],{...data,transactions:[]},{coverage:[]});
+ assert.equal(confirmed.verdicts.get("out")?.kind,"transfer");
+});

@@ -9,5 +9,5 @@ export default defineConfig(({ command, mode }) => {
       throw new Error(`${mode === "staging" ? "Staging" : "Production"} build requires VITE_SAKU_API_URL=${required} (received ${apiUrl || "empty"})`);
     }
   }
-  return { plugins: [react()] };
+  return { plugins: [react()], server: { watch: { ignored: ["**/output/**", "**/.tstexmpl/**", "**/android/**/build/**"] } } };
 });

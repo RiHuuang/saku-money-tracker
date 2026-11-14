@@ -41,6 +41,7 @@ import {
   COLORS,
   ICONS,
   accountBalance,
+  accountIsReferenced,
   averageDailySpending,
   balanceAdjustment,
   budgetFor,
@@ -2396,7 +2397,7 @@ function SettingsView({
                 <strong className="account-list-balance">{money(accountBalance(data, a))}</strong>
                 <PencilLine size={16} aria-hidden="true" />
               </button>
-              {!data.transactions.some((t) => t.account === a) &&
+              {!accountIsReferenced(data, a) &&
                 data.accounts.length > 1 && (
                   <IconButton
                     label={t("deleteAccountNamed", { account: a })}

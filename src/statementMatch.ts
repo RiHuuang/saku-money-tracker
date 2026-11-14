@@ -142,7 +142,7 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
   const owner = (options.ownerName ?? data.name).toLocaleLowerCase("id-ID").split(/\s+/).filter((part) => part.length >= 4);
   // Evidence beyond equal value and a close date; without any, two rows are only a coincidence.
   const evidence = (row: MatchRow, other: MatchRow) => {
-    let value = ["transfer", "topup"].includes(row.activity) || ["transfer", "topup"].includes(other.activity) ? 2 : 0;
+    let value = 0; // A transfer label alone does not establish that the other account is ours.
     if (mentionsAccount(`${row.name} ${row.cleanName || ""}`, other.account)) value += 2;
     if (mentionsAccount(`${other.name} ${other.cleanName || ""}`, row.account)) value += 2;
     if (owner.some((part) => `${row.name} ${other.name}`.toLocaleLowerCase("id-ID").includes(part))) value += 2;
@@ -174,9 +174,10 @@ export function analyzeStatement(rows: readonly MatchRow[], data: Pick<Data, "tr
     verdicts.set(pair.out.id, { kind: "transfer", counterparty: pair.in.account, partnerRowId: pair.in.id });
     verdicts.set(pair.in.id, { kind: "transfer", counterparty: pair.out.account, partnerRowId: pair.out.id });
   }
-  for (const row of transferable) {
-    if (verdicts.has(row.id)) continue;
-    const left = options_(row);
+  // Capture both sides before writing review verdicts; marking one side must not
+  // make its unresolved partner appear to be an unrelated new transaction.
+  const unresolvedPairs = transferable.filter((row) => !verdicts.has(row.id)).map((row) => ({ row, left: options_(row) }));
+  for (const { row, left } of unresolvedPairs) {
     if (left.length) verdicts.set(row.id, { kind: "look", reason: "transfer_tie", candidates: [], partnerRowIds: left.map((pair) => pair.out.id === row.id ? pair.in.id : pair.out.id) });
   }
 

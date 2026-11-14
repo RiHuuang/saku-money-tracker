@@ -5,6 +5,7 @@ server/node_modules/
 dist/
 .wrangler/
 .gradle/
+android/.kotlin/
 .gradle-home/
 .gradle-user/
 android/.gradle/

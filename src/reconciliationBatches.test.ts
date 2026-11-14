@@ -57,3 +57,17 @@ test("Undo reverts batch-owned balance anchors and account mappings", () => {
   assert.deepEqual(undone.statementBalanceObservations, []);
   assert.deepEqual(undone.statementAccountMappings, []);
 });
+
+test("monthly saves cannot break a retained already-correct later bank balance",()=>{
+ const before={...emptyData(),accounts:["Cash"],transactions:[{...row("opening"),amount:100000,type:"income" as const,date:"2026-10-01"}],statementBalanceObservations:[{id:"today",account:"Cash",date:"2026-11-07",balance:100000,evidence:"Synthetic bank balance"}]};
+ const lateExpense={...row("late"),date:"2026-10-31"};
+ assert.throws(()=>recordReconciliationBatch(before,{...before,transactions:[...before.transactions,lateExpense]},meta()),/break the checked/);
+ const offset={...row("observed-offset"),type:"income" as const,date:"2026-11-01"};
+ assert.doesNotThrow(()=>recordReconciliationBatch(before,{...before,transactions:[...before.transactions,lateExpense,offset]},meta()));
+});
+test("Undo cannot invalidate independent balance evidence recorded after a batch",()=>{
+ const before={...emptyData(),accounts:["Cash"],transactions:[{...row("opening"),amount:100000,type:"income" as const,date:"2026-10-01"}]};
+ const saved=recordReconciliationBatch(before,{...before,transactions:[...before.transactions,row("added")]},meta());
+ const checked={...saved,statementBalanceObservations:[{id:"later-bank-check",account:"Cash",date:"2026-11-07",balance:90000,evidence:"Synthetic later check"}]};
+ assert.throws(()=>undoReconciliationBatch(checked,"check"),/break the checked/);
+});

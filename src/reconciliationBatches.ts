@@ -1,3 +1,4 @@
+import { assertStatementBalancesPreserved } from "./statementBalances";
 import { validateData, type Data, type ReconciliationBatch, type ReconciliationChange } from "./domain";
 
 const canonical = (value: unknown): string => {
@@ -13,6 +14,7 @@ const diff = <T,>(before: T[], after: T[], key: (item: T) => string): Reconcilia
 export function recordReconciliationBatch(before: Data, after: Data, meta: Pick<ReconciliationBatch, "id" | "createdAt" | "evidence">): Data {
   if (before.reconciliationBatches?.some(batch => batch.id === meta.id)) throw new Error("This monthly check was already saved");
   if ((before.reconciliationBatches?.length || 0) >= 100) throw new Error("Reconciliation history is full; export a backup before continuing");
+  assertStatementBalancesPreserved(before, after);
   const batch: ReconciliationBatch = { ...meta, transactions: diff(before.transactions, after.transactions, item => item.id), merchantRules: diff(before.merchantRules, after.merchantRules, item => item.key), balanceObservations: diff(before.statementBalanceObservations || [], after.statementBalanceObservations || [], item => item.id), accountMappings: diff(before.statementAccountMappings || [], after.statementAccountMappings || [], item => item.id) };
   return validateData({ ...after, reconciliationBatches: [...(before.reconciliationBatches || []), batch] });
 }
@@ -33,8 +35,10 @@ export function undoReconciliationBatch(data: Data, id: string): Data {
     }
     return [...current.values()];
   };
-  return validateData({ ...data,
+  const restored = validateData({ ...data,
     ...(batch.balanceObservations?.length ? { statementBalanceObservations: revert(data.statementBalanceObservations || [], batch.balanceObservations, item => item.id) } : {}),
     ...(batch.accountMappings?.length ? { statementAccountMappings: revert(data.statementAccountMappings || [], batch.accountMappings, item => item.id) } : {}),
     transactions: revert(data.transactions, batch.transactions, item => item.id), merchantRules: revert(data.merchantRules, batch.merchantRules, item => item.key), reconciliationBatches: data.reconciliationBatches!.map(item => item.id === id ? { ...item, undone: true } : item) });
+  assertStatementBalancesPreserved(data, restored);
+  return restored;
 }

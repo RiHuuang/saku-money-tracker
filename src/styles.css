@@ -4446,3 +4446,15 @@ main.onboarding { max-width: none; margin: 0; padding: 0; }
 .statement-evidence-form > label:has(input[type="checkbox"]) { grid-template-columns: 20px minmax(0, 1fr); align-items: start; }
 .statement-evidence-form input:not([type="checkbox"]) { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
 .statement-evidence-form input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0; }
+
+.monthly-tools { display: block; }
+.monthly-tools > summary, .monthly-source-list > summary { cursor: pointer; color: var(--ink); font-size: 14px; font-weight: 600; line-height: 1.5; }
+.monthly-tools[open] > summary, .monthly-source-list[open] > summary { margin-bottom: 16px; }
+.monthly-tools .statement-evidence-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+details.statement-evidence-form:not([open]) { display: block; }
+details.statement-evidence-form[open] { display: grid; gap: 14px; }
+.statement-evidence-form > summary { overflow-wrap: anywhere; cursor: pointer; }
+.monthly-history-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; }
+.monthly-source-list { margin-top: 12px; }
+.monthly-more { margin-top: 14px; width: 100%; }
+.monthly-look .catchup-row-summary { min-height: 76px; }

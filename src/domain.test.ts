@@ -3,6 +3,7 @@ import { mock, test } from "node:test";
 import {
   bankRows,
   accountBalance,
+  accountIsReferenced,
   averageDailySpending,
   balanceAdjustment,
   cardBalance,
@@ -449,4 +450,12 @@ test("renaming an account moves its history, recurring rules and shortcuts with 
   assert.equal(renameAccount(data, "BCA", "BCA Visa"), null);
   assert.equal(renameAccount(data, "BCA", "   "), null);
   assert.equal(renameAccount(data, "BCA", "BCA"), data);
+});
+
+test("account renaming preserves statement mappings and checked balance references",()=>{
+ const data={...emptyData(),accounts:["Cash","BCA"],statementAccountMappings:[{id:"source-account",bank:"bca",statementAccount:"Main",account:"BCA"}],statementBalanceObservations:[{id:"bank",account:"BCA",date:"2026-10-31",balance:0,evidence:"Synthetic bank check"}]};
+ assert.equal(accountIsReferenced(data,"BCA"),true);
+ const next=renameAccount(data,"BCA","BCA Main")!;
+ assert.equal(next.statementAccountMappings![0].account,"BCA Main");assert.equal(next.statementBalanceObservations![0].account,"BCA Main");
+ assert.doesNotThrow(()=>validateData(next));
 });
