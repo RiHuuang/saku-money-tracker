@@ -1,7 +1,12 @@
+export type StatementSummary = { from: string; to: string; incoming: number; outgoing: number; categories?: { topup?: number; sendMoney?: number; merchant?: number } };
 export type ImportRow = {
   id: string;
   sourceId: string;
   account?: string;
+  // The bank's pocket/account label, retained separately from the user's Saku account mapping.
+  statementAccount?: string;
+  exactAmount?: number;
+  currency?: string;
   page: number;
   date: string;
   dateEvidence?: string;
@@ -21,6 +26,17 @@ export type ImportRow = {
   note?: string;
   check?: string;
   alreadyInSaku?: boolean;
+  // Monthly check: the ledger entry the user picked for this row, a link or pair the user undid,
+  // the statement row the user paired it with by hand, and whether the user chose add/skip themselves.
+  matchId?: string;
+  unlinked?: boolean;
+  unpaired?: boolean;
+  pairRowId?: string;
+  userDecided?: boolean;
+  // Read without AI from a page whose running balance proves every row.
+  proven?: boolean;
+  // Saku's guess from the compare-names helper, shown but never applied without a tap.
+  aiPick?: string;
 };
 export type ImportSource = {
   id: string;
@@ -36,6 +52,15 @@ export type ImportSource = {
   processedPages: number;
   pageCount: number;
   error?: string;
+  // The bank or wallet the statement is from, the printed opening and closing balances, and the running
+  // balance (in sen) the last proven page ended on, so the next page can continue the proof.
+  bank?: string;
+  totals?: { opening?: number; closing?: number };
+  summary?: StatementSummary;
+  coverage?: { from: string; to: string; confirmed: boolean };
+  carry?: number;
+  // Pages read without AI, for the neuron budget notes in docs/monthly-check-3.0.md.
+  localPages?: number;
 };
 export type ImportDraft = {
   id: string;
@@ -44,6 +69,13 @@ export type ImportDraft = {
   sources: ImportSource[];
   rows: ImportRow[];
   saved: { id: string; fingerprint: string; pairedRowId?: string }[];
+  // Ledger entries this draft marked as checked, so Undo can clear the mark again.
+  verified?: string[];
+  // Entries this draft moved to the statement's account ("Move it"), so Undo can move them back.
+  moved?: { id: string; from: string; to: string }[];
+  // Monthly check tuning (shown in development builds only): how many choices the person had to make, and how many
+  // automatic links they undid. Stays on the device with the draft.
+  stats?: { decisions: number; unlinks: number };
   createdAt: number;
 };
 

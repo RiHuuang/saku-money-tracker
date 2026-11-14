@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, shiftMonth, summary, validateData } from "./domain";
-import { applySharedSourceDate, bcaAccount, prepareBcaRow, withoutOverlap, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowFirstDueMonth, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
+import { applySharedSourceDate, bcaAccount, prepareBcaRow, prepareImportRow, withoutOverlap, confirmedImportAccount, detectImportAccount, importedTransactions, importMatchesNeedSourceDateCheck, importPatchNeedsSourceRecheck, importRowAccount, importRowAlreadySaved, importRowFirstDueMonth, importRowReady, importRowReviewIssue, importRowsWaiting, importRowsNeedingDuplicateConfirmation, suggestImportDecision } from "./importTransactions";
 import type { ImportDraft, ImportRow } from "./importDraft";
 
 const ledger = emptyData();
@@ -326,4 +326,37 @@ test("rows another screenshot in the draft already has are left out", () => {
   const result = withoutOverlap(page, earlier);
   assert.deepEqual(result.rows.map((row) => row.id), ["b"]);
   assert.equal(result.dropped, 1);
+});
+
+test("overlap preserves account identity and repeated-row multiplicity", () => {
+  const earlier = [{...base,id:"old",name:"Shop",account:"BCA",amount:50000,date:"2026-10-01"}];
+  const next = [{...earlier[0],id:"same"},{...earlier[0],id:"second"},{...earlier[0],id:"other-account",account:"Jago"},{...earlier[0],id:"other-pocket",statementAccount:"Savings"},{...earlier[0],id:"foreign",currency:"SGD"}];
+  const result=withoutOverlap(next,earlier);
+  assert.equal(result.dropped,1);
+  assert.deepEqual(result.rows.map(r=>r.id),["second","other-account","other-pocket","foreign"]);
+});
+
+
+test("unresolved extraction flags cannot pass the save barrier", () => {
+  for (const check of ["amount", "card_statement", "direction"]) {
+    const row = { ...base, check };
+    assert.equal(importRowReady(row, "BCA", ledger), false);
+    assert.throws(() => importedTransactions(row, "BCA", "test.pdf", ledger));
+  }
+});
+test("paired transfers preserve October debit and November credit dates", () => {
+  const row: ImportRow = { ...base, activity: "transfer", counterparty: "GoPay", date: "2026-10-31" };
+  const parts = importedTransactions(row, "BCA", "test.pdf", ledger, "incoming", "2026-11-01");
+  assert.equal(parts[0].date, "2026-10-31");
+  assert.equal(parts[1].date, "2026-11-01");
+  validateData({ ...ledger, transactions: parts });
+});
+
+test("unmapped incoming wallet top-ups retain their classification and wait for a source account",()=>{
+ const incoming: ImportRow={...base,name:"Top Up",activity:"topup",direction:"income",amount:6000000};
+ const prepared=prepareImportRow(incoming,ledger,"GoPay",{checkLedger:false});
+ assert.equal(prepared.activity,"topup");assert.equal(prepared.counterparty,undefined);
+ assert.equal(importRowReady({...prepared,decision:"ready"},"GoPay",ledger),false);
+ const outgoing=prepareImportRow({...incoming,direction:"expense"},ledger,"BCA",{checkLedger:false});
+ assert.equal(outgoing.activity,"topup");assert.equal(importRowReady({...outgoing,decision:"ready"},"BCA",ledger),false);
 });

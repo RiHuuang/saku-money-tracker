@@ -113,5 +113,19 @@ try {
   assert.match((await sharedLimit.json()).error, /shared/);
   assert.equal(sqlite.prepare("SELECT neurons FROM import_ai_user_budget WHERE uid=? AND day=?").get(otherUid, day).neurons, 24, "a refused shared reservation leaves the user's counter untouched");
   assert.equal(aiCalls, 10);
+  sqlite.prepare("UPDATE import_ai_budget SET neurons=0 WHERE day=?").run(day);
+  sqlite.prepare("UPDATE import_ai_user_budget SET neurons=0 WHERE uid=? AND day=?").run(uid, day);
+  const summary = { from: "2026-10-01", to: "2026-10-31", incoming: 120000, outgoing: 100000, categories: { topup: 120000, sendMoney: 80000, merchant: 20000 } };
+  const summaryInput = JSON.stringify({ kind: "image", month: "2026-10", source: "auto", image: "data:image/png;base64,AA==" });
+  env.AI.run = async () => ({ response: JSON.stringify({ bank: "dana", summary, rows: [{ name: "Invented summary expense", amount: 100000, direction: "expense", activity: "purchase" }] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } });
+  const summaryResponse = await request(summaryInput);
+  assert.equal(summaryResponse.status, 200, await summaryResponse.clone().text());
+  assert.deepEqual(await summaryResponse.json(), { bank: "dana", rows: [], summary }, "auto-detected DANA summaries survive the HTTP route without generated rows");
+  const transactionMode = await request(JSON.stringify({ ...JSON.parse(summaryInput), readingMode: "transactions" }));
+  assert.equal(transactionMode.status, 502, "summary responses cannot silently replace transaction details");
+  let summaryCalls = 0;
+  env.AI.run = async () => ({ response: JSON.stringify({ bank: "dana", summary: { ...summary, outgoing: summaryCalls++ ? 100001 : 100000 }, rows: [] }), usage: { prompt_tokens: 1000, completion_tokens: 100 } });
+  const disagreement = await request(summaryInput);
+  assert.equal(disagreement.status, 502, "disagreeing summary totals cannot be accepted");
   console.log("AI import route: auth, release gate, input validation and quota passed with a stub binding");
 } finally { delete crypto.subtle.timingSafeEqual; sqlite.close(); }

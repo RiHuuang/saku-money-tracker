@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PencilLine, SlidersHorizontal, Trash2, Wallet } from "lucide-react";
-import { accountBalance, compact, money, renameAccount, type Data, type Transaction } from "./domain";
+import { accountBalance, accountIsReferenced, compact, money, renameAccount, type Data, type Transaction } from "./domain";
 import { DonutRing, Modal } from "./components";
 import { t } from "./i18n";
 
@@ -64,7 +64,7 @@ export function AccountEditor({ data, account, busy, onClose, onSave, onAdjust }
   const [name, setName] = useState(account);
   const [error, setError] = useState("");
   const balance = accountBalance(data, account);
-  const removable = data.accounts.length > 1 && !data.transactions.some((item) => item.account === account);
+  const removable = data.accounts.length > 1 && !accountIsReferenced(data, account);
   async function rename() {
     const next = renameAccount(data, account, name);
     if (!next) { setError(name.trim() ? t("thisAccountAlreadyExists") : t("accountNameNeeded")); return; }
