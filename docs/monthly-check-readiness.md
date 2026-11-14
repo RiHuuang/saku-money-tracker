@@ -1,6 +1,6 @@
 # Monthly Check readiness
 
-Updated 14 November 2026. Production publication remains gated on the final signed Android build and phone verification.
+Updated 14 November 2026. The final signed Android build and phone verification pass. Production publication still requires the merge, ordered release publication and post-deployment checks below.
 
 ## Review experience
 
@@ -14,6 +14,8 @@ The list shows the date, name, amount and a short next action. Detailed question
 - Deployed Stage browser, owner account: the supplied DANA activity screenshot produces ten observations. Two existing purchases link; one independently reviewed purchase is saved; seven unresolved movements are withheld. Revision 24 / 183 transactions becomes revision 25 / 184 transactions. Reload is identical; fresh screenshot reimport links the added purchase and adds nothing. UI Undo yields revision 26 / 183 transactions, with the original transactions and merchant rules restored. The undone audit batch remains durable.
 - Stage and production use distinct Sheets. Production was read only during the Stage verification.
 - Mobile component checks cover light/dark dialogs, initial row limit, revealing all remaining rows, save and Undo. Synthetic component fixtures are distinct from supplied financial evidence.
+- The final isolated Stage build 17 was installed in place on the actual Xiaomi phone. All three SQLite ledger tables, all 27 transactions and the app data-folder inode are unchanged. Production's installed package, version and update timestamp are unchanged. The supplied existing DANA draft displays ten rows; missing account confirmation blocks Save. The compact list and transaction dialog were visually inspected in light and dark themes, with a native screenshot as evidence. The phone's three-account workspace was preserved; the separate eight-account owner Stage save test above proves cloud persistence.
+- Image-source bank hints now follow explicit account confirmation. A previously incorrect GoPay guess on the DANA image is hidden while unconfirmed, rather than presented as a known bank.
 - A separate synthetic Stage workspace tested the deployed route dialog and persistence: a direct BCA-to-Jago pair was atomically replaced by BCA-to-DANA and DANA-to-Jago pairs, preserving October 31 / November 1 dates. Undo restored the baseline. Removing DANA blocked replacement; unchecked screenshot dates opened review without saving. An omitted detail row displayed a totals discrepancy, with no unsupported removal suggestion.
 
 ## Scenario coverage
@@ -37,7 +39,6 @@ These are scoped results, not a claim that every possible financial route is kno
 
 ## Remaining release gates
 
-- Install the compact Stage build in place and inspect the actual phone UI without changing its ledger.
 - The signed build 17 candidate passes release lint, unit tests, signature verification and packaged-file comparison. Rebuild it if release code changes.
 - Complete pull-request checks, merge to main, deploy production, and verify public web/download artifacts against the built files.
 - Publish the build 17 APK and manifest with minimum build 17 before deploying the production minimum-build gate. Earlier Android clients do not retain the new reconciliation fields. Their local ledger remains accessible, but they must update before cloud sync resumes. Stage retains its lower test-build gate.

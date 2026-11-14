@@ -1,6 +1,6 @@
 # Monthly Check verification — 7 November 2026
 
-**14 November follow-up:** See [current readiness](monthly-check-readiness.md). The corrected actual-phone DANA retest now passes all ten rows for date, amount, direction and activity type. Deployed owner-account Stage UI save/reload/reimport/Undo also passed: 183 → 184 → 183 transactions, with original transactions and merchant rules restored. Earlier pending notes below are historical. The compact Stage UI and synthetic missing-evidence/route scenarios have additional browser evidence; its final phone-install check remains pending.
+**14 November follow-up:** See [current readiness](monthly-check-readiness.md). The corrected actual-phone DANA retest now passes all ten rows for date, amount, direction and activity type. Deployed owner-account Stage UI save/reload/reimport/Undo also passed: 183 → 184 → 183 transactions, with original transactions and merchant rules restored. Earlier pending notes below are historical. Final Stage build 17 also passes in-place phone installation and compact light/dark UI checks; all three SQLite ledger tables and 27 phone transactions remain unchanged. Supplied DANA inputs remain separate from the controlled synthetic missing-evidence/route fixtures.
 
 Implementation and verification are on the continuation worktree. Production was not written.
 

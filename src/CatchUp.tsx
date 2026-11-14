@@ -574,7 +574,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   const flaggedNotes = statementMode && draft ? draft.sources.flatMap((source) => {
     const rowsOf = draft.rows.filter((row) => row.sourceId === source.id);
     if (balanceMismatch(rowsOf, source.totals)) return [<p className="catchup-issue" key={`b-${source.id}`}>{t("balanceMismatch", { name: source.name })}</p>];
-    const bank = bankById(source.bank || "");
+    const bank = bankById(isImage(source.name) ? source.accountConfirmed ? bankOfAccount(source.account) : "" : source.bank || "");
     return bank?.beta && rowsOf.some((row) => !row.proven) ? [<p className="import-note" key={`beta-${source.id}`}>{t("bankBeta", { bank: bank.name })}</p>] : [];
   }) : [];
   const renderLook = (row: ImportRow) => {
