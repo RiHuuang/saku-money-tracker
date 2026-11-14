@@ -371,7 +371,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
       const [a,b,c,d] = proposal.rows;
       const additions = [...importedTransactions({ ...a, activity: "transfer", counterparty: proposal.middle, decision: "ready" }, proposal.from, "route evidence", data, b.id, b.date), ...importedTransactions({ ...c, activity: "transfer", counterparty: proposal.to, decision: "ready" }, proposal.middle, "route evidence", data, d.id, d.date)];
       const removed = new Set(proposal.oldParts.map((item) => item.id));
-      await monthlyCommit({ ...data, transactions: [...data.transactions.filter((item) => !removed.has(item.id)), ...additions.map((item) => ({ ...item, note: `${item.note} · Replaces recorded route: ${proposal.oldParts.map((part) => part.note).filter(Boolean).join("; ")}`.slice(0,500) }))] }, t("importBatchSaved"));
+      if (await monthlyCommit({ ...data, transactions: [...data.transactions.filter((item) => !removed.has(item.id)), ...additions.map((item) => ({ ...item, note: `${item.note} · Replaces recorded route: ${proposal.oldParts.map((part) => part.note).filter(Boolean).join("; ")}`.slice(0,500) }))] }, t("importBatchSaved"))) setEditingRow("");
     } catch (error) { setInfo(error instanceof Error ? error.message : t("checkThisRow")); }
     finally { savingRef.current = false; setSaving(false); }
   }

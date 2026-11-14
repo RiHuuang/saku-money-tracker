@@ -46,7 +46,7 @@ type AuthResponse = {
 
 const plugin = registerPlugin<GoogleAuthPlugin>("GoogleAuth");
 const stateKey = "saku-cloud-state-v1";
-export const SAKU_ANDROID_BUILD = 10;
+export const SAKU_ANDROID_BUILD = 17;
 export const AGREEMENT_VERSION = "2026-10-26";
 const apiUrl = Capacitor.isNativePlatform() ? (import.meta.env.VITE_SAKU_API_URL || "").replace(/\/$/, "") : "";
 export const legalUrl = (page: "privacy" | "terms" | "account-deletion") => `${apiUrl}/${page}`;

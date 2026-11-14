@@ -38,5 +38,6 @@ These are scoped results, not a claim that every possible financial route is kno
 ## Remaining release gates
 
 - Install the compact Stage build in place and inspect the actual phone UI without changing its ledger.
-- Build and verify the signed production APK, preserving the release certificate and production API target.
+- The signed build 17 candidate passes release lint, unit tests, signature verification and packaged-file comparison. Rebuild it if release code changes.
 - Complete pull-request checks, merge to main, deploy production, and verify public web/download artifacts against the built files.
+- Publish the build 17 APK and manifest with minimum build 17 before deploying the production minimum-build gate. Earlier Android clients do not retain the new reconciliation fields. Their local ledger remains accessible, but they must update before cloud sync resumes. Stage retains its lower test-build gate.
