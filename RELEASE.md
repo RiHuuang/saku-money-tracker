@@ -1,12 +1,12 @@
 # Saku production release
 
-## 2.5.0 candidate — November 14
+## Current direct APK release — November 14
 
-Build 17 adds Monthly Check across statements, conservative duplicate and transfer review, dated balance protection, reversible reconciliation history, and income-based pocket planning. Review lists use short next actions; details open on demand. DANA summary files validate totals separately from activity screenshots. See [readiness and measured verification](docs/monthly-check-readiness.md) for the current evidence and remaining publication gates. This entry records the candidate, not a completed production publication.
+Saku 2.5.0 / build 17 adds Monthly Check across statements, conservative duplicate and transfer review, dated balance protection, reversible reconciliation history, and income-based pocket planning. Review lists use short next actions; details open on demand. DANA summary files validate totals separately from activity screenshots. It is published from merged main commit `57ad5a7638125b91cb1a01f322f8d07a9b320d88` (PR #74), with production Worker `33c8c6f6-13a5-4c4b-9af4-726243b5a607`. See [completed verification](docs/monthly-check-readiness.md).
 
-Release order: publish the signed build 17 APK and its manifest (minimum supported build 17), then deploy the production Worker with minimum Android build 17. The new client reports build 17 to the API. This prevents earlier Android clients from dropping reconciliation metadata when saving their older ledger shape. Offline ledger access remains available.
+The signed APK and manifest were published before enabling minimum Android build 17. The new client reports build 17 to the API, preventing earlier Android clients from dropping reconciliation metadata when saving their older ledger shape. Offline ledger access remains available. Both public download routes match SHA-256 `cdaef7caaa519d5e5a4edd4d0b34e7dc5e3a1a172a7e04649b020931bc4828a2` (43,259,515 bytes). Production's 208-transaction snapshot stayed unchanged. The isolated Stage phone upgrade and light/dark review passed; no Play release was uploaded.
 
-## Current direct APK release — October 25
+## Previous direct APK release — October 25
 
 Saku 2.3.4 (versionCode 14) removes the translucent rim around Activity's Pocket and Account choice sheets. The sheet now uses the app's opaque surface and border tokens in light and dark themes, including the mobile bottom-sheet layout. A synthetic Activity preview was checked with both themes, without opening a real ledger.
 
