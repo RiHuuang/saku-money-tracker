@@ -199,6 +199,29 @@ export const validAmount = (n: number) =>
   Number.isSafeInteger(n) && n > 0 && n <= 1e12;
 export const budgetFor = (p: Pocket, m: string) =>
   m < p.createdMonth ? 0 : (p.budgets[m] ?? p.budget);
+export function setPocketBudgetFromMonth(pocket: Pocket, month: string, amount: number): Pocket {
+  const budgets: Record<string, number> = {};
+  for (let cursor = pocket.createdMonth; cursor < month; cursor = shiftMonth(cursor, 1)) {
+    budgets[cursor] = budgetFor(pocket, cursor);
+  }
+  return { ...pocket, budget: amount, budgets };
+}
+export function extendPocketsToTransactions(data: Data): Data {
+  const earliest = new Map<string, string>();
+  for (const transaction of data.transactions) {
+    if (!isSpending(transaction) || !transaction.pocketId || !validDate(transaction.date)) continue;
+    const month = transaction.date.slice(0, 7);
+    if (month < (earliest.get(transaction.pocketId) || "9999-99")) earliest.set(transaction.pocketId, month);
+  }
+  const pockets = data.pockets.map((pocket) => {
+    const month = earliest.get(pocket.id);
+    if (!month || month >= pocket.createdMonth) return pocket;
+    const budgets = { ...pocket.budgets };
+    for (let cursor = month; cursor < pocket.createdMonth; cursor = shiftMonth(cursor, 1)) budgets[cursor] = 0;
+    return { ...pocket, createdMonth: month, budgets };
+  });
+  return pockets.every((pocket, index) => pocket === data.pockets[index]) ? data : { ...data, pockets };
+}
 export const isSpending = (t: Transaction) =>
   t.type === "expense" && !["card_payment", "account_transfer", "balance_adjustment"].includes(t.kind || "");
 export const personalAmount = (t: Transaction) =>
@@ -884,6 +907,19 @@ export function exportCSV(transactions: Transaction[], pockets: Pocket[]) {
 export const pocketHasReferences = (data: Pick<Data, "transactions" | "recurring" | "favorites" | "pocketTransfers">, pocketId: string) =>
   data.transactions.some((t) => t.pocketId === pocketId) || data.recurring.some((r) => r.pocketId === pocketId) ||
   data.favorites.some((f) => f.pocketId === pocketId) || data.pocketTransfers.some((move) => move.fromPocketId === pocketId || move.toPocketId === pocketId);
+
+export function reassignAndDeletePocket(data: Data, pocketId: string, targetId: string): Data {
+  if (!data.pockets.some((pocket) => pocket.id === pocketId) || !data.pockets.some((pocket) => pocket.id === targetId) || pocketId === targetId) throw new Error("Choose another pocket.");
+  const replace = (id: string) => id === pocketId ? targetId : id;
+  return extendPocketsToTransactions({
+    ...data,
+    pockets: data.pockets.filter((pocket) => pocket.id !== pocketId),
+    transactions: data.transactions.map((transaction) => transaction.pocketId === pocketId ? { ...transaction, pocketId: targetId } : transaction),
+    recurring: data.recurring.map((rule) => rule.pocketId === pocketId ? { ...rule, pocketId: targetId } : rule),
+    favorites: data.favorites.map((favorite) => favorite.pocketId === pocketId ? { ...favorite, pocketId: targetId } : favorite),
+    pocketTransfers: data.pocketTransfers.map((move) => ({ ...move, fromPocketId: replace(move.fromPocketId), toPocketId: replace(move.toPocketId) })).filter((move) => move.fromPocketId !== move.toPocketId),
+  });
+}
 
 // One pocket in a plan: an existing pocket (pocketId) or a new one, with its monthly amount from `month` on.
 export type PocketPlanItem = { pocketId?: string; name: string; icon: string; amount: number };

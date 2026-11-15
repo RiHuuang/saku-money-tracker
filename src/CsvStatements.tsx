@@ -50,7 +50,7 @@ export default function Statements({ data, month, commit, busy, notify, cloudImp
   async function apply() {
     const additions = actionable.filter((row) => row.status === "missing" && decisions[row.id] === "add");
     if (additions.some((row) => row.date > today())) { notify(t("futureDatedRowsCannotBe")); return; }
-    if (additions.some((row) => pockets[row.id] && !data.pockets.some((pocket) => pocket.id === pockets[row.id] && pocket.createdMonth <= row.date.slice(0, 7)))) { notify(t("chooseAPocketThatExisted")); return; }
+    if (additions.some((row) => pockets[row.id] && !data.pockets.some((pocket) => pocket.id === pockets[row.id]))) { notify(t("chooseAPocketThatExisted")); return; }
     const added: Transaction[] = additions.map((row) => ({ id: uid(), name: row.name, amount: row.amount, type: row.type, date: row.date, account: row.account, pocketId: row.type === "income" ? "" : pockets[row.id] || "", note: "Imported from CSV", verified: true }));
     const updates = new Map(actionable.filter((row) => row.status === "different" && decisions[row.id] === "update").map((row) => [row.matchId, row]));
     const transactions = data.transactions.map((transaction) => { const row = updates.get(transaction.id); return row ? { ...transaction, name: row.name, amount: row.amount, type: row.type, date: row.date, verified: true } : transaction; });
@@ -74,7 +74,7 @@ export default function Statements({ data, month, commit, busy, notify, cloudImp
           <span className="catchup-row-figure"><strong>{row.type === "income" ? "+" : "−"}{money(row.amount)}</strong><RowStatus state={state} label={decision === take ? (take === "update" ? t("useCsvDetails") : t("willAdd")) : decision === leave ? (leave === "keep" ? t("keepSakuDetails") : t("notImporting")) : t("decideLater")} /></span>
         </button>
         {editingRow === row.id && <Modal title={row.name || t("unnamedTransaction")} subtitle={`${row.date} · ${row.type === "income" ? "+" : "−"}${money(row.amount)}`} onClose={() => setEditingRow("")}><div className="catchup-row-details"><div className="catchup-row-meta">
-          {row.status === "missing" && row.type === "expense" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={pockets[row.id] || ""} onValueChange={(value) => setPockets((old) => ({ ...old, [row.id]: value }))} options={[{ value: "", label: t("unassigned") }, ...data.pockets.filter((pocket) => pocket.createdMonth <= row.date.slice(0, 7)).map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
+          {row.status === "missing" && row.type === "expense" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={pockets[row.id] || ""} onValueChange={(value) => setPockets((old) => ({ ...old, [row.id]: value }))} options={[{ value: "", label: t("unassigned") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
           <div className="catchup-decision"><div role="group" aria-label={t("decisionFor", { name: row.name || t("transactionLower") })}>
             <button type="button" className={decision === take ? "selected" : ""} aria-pressed={decision === take} onClick={() => decide(take)}>{take === "update" ? t("useCsvDetails") : t("addToSaku")}</button>
             <button type="button" className={!decision ? "selected" : ""} aria-pressed={!decision} onClick={() => decide("")}>{t("decideLater")}</button>

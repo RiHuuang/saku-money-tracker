@@ -116,7 +116,7 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
   }
   async function postRule(rule: RecurringRule, scheduledDate: string) {
     const date = scheduledDate > today() ? scheduledDate : today();
-    if (rule.type === "expense" && !data.pockets.some((p) => p.id === rule.pocketId && p.createdMonth <= date.slice(0, 7))) {
+    if (rule.type === "expense" && !data.pockets.some((p) => p.id === rule.pocketId)) {
       notify(translate("thisBillNeedsAPocket")); return;
     }
     const transaction: Transaction = {

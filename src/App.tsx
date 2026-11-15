@@ -51,16 +51,19 @@ import {
   dayLabel,
   emptyData,
   exportCSV,
+  extendPocketsToTransactions,
   groupDigits,
   isIncome,
   isSpending,
   personalAmount,
   receiptSuggestion,
+  reassignAndDeletePocket,
   money,
   monthLabel,
   shiftDate,
   lastPocketFor,
   shiftMonth,
+  setPocketBudgetFromMonth,
   summary,
   today,
   daysAgo,
@@ -158,18 +161,18 @@ import {
 } from "./cloud";
 
 type Edit =
-  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string; date?: string }
+  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string; date?: string; initialMode?: "expense" | "income" }
   | { type: "balance_adjustment"; account: string; value?: Transaction }
-  | { type: "pocket"; value?: Pocket }
+  | { type: "pocket"; value?: Pocket; focusBudget?: boolean }
   | { type: "pocket_delete"; value: Pocket }
   | { type: "account_transfer"; value?: Transaction }
-  | { type: "pocket_transfer" }
+  | { type: "pocket_transfer"; toPocketId?: string; amount?: number }
+  | { type: "cash_shortfall" }
   | { type: "start" }
   | { type: "plan" }
   | null;
 const cloudImportEnabled = true;
 const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
-const setupCompletedKey = "saku-setup-completed-v1";
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "transactions", label: "Activity", icon: ArrowDownLeft },
@@ -210,7 +213,6 @@ export default function App() {
   const authenticating = useRef(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [languagePreference, setLanguagePreference] = useState<LanguagePreference>("system");
-  const [setupCompletedAt, setSetupCompletedAt] = useState<string | null>(null);
   const [showAvailabilityInfo, setShowAvailabilityInfo] = useState(false);
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState("");
@@ -410,7 +412,6 @@ export default function App() {
   useEffect(() => {
     void loadTheme().then(setThemePreference).catch(() => {});
     void loadLanguage().then(setLanguagePreference).catch(() => {});
-    void Preferences.get({ key: setupCompletedKey }).then(({ value }) => setSetupCompletedAt(value)).catch(() => {});
   }, []);
   async function unlock() {
     if (authenticating.current) return;
@@ -503,6 +504,7 @@ export default function App() {
     saving.current = true;
     setBusy(true);
     try {
+      next = extendPocketsToTransactions(next);
       await saveData(next);
       setData(next);
       setCloud((value) => value?.signedIn ? { ...value, dirty: true } : value);
@@ -676,7 +678,6 @@ export default function App() {
       (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
     );
   const topPocket = [...stats.pockets].sort((a, b) => b.spent - a.spent)[0];
-  const overspent = stats.pockets.filter((p) => p.spent > p.limit);
   const weekStart = new Date();
   weekStart.setHours(0, 0, 0, 0);
   weekStart.setDate(weekStart.getDate() - 6);
@@ -816,7 +817,7 @@ export default function App() {
               {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={backView}><ChevronLeft size={17} /> {t(viewHistory.at(-1) === "more" ? "more" : viewHistory.at(-1) === "overview" ? "home" : viewHistory.at(-1) === "pockets" ? "pockets" : "more")}</button>}
               {selectedPocket && view === "pockets" && <button className="back-to-more" onClick={closePocket}><ChevronLeft size={17} /> {t(pocketReturnView === "pockets" ? "allPockets" : pocketReturnView === "insights" ? "insights" : "home")}</button>}
               <p>{selectedPocket && view === "pockets" ? t("pocketActivity") : titles[view][0]}</p>
-              <h1>{selectedPocket && view === "pockets" ? selectedPocket.name : titles[view][1]}</h1>
+              <h1>{selectedPocket && view === "pockets" ? selectedPocket.name : titles[view][1]}{selectedPocket && view === "pockets" && <button type="button" className="pocket-heading-edit" aria-label={t("editPocket")} onClick={() => setEdit({ type: "pocket", value: selectedPocket })}><PencilLine size={17} /></button>}</h1>
             </div>
             <div className="heading-actions">
               {view !== "settings" && view !== "more" && (
@@ -866,7 +867,7 @@ export default function App() {
                   {t("addPocket")}
                 </button>
               )}
-              {view === "pockets" && selectedPocket && <button className="button primary" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket.id })}><Plus size={18} /> {t("addTransaction")}</button>}
+              {view === "pockets" && selectedPocket && <button className="button primary pocket-desktop-add" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket.id })}><Plus size={18} /> {t("addTransaction")}</button>}
             </div>
           </section>
           {view === "more" && <section className="more-list" aria-label={t("moreDestinations")}>
@@ -985,6 +986,7 @@ export default function App() {
                         onClick={() => openPocket(p.id)}
                         onEdit={() => setEdit({ type: "pocket", value: p })}
                         onDelete={() => setEdit({ type: "pocket_delete", value: p })}
+                        onCover={() => setEdit(data.pockets.length > 1 ? { type: "pocket_transfer", toPocketId: p.id, amount: p.spent - p.limit } : { type: "pocket", value: p, focusBudget: true })}
                       />
                     ))}
                   </div>
@@ -1070,8 +1072,7 @@ export default function App() {
             />
           )}
           {view === "pockets" && selectedPocket && <section className="pocket-activity">
-            <div className="pocket-activity-summary"><div><span>{t("fundedThisMonth")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0)}</strong></div><div><span>{t("spentThisMonth")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)}</strong></div><div><span>{t("remaining")}</span><strong>{money((stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) - (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0))}</strong></div></div>
-            <p className="pocket-funding-note">{t("fundingIsYourMonthlyBudget")}</p>
+            <div className="pocket-activity-summary"><button type="button" onClick={() => setEdit({ type: "pocket", value: selectedPocket, focusBudget: true })}><span>{t("budget")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0)}</strong></button><div><span>{t("spent2")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)}</strong></div><div><span>{(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) < (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0) ? t("overBudget") : t("left")}</span><strong>{money(Math.abs((stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) - (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)))}</strong></div></div>
             <div className="section-heading"><h2>{t("history")}</h2><button className="text-button" onClick={() => setPocketAllHistory((value) => !value)}>{pocketAllHistory ? t("selectedMonth") : t("allHistory")}</button></div>
             {data.pocketTransfers.filter((move) => (move.fromPocketId === selectedPocket.id || move.toPocketId === selectedPocket.id) && (pocketAllHistory || move.month === month)).map((move) => <div className="pocket-move" key={move.id}><span>{move.toPocketId === selectedPocket.id ? t("budgetMovedIn") : t("budgetMovedOut")} · {monthLabel(move.month, true)}</span><strong>{move.toPocketId === selectedPocket.id ? "+" : "−"}{money(move.amount)}</strong></div>)}
             <TransactionList transactions={data.transactions.filter((t) => t.pocketId === selectedPocket.id && (pocketAllHistory || t.date.startsWith(month))).sort((a, b) => b.date.localeCompare(a.date))} pockets={data.pockets} onEdit={(value) => setEdit({ type: "transaction", value })} groupDates />
@@ -1087,23 +1088,11 @@ export default function App() {
                   <span>{t("spentSoFar")}</span>
                   <strong>{money(stats.expenses)}</strong>
                 </div>
-                <div>
-                  <span>{t("withinBudgetCash")}</span>
-                  <strong className="positive">{money(stats.available)}</strong>
-                </div>
+                <button type="button" className={stats.remaining > Math.max(0, stats.balance) ? "shortfall-tile" : ""} onClick={() => setEdit({ type: "cash_shortfall" })}>
+                  <span>{stats.remaining > Math.max(0, stats.balance) ? t("shortBy") : t("freeToSpend")}</span>
+                  <strong>{money(stats.remaining > Math.max(0, stats.balance) ? stats.remaining - Math.max(0, stats.balance) : stats.available)}</strong>
+                </button>
               </div>
-              {stats.remaining > Math.max(0, stats.balance) && (
-                <div className="inline-warning">
-                  {setupCompletedAt && Date.now() - Date.parse(setupCompletedAt) < 7 * 24 * 60 * 60 * 1000
-                    ? t("planAboveCashFirstWeek", { amount: money(stats.remaining - Math.max(0, stats.balance)) })
-                    : t("planAboveCash", { amount: money(stats.remaining - Math.max(0, stats.balance)) })}
-                </div>
-              )}
-              {overspent.length > 0 && (
-                <div className="inline-warning">
-                  {t(overspent.length === 1 ? "onePocketOverBudget" : "pocketsOverBudget", { count: overspent.length })}
-                </div>
-              )}
               <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><div className="section-actions"><button className="button secondary" onClick={() => setEdit({ type: "plan" })}><Sparkles size={16} />{t("planWithSaku")}</button><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div></div>
               {!data.monthlyIncome && data.pockets.length > 0 && !planHintHidden && <section className="plan-hint"><span className="plan-hint-icon" aria-hidden="true"><Sparkles size={18} /></span><div><strong>{t("planHintTitle")}</strong><p>{t("planHintBody")}</p></div><div className="plan-hint-actions"><button className="button primary" onClick={() => setEdit({ type: "plan" })}>{t("planWithSaku")}</button><button className="text-button" onClick={() => { setPlanHintHidden(true); try { localStorage.setItem("saku-plan-hint-hidden-v1", "1"); } catch { /* A convenience only. */ } }}>{t("notNow")}</button></div></section>}
               <div className="pocket-grid all-pockets">
@@ -1114,6 +1103,7 @@ export default function App() {
                     onClick={() => openPocket(p.id)}
                     onEdit={() => setEdit({ type: "pocket", value: p })}
                     onDelete={() => setEdit({ type: "pocket_delete", value: p })}
+                    onCover={() => setEdit(data.pockets.length > 1 ? { type: "pocket_transfer", toPocketId: p.id, amount: p.spent - p.limit } : { type: "pocket", value: p, focusBudget: true })}
                   />
                 ))}
                 <button
@@ -1311,7 +1301,8 @@ export default function App() {
           if (await commit({ ...data, transactions: data.transactions.filter((item) => item.id !== id) }, t("balanceAdjustmentRemoved"))) setEdit(null);
         }}
       />}
-      {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, t("pocketBudgetMoved"))) setEdit(null); }} />}
+      {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} toPocketId={edit.toPocketId} initialAmount={edit.amount} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, t("pocketBudgetMoved"))) setEdit(null); }} />}
+      {edit?.type === "cash_shortfall" && <Modal title={t("freeToSpend")} onClose={() => setEdit(null)}><div className="form-footer"><button className="button primary" onClick={() => setEdit({ type: "transaction", initialMode: "income" })}>{t("addIncome")}</button><button className="button secondary" onClick={() => setEdit({ type: "plan" })}>{t("adjustPlan")}</button></div></Modal>}
       {catchUpSheet && !edit && <Suspense fallback={null}><CatchUpDays data={data} days={catchUpSheet.days} index={catchUpSheet.index} busy={busy} onIndex={(index) => setCatchUpSheet({ ...catchUpSheet, index })} onAdd={(date, favorite) => setEdit({ type: "transaction", date, favorite })} onEdit={(value) => openTransaction(value)} onNothingSpent={(day) => commit({ ...data, checkedDays: [...new Set([...data.checkedDays, day])].sort() }, t("markedAsNothingSpent"))} onClose={() => setCatchUpSheet(null)} /></Suspense>}
       {edit?.type === "transaction" && (
         <TransactionEditor
@@ -1321,6 +1312,7 @@ export default function App() {
           initialCardId={edit.cardId}
           initialPocketId={edit.pocketId}
           initialDate={edit.date}
+          initialMode={edit.initialMode}
           favorite={edit.favorite}
           month={month}
           busy={busy}
@@ -1393,6 +1385,7 @@ export default function App() {
         <PocketEditor
           data={data}
           pocket={edit.value}
+          focusBudget={edit.focusBudget}
           month={month}
           busy={busy}
           onClose={() => {
@@ -1412,21 +1405,13 @@ export default function App() {
             )
               setEdit(null);
           }}
-          onDelete={async (id) => {
-            if (
-              await commit(
-                { ...data, pockets: data.pockets.filter((p) => p.id !== id) },
-                t("pocketDeleted"),
-              )
-            )
-              setEdit(null);
-          }}
+          onDelete={() => edit.value && setEdit({ type: "pocket_delete", value: edit.value })}
         />
       )}
-      {edit?.type === "pocket_delete" && <Modal title={t("deleteNamed", { name: edit.value.name })} subtitle={t("thisPocketWillBeRemoved")} onClose={() => setEdit(null)}>
-        {pocketHasReferences(data, edit.value.id) ? <p className="editor-help">{t("thisPocketHasTransactionsRecurring")}</p> : <p>{t("deleteThisPocketAndIts")}</p>}
-        <div className="form-footer"><button className="button secondary" onClick={() => setEdit(null)}>{t("cancel")}</button>{!pocketHasReferences(data, edit.value.id) && <button className="button danger" disabled={busy} onClick={() => void commit({ ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) }, t("pocketDeleted")).then((saved) => { if (saved) setEdit(null); })}>{t("deletePocket")}</button>}</div>
-      </Modal>}
+      {edit?.type === "pocket_delete" && <PocketDeleteEditor data={data} pocket={edit.value} busy={busy} onClose={() => setEdit(null)} onAddPocket={() => setEdit({ type: "pocket" })} onSave={async (targetId) => {
+        const next = targetId ? reassignAndDeletePocket(data, edit.value.id, targetId) : { ...data, pockets: data.pockets.filter((p) => p.id !== edit.value.id) };
+        if (await commit(next, t("pocketDeleted"))) { setEdit(null); if (selectedPocketId === edit.value.id) closePocket(); }
+      }} />}
       {edit?.type === "plan" && <Suspense fallback={null}><PocketPlanner
         data={data}
         month={today().slice(0, 7)}
@@ -1460,9 +1445,6 @@ export default function App() {
           onClose={() => setEdit(null)}
           onStart={async (next) => {
             if (await commit(next, t("yourOwnLittleFreshStart"))) {
-              const completedAt = new Date().toISOString();
-              setSetupCompletedAt(completedAt);
-              void Preferences.set({ key: setupCompletedKey, value: completedAt }).catch(() => {});
               setEdit(null);
               setMonth(today().slice(0, 7));
               go("pockets");
@@ -1673,6 +1655,7 @@ function TransactionEditor({
   initialCardId,
   initialPocketId,
   initialDate,
+  initialMode,
   favorite,
   month,
   busy,
@@ -1689,6 +1672,7 @@ function TransactionEditor({
   initialCardId?: string;
   initialPocketId?: string;
   initialDate?: string;
+  initialMode?: "expense" | "income";
   favorite?: Favorite;
   month: string;
   busy: boolean;
@@ -1703,7 +1687,7 @@ function TransactionEditor({
   const transferPair = transaction?.transferId ? data.transactions.find((item) => item.transferId === transaction.transferId && item.id !== transaction.id) : undefined;
   const transferOutgoing = transaction?.type === "expense" ? transaction : transferPair?.type === "expense" ? transferPair : undefined;
   const transferIncoming = transaction?.type === "income" ? transaction : transferPair?.type === "income" ? transferPair : undefined;
-  const [mode, setMode] = useState<"expense" | "income" | "transfer">(initialTransfer || transaction?.kind === "account_transfer" ? "transfer" : transaction?.type || favorite?.type || "expense"),
+  const [mode, setMode] = useState<"expense" | "income" | "transfer">(initialTransfer || transaction?.kind === "account_transfer" ? "transfer" : transaction?.type || favorite?.type || initialMode || "expense"),
     [amount, setAmount] = useState(
       transaction ? String(transaction.amount) : favorite ? String(favorite.amount) : "",
     ),
@@ -1794,11 +1778,6 @@ function TransactionEditor({
     if (!name.trim()) {
       setFieldError({ field: "name", message: t("transactionNameNeeded") });
       nameField.current?.focus();
-      return;
-    }
-    const p = data.pockets.find((p) => p.id === pocket);
-    if (type === "expense" && p && date.slice(0, 7) < p.createdMonth) {
-      setFieldError({ field: "pocket", message: t("pocketStartsLater", { month: monthLabel(p.createdMonth) }) });
       return;
     }
     if (shared && (!Number.isInteger(Number(people)) || Number(people) < 2 || Number(people) > 30 || !validAmount(Number(ownAmount || Math.ceil(Number(amount) / Number(people)))) || Number(ownAmount || Math.ceil(Number(amount) / Number(people))) > Number(amount))) {
@@ -2028,6 +2007,7 @@ function TransactionEditor({
 function PocketEditor({
   data,
   pocket,
+  focusBudget,
   month,
   busy,
   onClose,
@@ -2036,11 +2016,12 @@ function PocketEditor({
 }: {
   data: Data;
   pocket?: Pocket;
+  focusBudget?: boolean;
   month: string;
   busy: boolean;
   onClose: () => void;
   onSave: (p: Pocket) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
+  onDelete: () => void;
 }) {
   const [name, setName] = useState(pocket?.name || ""),
     [budget, setBudget] = useState(
@@ -2048,10 +2029,7 @@ function PocketEditor({
     ),
     [color, setColor] = useState(pocket?.color || COLORS[0]),
     [icon, setIcon] = useState(pocket?.icon || ICONS[0]),
-    [error, setError] = useState(""),
-    [deleting, setDeleting] = useState(false);
-  const used =
-    !!pocket && pocketHasReferences(data, pocket.id);
+    [error, setError] = useState("");
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (
@@ -2072,15 +2050,16 @@ function PocketEditor({
       setError(t("aPocketWithThisName"));
       return;
     }
-    await onSave({
+    const base: Pocket = {
       id: pocket?.id || uid(),
       name: name.trim(),
       color,
       icon,
-      budget: pocket?.budget ?? Number(budget),
-      budgets: { ...pocket?.budgets, [month]: Number(budget) },
+      budget: Number(budget),
+      budgets: {},
       createdMonth: pocket?.createdMonth || month,
-    });
+    };
+    await onSave(pocket ? { ...setPocketBudgetFromMonth(pocket, month, Number(budget)), name: base.name, color, icon } : base);
   }
   return (
     <Modal
@@ -2096,7 +2075,7 @@ function PocketEditor({
           <label className="field">
             {t("pocketName")}
             <input
-              autoFocus
+              autoFocus={!focusBudget}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t("eGWeekendAdventures")}
@@ -2110,6 +2089,7 @@ function PocketEditor({
             <div className="amount-input">
               <span>Rp</span>
               <MoneyInput
+                autoFocus={focusBudget}
                 min="0"
                 max="1000000000000"
                 step="1"
@@ -2120,11 +2100,6 @@ function PocketEditor({
                 aria-label={t("pocketBudgetInRupiah")}
               />
             </div>
-            {!pocket && (
-              <small>
-                {t("thisAmountRepeatsAsThe")}
-              </small>
-            )}
           </label>
           <span className="field-label">{t("color")}</span>
           <div className="color-swatches">
@@ -2163,36 +2138,11 @@ function PocketEditor({
               {error}
             </p>
           )}
-          {deleting ? (
-            <div className="delete-confirm">
-              <p>
-                {used
-                  ? "This pocket has transactions. Move or delete them before deleting the pocket."
-                  : "Delete this empty pocket?"}
-              </p>
-              {!used && (
-                <button
-                  type="button"
-                  className="button danger"
-                  onClick={() => void onDelete(pocket!.id)}
-                >
-                  {t("deletePocket")}
-                </button>
-              )}
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => setDeleting(false)}
-              >
-                {t("keepIt")}
-              </button>
-            </div>
-          ) : (
             <div className="form-footer">
               {pocket && (
                 <IconButton
                   label={t("deletePocket")}
-                  onClick={() => setDeleting(true)}
+                  onClick={onDelete}
                 >
                   <Trash2 size={18} />
                 </IconButton>
@@ -2209,17 +2159,31 @@ function PocketEditor({
                 <Check size={16} />
               </button>
             </div>
-          )}
         </fieldset>
       </form>
     </Modal>
   );
 }
 
-function PocketTransferEditor({ data, month, busy, onClose, onSave }: { data: Data; month: string; busy: boolean; onClose: () => void; onSave: (move: Data["pocketTransfers"][number]) => Promise<void> }) {
-  const stats = summary(data, month), [from, setFrom] = useState(data.pockets[0]?.id || ""), [to, setTo] = useState(data.pockets[1]?.id || ""), [amount, setAmount] = useState(""), [error, setError] = useState("");
+function PocketDeleteEditor({ data, pocket, busy, onClose, onAddPocket, onSave }: { data: Data; pocket: Pocket; busy: boolean; onClose: () => void; onAddPocket: () => void; onSave: (targetId: string) => Promise<void> }) {
+  const used = pocketHasReferences(data, pocket.id);
+  const choices = data.pockets.filter((item) => item.id !== pocket.id).map((item) => ({ value: item.id, label: item.name }));
+  const [target, setTarget] = useState("");
+  const [error, setError] = useState("");
+  return <Modal title={t("deleteNamed", { name: pocket.name })} onClose={onClose}>
+    <form onSubmit={(event) => { event.preventDefault(); if (used && !target) { setError(t("chooseDestinationPocket")); return; } void onSave(target); }}>
+      {used && <div className="field"><ChoiceField label={t("movePocketContentsTo")} value={target} onValueChange={(value) => { setTarget(value); setError(""); }} placeholder={t("choosePocket")} options={choices} />{error && <p className="field-error" role="alert">{error}</p>}</div>}
+      {used && !choices.length && <button type="button" className="button secondary" onClick={onAddPocket}>{t("addPocket")}</button>}
+      {!used && <p>{t("deleteThisPocketAndIts")}</p>}
+      <div className="form-footer"><button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button><button className="button danger" disabled={busy}>{t("deletePocket")}</button></div>
+    </form>
+  </Modal>;
+}
+
+function PocketTransferEditor({ data, month, busy, toPocketId, initialAmount, onClose, onSave }: { data: Data; month: string; busy: boolean; toPocketId?: string; initialAmount?: number; onClose: () => void; onSave: (move: Data["pocketTransfers"][number]) => Promise<void> }) {
+  const stats = summary(data, month), [from, setFrom] = useState(() => stats.pockets.filter((p) => p.id !== toPocketId).sort((a, b) => (b.limit - b.spent) - (a.limit - a.spent))[0]?.id || ""), [to, setTo] = useState(toPocketId || data.pockets.find((p) => p.id !== from)?.id || ""), [amount, setAmount] = useState(initialAmount ? String(initialAmount) : ""), [error, setError] = useState("");
   const choices = stats.pockets.map((p) => ({ value: p.id, label: p.name, description: `${money(Math.max(0, p.limit - p.spent))} remaining` }));
-  return <Modal title={t("movePocketBudget")} subtitle={t("adjustMonthOnly", { month: monthLabel(month) })} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError(t("chooseTwoDifferentPocketsAnd")); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">{t("from")}<ChoiceField hideLabel label={t("pocketToMoveFrom")} value={from} onValueChange={setFrom} options={choices} /></label><label className="field">To<ChoiceField hideLabel label={t("pocketToMoveTo")} value={to} onValueChange={setTo} options={choices} /></label><label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">{t("moveBudget")}</button></div></fieldset></form></Modal>;
+  return <Modal title={t("movePocketBudget")} subtitle={t("adjustMonthOnly", { month: monthLabel(month) })} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError(t("chooseTwoDifferentPocketsAnd")); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">{t("from")}<ChoiceField hideLabel label={t("pocketToMoveFrom")} value={from} onValueChange={setFrom} options={choices} /></label><label className="field">{t("to")}<ChoiceField hideLabel label={t("pocketToMoveTo")} value={to} onValueChange={setTo} options={choices} /></label><label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">{t("moveBudget")}</button></div></fieldset></form></Modal>;
 }
 
 function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean; busy: boolean; error: string; onLogin: () => Promise<void> }) {
