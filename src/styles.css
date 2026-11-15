@@ -144,6 +144,13 @@
 .catchup-review-empty { display: flex; align-items: center; gap: 9px; padding: 20px; border-radius: 13px; background: var(--accent-soft); color: var(--teal); font-size: 12px; line-height: 1.5; }
 .catchup-row { margin: 8px 0; overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
 .catchup-row-summary { min-height: 76px; padding: 12px 15px; }
+.notification-row-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 15px 11px; }
+.notification-pocket-chip, .notification-status-toggle { min-height: 31px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font-size: 11px; font-weight: 650; }
+.notification-pocket-chip { background: var(--surface-muted); }
+.notification-status-toggle .catchup-row-status { margin: 0; }
+.notification-transfer-toggle { grid-column: 1 / -1; justify-self: start; }
+.notification-transfer-toggle[aria-pressed="true"] { color: var(--teal); font-weight: 700; }
+.notification-done { grid-column: 1 / -1; justify-self: end; }
 .catchup-row-identity small { font-size: 11px; }
 .catchup-row-identity strong { font-size: 14px; }
 .catchup-row-kicker { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--muted); font-size: 11px; font-weight: 700; }

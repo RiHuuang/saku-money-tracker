@@ -267,4 +267,11 @@ export const id = {
   startingBalanceAmount: "Saldo awal (Rp)",
   accountAdded: "Akun ditambahkan",
   fixBalanceFor: "Perbaiki saldo {account}",
+  notificationCaptureOff: "Pengambilan notifikasi sedang mati.",
+  openNotificationSettings: "Buka pengaturan",
+  markRowToAdd: "Tandai baris ini untuk ditambahkan",
+  markRowToSkip: "Lewati baris ini",
+  movedToMyOtherAccount: "Dipindah ke akun saya yang lain",
+  entriesUndone: "Catatan dibatalkan",
+  undoUnavailable: "Ruang kerja berganti. Batal tidak tersedia.",
 } satisfies Record<keyof typeof en, string>;

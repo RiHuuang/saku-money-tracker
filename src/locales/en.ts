@@ -265,4 +265,11 @@ export const en = {
   startingBalanceAmount: "Starting balance (Rp)",
   accountAdded: "Account added",
   fixBalanceFor: "Fix balance for {account}",
+  notificationCaptureOff: "Notification capture is off.",
+  openNotificationSettings: "Open settings",
+  markRowToAdd: "Mark this row to add",
+  markRowToSkip: "Skip this row",
+  movedToMyOtherAccount: "Moved to my other account",
+  entriesUndone: "Entries undone",
+  undoUnavailable: "This workspace changed. Undo is unavailable.",
 } as const;

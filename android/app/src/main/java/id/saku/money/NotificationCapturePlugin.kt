@@ -91,6 +91,28 @@ class NotificationCapturePlugin : Plugin() {
     }
 
     @PluginMethod
+    fun restoreInbox(call: PluginCall) {
+        val items = call.getArray("items")
+        if (items == null || items.length() > 500) { call.reject("Invalid inbox items"); return }
+        val store = NotificationInbox.store(context)
+        for (index in 0 until items.length()) {
+            val item = items.optJSONObject(index)
+            if (item == null || item.optString("id").isBlank() || item.optString("id").length > 150 ||
+                item.optString("packageName").isBlank() || item.optString("account").length > 50 ||
+                item.optLong("amount") !in 1L..1_000_000_000_000L ||
+                item.optString("direction") !in listOf("expense", "income")) {
+                call.reject("Invalid inbox item"); return
+            }
+            val balance = if (item.isNull("balance")) null else item.optLong("balance")
+            store.add(InboxItem(item.getString("id"), item.getString("packageName"), item.optString("account"),
+                item.getLong("amount"), item.getString("direction"), InboxRedaction.redact(item.optString("rawMerchant"), item.getLong("amount")),
+                balance, item.optLong("occurredAt")))
+        }
+        NotificationInbox.summarize(context, store.items().size)
+        call.resolve()
+    }
+
+    @PluginMethod
     fun clearInbox(call: PluginCall) {
         NotificationInbox.clear(context)
         call.resolve()

@@ -11,6 +11,7 @@ type NotificationCapturePlugin = {
   setPaused(options: { paused: boolean }): Promise<void>;
   inbox(): Promise<{ items: InboxItem[] }>;
   removeInbox(options: { ids: string[] }): Promise<void>;
+  restoreInbox(options: { items: InboxItem[] }): Promise<void>;
   clearInbox(): Promise<void>;
 };
 
