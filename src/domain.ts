@@ -345,6 +345,7 @@ export function summary(data: Data, month: string) {
     budget,
     remaining,
     available: Math.min(Math.max(0, balance), remaining),
+    shortfall: Math.max(0, remaining - balance),
     cardDebt: data.creditCards.reduce((n, c) => n + Math.max(0, cardBalance(data, c.id)), 0),
     unassigned: transactions.filter((t) => isSpending(t) && !t.pocketId).reduce((n, t) => n + personalAmount(t), 0),
     accounts: data.accounts.map((account) => ({ account, balance: accountBalance(data, account) })),

@@ -3529,6 +3529,9 @@ main {
     line-height: 1.7;
   }
 }
+.modal.modal-compact { width: min(480px, calc(100% - 28px)); max-width: calc(100% - 28px); height: fit-content; max-height: min(280px, calc(100dvh - 40px)); margin: auto; border: 1px solid var(--line); border-radius: 20px; }
+.modal.modal-compact .modal-content { min-height: 0; padding: 24px; }
+.modal.modal-compact .form-footer { position: static; border-top: 0; padding: 0; background: transparent; }
 @media (max-width: 370px) {
   main {
     padding-inline: 14px;

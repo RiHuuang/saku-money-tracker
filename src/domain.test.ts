@@ -59,6 +59,17 @@ test("a past expense extends a newer pocket with zero budgets in added months", 
   assert.equal(validateData(next).transactions[0].id, "old");
 });
 
+test("pocket cash shortfall includes a negative recorded balance", () => {
+  const data = emptyData();
+  data.accounts = ["Cash"];
+  data.pockets = [{ id: "food", name: "Food", color: COLORS[0], icon: ICONS[0], budget: 100000, budgets: {}, createdMonth: "2026-11" }];
+  data.transactions = [{ id: "balance", name: "Balance adjustment", amount: 50000, type: "expense", kind: "balance_adjustment", date: "2026-11-01", pocketId: "", account: "Cash", note: "Balance adjustment" }];
+  const stats = summary(data, "2026-11");
+  assert.equal(stats.balance, -50000);
+  assert.equal(stats.available, 0);
+  assert.equal(stats.shortfall, 150000);
+});
+
 test("editing a pocket budget preserves earlier months and changes later months", () => {
   const pocket = { id: "food", name: "Food", color: COLORS[0], icon: ICONS[0], budget: 100000, budgets: { "2026-09": 120000, "2026-11": 130000 }, createdMonth: "2026-08" };
   const edited = setPocketBudgetFromMonth(pocket, "2026-10", 200000);

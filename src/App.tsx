@@ -1088,9 +1088,9 @@ export default function App() {
                   <span>{t("spentSoFar")}</span>
                   <strong>{money(stats.expenses)}</strong>
                 </div>
-                <button type="button" className={stats.remaining > Math.max(0, stats.balance) ? "shortfall-tile" : ""} onClick={() => setEdit({ type: "cash_shortfall" })}>
-                  <span>{stats.remaining > Math.max(0, stats.balance) ? t("shortBy") : t("freeToSpend")}</span>
-                  <strong>{money(stats.remaining > Math.max(0, stats.balance) ? stats.remaining - Math.max(0, stats.balance) : stats.available)}</strong>
+                <button type="button" className={stats.shortfall > 0 ? "shortfall-tile" : ""} onClick={() => setEdit({ type: "cash_shortfall" })}>
+                  <span>{stats.shortfall > 0 ? t("shortBy") : t("freeToSpend")}</span>
+                  <strong>{money(stats.shortfall > 0 ? stats.shortfall : stats.available)}</strong>
                 </button>
               </div>
               <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><div className="section-actions"><button className="button secondary" onClick={() => setEdit({ type: "plan" })}><Sparkles size={16} />{t("planWithSaku")}</button><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div></div>
@@ -1302,7 +1302,7 @@ export default function App() {
         }}
       />}
       {edit?.type === "pocket_transfer" && <PocketTransferEditor data={data} month={month} busy={busy} toPocketId={edit.toPocketId} initialAmount={edit.amount} onClose={() => setEdit(null)} onSave={async (move) => { if (await commit({ ...data, pocketTransfers: [...data.pocketTransfers, move] }, t("pocketBudgetMoved"))) setEdit(null); }} />}
-      {edit?.type === "cash_shortfall" && <Modal title={t("freeToSpend")} onClose={() => setEdit(null)}><div className="form-footer"><button className="button primary" onClick={() => setEdit({ type: "transaction", initialMode: "income" })}>{t("addIncome")}</button><button className="button secondary" onClick={() => setEdit({ type: "plan" })}>{t("adjustPlan")}</button></div></Modal>}
+      {edit?.type === "cash_shortfall" && <Modal className="modal-compact" title={stats.shortfall > 0 ? t("shortBy") : t("freeToSpend")} subtitle={money(stats.shortfall > 0 ? stats.shortfall : stats.available)} onClose={() => setEdit(null)}><div className="form-footer"><button className="button primary" onClick={() => setEdit({ type: "transaction", initialMode: "income" })}>{t("addIncome")}</button><button className="button secondary" onClick={() => setEdit({ type: "plan" })}>{t("adjustPlan")}</button></div></Modal>}
       {catchUpSheet && !edit && <Suspense fallback={null}><CatchUpDays data={data} days={catchUpSheet.days} index={catchUpSheet.index} busy={busy} onIndex={(index) => setCatchUpSheet({ ...catchUpSheet, index })} onAdd={(date, favorite) => setEdit({ type: "transaction", date, favorite })} onEdit={(value) => openTransaction(value)} onNothingSpent={(day) => commit({ ...data, checkedDays: [...new Set([...data.checkedDays, day])].sort() }, t("markedAsNothingSpent"))} onClose={() => setCatchUpSheet(null)} /></Suspense>}
       {edit?.type === "transaction" && (
         <TransactionEditor
