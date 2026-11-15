@@ -196,8 +196,6 @@ export const en = {
   planApplied: "Plan from {date}",
   planCreated: "Added {count} pockets",
   planEditableLater: "You can re-plan any time with Plan with Saku on the Pockets page.",
-  planHintBody: "Tell Saku your income and it suggests how much each pocket gets, from what you really spend. Nothing changes until you apply it.",
-  planHintTitle: "Let Saku suggest your pocket amounts",
   planNotApplied: "The plan couldn't be applied.",
   planSaved: "New pocket plan applied",
   planWithSaku: "Plan with Saku",

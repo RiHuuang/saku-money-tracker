@@ -230,7 +230,6 @@ export default function App() {
   const activeSync = useRef<Data | null>(null);
   const syncRunning = useRef(false);
   const mirrorRunning = useRef(false);
-  const [planHintHidden, setPlanHintHidden] = useState(() => { try { return localStorage.getItem("saku-plan-hint-hidden-v1") === "1"; } catch { return false; } });
   const latest = useRef({ data, cloud, edit, resolution });
   latest.current = { data, cloud, edit, resolution };
   const reconcileRef = useRef<((afterFailedSync?: boolean) => Promise<void>) | null>(null);
@@ -1094,7 +1093,6 @@ export default function App() {
                 </button>
               </div>
               <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><div className="section-actions"><button className="button secondary" onClick={() => setEdit({ type: "plan" })}><Sparkles size={16} />{t("planWithSaku")}</button><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div></div>
-              {!data.monthlyIncome && data.pockets.length > 0 && !planHintHidden && <section className="plan-hint"><span className="plan-hint-icon" aria-hidden="true"><Sparkles size={18} /></span><div><strong>{t("planHintTitle")}</strong><p>{t("planHintBody")}</p></div><div className="plan-hint-actions"><button className="button primary" onClick={() => setEdit({ type: "plan" })}>{t("planWithSaku")}</button><button className="text-button" onClick={() => { setPlanHintHidden(true); try { localStorage.setItem("saku-plan-hint-hidden-v1", "1"); } catch { /* A convenience only. */ } }}>{t("notNow")}</button></div></section>}
               <div className="pocket-grid all-pockets">
                 {stats.pockets.map((p) => (
                   <PocketCard

@@ -4449,20 +4449,14 @@ main.onboarding { max-width: none; margin: 0; padding: 0; }
 .planner-history-row small { color: var(--muted); font-size: 11px; }
 .planner-footer { position: sticky; bottom: 0; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin: 0; padding: 12px 0 4px; background: var(--surface); border-top: 1px solid var(--line); }
 .section-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-.plan-hint { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px 14px; align-items: start; margin: 0 0 18px; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 2px 13px #173f2510; animation: onboarding-pop .42s cubic-bezier(.2,.8,.2,1) both; }
-.plan-hint-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--teal); }
-.plan-hint strong { font-size: 14px; }
-.plan-hint p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.plan-hint-actions { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .section-heading:has(> .section-actions) { flex-wrap: wrap; row-gap: 12px; }
 @media (max-width: 520px) {
   .section-actions { width: 100%; justify-content: flex-start; }
   .section-actions .button { flex: 1; }
   .allocation-row-inputs { grid-template-columns: minmax(0, 1fr) 84px; }
-  .plan-hint { grid-template-columns: 1fr; } .plan-hint-actions { grid-column: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .onboarding-hero, .onboarding-step, .onboarding-pop, .allocation-row, .onboarding-summary-list li, .plan-hint, .allocation-bar.is-summary i, .onboarding-chips button.is-selected { animation: none; }
+  .onboarding-hero, .onboarding-step, .onboarding-pop, .allocation-row, .onboarding-summary-list li, .allocation-bar.is-summary i, .onboarding-chips button.is-selected { animation: none; }
   .allocation-pulse { animation: none; opacity: 1; }
 }
 

@@ -198,8 +198,6 @@ export const id = {
   planApplied: "Rencana {date}",
   planCreated: "Menambah {count} kantong",
   planEditableLater: "Kamu bisa atur ulang kapan saja lewat Rencanakan dengan Saku di halaman Kantong.",
-  planHintBody: "Beri tahu Saku pemasukanmu, nanti Saku sarankan isi tiap kantong dari pengeluaranmu yang sebenarnya. Tidak ada yang berubah sampai kamu terapkan.",
-  planHintTitle: "Biar Saku sarankan isi kantongmu",
   planNotApplied: "Rencana belum bisa diterapkan.",
   planSaved: "Rencana kantong baru diterapkan",
   planWithSaku: "Rencanakan dengan Saku",
