@@ -86,7 +86,6 @@ import { notificationCapture, notificationCaptureSupported } from "./notificatio
 import NotificationAccess from "./NotificationAccess";
 import { importRowsWaiting } from "./importTransactions";
 import { AccountEditor, AccountsOverview, accountColor } from "./AccountsOverview";
-import { useHold } from "./rowGestures";
 import { applyRecentsPrivacy, appLockStatus, appLockSupported, authenticate, defaultAppLock, loadAppLock, saveAppLock, shouldLock, type AppLockSettings, type LockAfter } from "./appLock";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { defaultReminder, loadReminder, remindersSupported, requestReminderPermission, saveReminder, syncReminders, type ReminderSettings } from "./reminders";
@@ -161,11 +160,11 @@ import {
 } from "./cloud";
 
 type Edit =
-  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string; date?: string; initialMode?: "expense" | "income" }
+  | { type: "transaction"; value?: Transaction; cardId?: string; favorite?: Favorite; pocketId?: string; account?: string; date?: string; initialMode?: "expense" | "income" }
   | { type: "balance_adjustment"; account: string; value?: Transaction }
   | { type: "pocket"; value?: Pocket; focusBudget?: boolean }
   | { type: "pocket_delete"; value: Pocket }
-  | { type: "account_transfer"; value?: Transaction }
+  | { type: "account_transfer"; value?: Transaction; account?: string }
   | { type: "pocket_transfer"; toPocketId?: string; amount?: number }
   | { type: "cash_shortfall" }
   | { type: "start" }
@@ -216,7 +215,7 @@ export default function App() {
   const [showAvailabilityInfo, setShowAvailabilityInfo] = useState(false);
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState("");
-  const hold = useHold();
+  const [selectedAccount, setSelectedAccount] = useState("");
   setActiveLanguage(languagePreference);
   const [viewHistory, setViewHistory] = useState<View[]>([]);
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
@@ -478,6 +477,7 @@ export default function App() {
       const stepper = document.querySelector("[data-back-step]");
       if (stepper) { stepper.dispatchEvent(new Event("saku-back")); return; }
       if (edit) setEdit(null);
+      else if (selectedAccount) setSelectedAccount("");
       else if (selectedPocketId) closePocket();
       else {
         if (backDestination(view, viewHistory)) backView();
@@ -487,7 +487,7 @@ export default function App() {
     return () => {
       void listener.then((h) => h.remove());
     };
-  }, [edit, view, viewHistory, selectedPocketId, pocketReturnView]);
+  }, [edit, view, viewHistory, selectedAccount, selectedPocketId, pocketReturnView]);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const openQuickAdd = (url?: string) => {
@@ -703,6 +703,8 @@ export default function App() {
     // Opening Catch up lands on what is actually waiting: captured notifications, unless a screenshot draft is open.
     if (v === "check" && view !== "check" && cloudImportEnabled && importWaiting > draftsWaiting && !draftsWaiting) setCheckTab("notifications");
     setSelectedPocketId(null);
+    setSelectedAccount("");
+    setAccountsOpen(false);
     setView(v);
     window.scrollTo({ top: 0 });
   };
@@ -711,6 +713,8 @@ export default function App() {
     if (!destination) return;
     setViewHistory((history) => popSheet(history));
     setSelectedPocketId(null);
+    setSelectedAccount("");
+    setAccountsOpen(false);
     setView(destination);
     window.scrollTo({ top: 0 });
   }
@@ -811,6 +815,7 @@ export default function App() {
           </div>
         </header>
         <main id="main-content" tabIndex={-1}>
+          {selectedAccount ? <AccountActivity data={data} account={selectedAccount} month={month} onMonthChange={setMonth} onBack={() => setSelectedAccount("")} onRename={() => setEditingAccount(selectedAccount)} onAdd={() => setEdit({ type: "transaction", account: selectedAccount })} onTransfer={() => setEdit({ type: "account_transfer", account: selectedAccount })} onAdjust={() => setEdit({ type: "balance_adjustment", account: selectedAccount })} onEdit={openTransaction} /> : <>
           <section className="page-heading">
             <div>
               {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={backView}><ChevronLeft size={17} /> {t(viewHistory.at(-1) === "more" ? "more" : viewHistory.at(-1) === "overview" ? "home" : viewHistory.at(-1) === "pockets" ? "pockets" : "more")}</button>}
@@ -951,14 +956,8 @@ export default function App() {
                   <small>{money(stats.budget)} {t("planned")}</small>
                 </div>
               </section>
-              <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <button type="button" className="account-balance-item" key={item.account} aria-label={t("accountCardLabel", { account: item.account, amount: money(item.balance) })} {...hold(() => setAccountsOpen(true), () => setEditingAccount(item.account))}><span className="account-balance-icon" style={{ color: accountColor(data, item.account) }}><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></button>)}</section>
-              {accountsOpen && <AccountsOverview data={data} monthTransactions={stats.transactions} onClose={() => setAccountsOpen(false)} onEdit={(account) => setEditingAccount(account)} />}
-              {editingAccount && <AccountEditor data={data} account={editingAccount} busy={busy} onClose={() => setEditingAccount("")} onAdjust={(account) => setEdit({ type: "balance_adjustment", account })} onSave={async (next, message, renamed) => {
-                const ok = await commit(next, message);
-                // Notification capture remembers the Saku account by name, so a rename moves those links too.
-                if (ok && renamed && notificationCaptureSupported()) void notificationCapture.status().then((status) => Promise.all(status.apps.filter((app) => app.account === renamed.from).map((app) => notificationCapture.setApp({ packageName: app.packageName, account: renamed.to })))).catch(() => {});
-                return ok;
-              }} />}
+              <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <button type="button" className="account-balance-item" key={item.account} aria-label={t("accountCardLabel", { account: item.account, amount: money(item.balance) })} onClick={() => setSelectedAccount(item.account)}><span className="account-balance-icon" style={{ color: accountColor(data, item.account) }}><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></button>)}</section>
+              {accountsOpen && <AccountsOverview data={data} monthTransactions={stats.transactions} onClose={() => setAccountsOpen(false)} onEdit={(account) => setSelectedAccount(account)} />}
               <section className="daily-strip" aria-label={t("quickEntriesLabel")}>
                 <div className="daily-check"><span>{t("currentWeek")}</span><strong>{money(weekSpend)} {t("spent")}</strong><small>{weekTop?.amount ? t("largestPocket", { name: weekTop.name }) : t("noSpending")}</small><small>{money(currentAvailable)} {t("currentPlanAvailable")}</small></div>
 <div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={t("removeShortcut", { name: f.name })} aria-label={t("removeShortcut", { name: f.name })} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, t("quickEntryRemoved"))}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
@@ -1252,16 +1251,26 @@ export default function App() {
               onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast(t("appearanceCouldNotBeSaved"))); }}
               languagePreference={languagePreference}
               onLanguageChange={(preference) => { setLanguagePreference(preference); void saveLanguage(preference).catch(() => setToast(t("languageSaveError"))); }}
-              onAdjustBalance={(account) => setEdit({ type: "balance_adjustment", account })}
+              onOpenAccount={(account) => setSelectedAccount(account)}
               appLock={appLock}
               onAppLockChange={changeAppLock}
               reminder={reminder}
               onReminderChange={async (next) => { await saveReminder(next); setReminder(next); }}
             />
           )}
+          </>}
         </main>
       </div>
-      {(view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket)) && <button className="mobile-add-action" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket?.id })}><Plus size={20} /> {t("addTransaction")}</button>}
+      {editingAccount && <AccountEditor data={data} account={editingAccount} busy={busy} onClose={() => setEditingAccount("")} onAdjust={(account) => { setEditingAccount(""); setEdit({ type: "balance_adjustment", account }); }} onSave={async (next, message, renamed) => {
+        const ok = await commit(next, message);
+        if (ok && !next.accounts.includes(editingAccount)) setSelectedAccount("");
+        if (ok && renamed) {
+          setSelectedAccount(renamed.to);
+          if (notificationCaptureSupported()) void notificationCapture.status().then((status) => Promise.all(status.apps.filter((app) => app.account === renamed.from).map((app) => notificationCapture.setApp({ packageName: app.packageName, account: renamed.to })))).catch(() => {});
+        }
+        return ok;
+      }} />}
+      {!selectedAccount && (view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket)) && <button className="mobile-add-action" onClick={() => setEdit({ type: "transaction", pocketId: selectedPocket?.id })}><Plus size={20} /> {t("addTransaction")}</button>}
       <nav className="bottom-nav" aria-label={t("mobileNavigation")}>
         {mobileNavigation.map((n) => (
           <button
@@ -1278,7 +1287,7 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {edit?.type === "account_transfer" && <TransactionEditor data={data} transaction={edit.value} initialTransfer month={month} busy={busy} onClose={() => setEdit(null)} onSave={async () => false} onDelete={async () => {}} onRepay={async () => {}} onTransfer={async (rows, oldTransferId) => {
+      {edit?.type === "account_transfer" && <TransactionEditor data={data} transaction={edit.value} initialTransfer initialAccount={edit.account} month={month} busy={busy} onClose={() => setEdit(null)} onSave={async () => false} onDelete={async () => {}} onRepay={async () => {}} onTransfer={async (rows, oldTransferId) => {
         const kept = data.transactions.filter((t) => !oldTransferId || t.transferId !== oldTransferId);
         if (await commit({ ...data, transactions: [...kept, ...rows] }, oldTransferId ? t("transferUpdated") : t("transferRecorded"))) setEdit(null);
       }} onDeleteTransfer={async (transferId) => { if (await commit({ ...data, transactions: data.transactions.filter((t) => t.transferId !== transferId) }, t("transferDeleted"))) setEdit(null); }} />}
@@ -1309,6 +1318,7 @@ export default function App() {
           transaction={edit.value}
           initialCardId={edit.cardId}
           initialPocketId={edit.pocketId}
+          initialAccount={edit.account}
           initialDate={edit.date}
           initialMode={edit.initialMode}
           favorite={edit.favorite}
@@ -1462,6 +1472,26 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function AccountActivity({ data, account, month, onMonthChange, onBack, onRename, onAdd, onTransfer, onAdjust, onEdit }: {
+  data: Data; account: string; month: string; onMonthChange: (month: string) => void; onBack: () => void;
+  onRename: () => void; onAdd: () => void; onTransfer: () => void; onAdjust: () => void; onEdit: (transaction: Transaction) => void;
+}) {
+  const [allHistory, setAllHistory] = useState(false);
+  const transactions = data.transactions.filter((transaction) => transaction.account === account && transaction.kind !== "card_purchase");
+  const monthRows = transactions.filter((transaction) => transaction.date.startsWith(month));
+  const amount = (type: Transaction["type"]) => monthRows.filter((transaction) => transaction.type === type).reduce((total, transaction) => total + transaction.amount, 0);
+  const shown = (allHistory ? transactions : monthRows).sort((a, b) => b.date.localeCompare(a.date));
+  return <section className="account-activity">
+    <div className="page-heading"><div><button className="back-to-more" onClick={onBack}><ChevronLeft size={17} />{t("back")}</button><p>{t("accountActivity")}</p><h1>{account}<button type="button" className="pocket-heading-edit" aria-label={t("editAccountNamed", { account })} onClick={onRename}><PencilLine size={17} /></button></h1></div>
+      <div className="heading-actions"><div className="month-picker"><IconButton label={t("previousMonth")} onClick={() => onMonthChange(shiftMonth(month, -1))}><ChevronLeft size={16} /></IconButton><label><CalendarDays size={16} /><span>{monthLabel(month, true)}</span><input aria-label={t("selectedMonth")} type="month" value={month} onChange={(event) => { if (/^\d{4}-\d{2}$/.test(event.target.value)) onMonthChange(event.target.value); }} /></label><IconButton label={t("nextMonth")} onClick={() => onMonthChange(shiftMonth(month, 1))}><ChevronRight size={16} /></IconButton></div></div>
+    </div>
+    <div className="pocket-activity-summary"><div><span>{t("balance")}</span><strong>{money(accountBalance(data, account))}</strong></div><div><span>{t("moneyIn")}</span><strong>{money(amount("income"))}</strong></div><div><span>{t("moneyOut")}</span><strong>{money(amount("expense"))}</strong></div></div>
+    <div className="account-activity-actions"><button className="button primary" onClick={onAdd}><Plus size={16} />{t("addTransaction")}</button><button className="button secondary" onClick={onTransfer}><ArrowRight size={16} />{t("transfer")}</button><button className="button secondary" onClick={onAdjust}><Wallet size={16} />{t("fixBalance")}</button></div>
+    <div className="section-heading"><h2>{t("history")}</h2><button className="text-button" onClick={() => setAllHistory((value) => !value)}>{allHistory ? t("selectedMonth") : t("allHistory")}</button></div>
+    <TransactionList transactions={shown} pockets={data.pockets} onEdit={onEdit} groupDates />
+  </section>;
 }
 
 function Transactions({
@@ -1619,7 +1649,7 @@ function BalanceAdjustmentEditor({
     catch { setBalanceError(t("couldNotAdjustBalance")); }
   }
   return <Modal
-    title={t("adjustAccountBalance", { account })}
+    title={t("fixBalanceFor", { account })}
     onClose={onClose}
   >
     <form onSubmit={(event) => void submit(event)} className="balance-adjustment-form">
@@ -1639,7 +1669,7 @@ function BalanceAdjustmentEditor({
         {deleting && transaction ? <div className="delete-confirm"><p>{t("removeThisBalanceAdjustmentThe")}</p><button type="button" className="button danger" onClick={() => void onDelete(transaction.id)}>{t("removeAdjustment")}</button><button type="button" className="button secondary" onClick={() => setDeleting(false)}>{t("keepIt")}</button></div> : <div className="form-footer">
           {transaction && <IconButton label={t("removeBalanceAdjustment")} onClick={() => setDeleting(true)}><Trash2 size={18} /></IconButton>}
           <button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button>
-          <button className="button primary" disabled={busy}>{busy ? t("saving") : transaction ? t("saveAdjustment") : t("adjustBalance")}<Check size={16} /></button>
+          <button className="button primary" disabled={busy}>{busy ? t("saving") : transaction ? t("saveChanges") : t("fixBalance")}<Check size={16} /></button>
         </div>}
       </fieldset>
     </form>
@@ -1652,6 +1682,7 @@ function TransactionEditor({
   initialTransfer,
   initialCardId,
   initialPocketId,
+  initialAccount,
   initialDate,
   initialMode,
   favorite,
@@ -1669,6 +1700,7 @@ function TransactionEditor({
   initialTransfer?: boolean;
   initialCardId?: string;
   initialPocketId?: string;
+  initialAccount?: string;
   initialDate?: string;
   initialMode?: "expense" | "income";
   favorite?: Favorite;
@@ -1699,9 +1731,9 @@ function TransactionEditor({
     // An existing row, a quick entry or a pocket page already chose the pocket; only a blank new entry learns it from the name.
     [pocketChosen, setPocketChosen] = useState(Boolean(transaction || favorite || initialPocketId)),
     [pickingDate, setPickingDate] = useState(() => ![daysAgo(0), daysAgo(1), daysAgo(2)].includes(transaction?.date || initialDate || today())),
-    [account, setAccount] = useState(transaction && transaction.kind !== "card_purchase" ? transaction.account : favorite && !favorite.cardId ? favorite.account : data.accounts[0]),
-    [transferFrom, setTransferFrom] = useState(transferOutgoing?.account || data.accounts[0]),
-    [transferTo, setTransferTo] = useState(transferIncoming?.account || data.accounts.find((item) => item !== data.accounts[0]) || data.accounts[0]),
+    [account, setAccount] = useState(transaction && transaction.kind !== "card_purchase" ? transaction.account : favorite && !favorite.cardId ? favorite.account : initialAccount || data.accounts[0]),
+    [transferFrom, setTransferFrom] = useState(transferOutgoing?.account || initialAccount || data.accounts[0]),
+    [transferTo, setTransferTo] = useState(transferIncoming?.account || data.accounts.find((item) => item !== (initialAccount || data.accounts[0])) || data.accounts[0]),
     [cardId, setCardId] = useState(transaction?.kind === "card_purchase" ? transaction.cardId || "" : initialCardId || favorite?.cardId || ""),
     [installments, setInstallments] = useState(String(transaction?.installments || 1)),
     [firstDueMonth, setFirstDueMonth] = useState(transaction?.firstDueMonth || shiftMonth(transaction?.date.slice(0, 7) || today().slice(0, 7), 1)),
@@ -2234,7 +2266,7 @@ function SettingsView({
   onThemeChange,
   languagePreference,
   onLanguageChange,
-  onAdjustBalance,
+  onOpenAccount,
   appLock,
   onAppLockChange,
   reminder,
@@ -2254,7 +2286,7 @@ function SettingsView({
   onThemeChange: (preference: ThemePreference) => void;
   languagePreference: LanguagePreference;
   onLanguageChange: (preference: LanguagePreference) => void;
-  onAdjustBalance: (account: string) => void;
+  onOpenAccount: (account: string) => void;
   appLock: AppLockSettings;
   onAppLockChange: (next: AppLockSettings, confirm: boolean) => Promise<boolean>;
   reminder: ReminderSettings;
@@ -2262,6 +2294,8 @@ function SettingsView({
 }) {
   const [name, setName] = useState(data.name),
     [account, setAccount] = useState(""),
+    [startingBalance, setStartingBalance] = useState(""),
+    [accountError, setAccountError] = useState(""),
     [profileImage, setProfileImage] = useState<string | undefined>(),
     [restore, setRestore] = useState<Data | null>(null),
     [protectOpen, setProtectOpen] = useState(false),
@@ -2399,9 +2433,9 @@ function SettingsView({
         <div className="account-list">
           {data.accounts.map((a) => (
             <div className="account-row" key={a}>
-              <button type="button" className="account-adjust-button" disabled={busy} onClick={() => onAdjustBalance(a)} aria-label={t("adjustBalanceCurrently", { account: a, amount: money(accountBalance(data, a)) })}>
+              <button type="button" className="account-adjust-button" disabled={busy} onClick={() => onOpenAccount(a)} aria-label={t("viewAccountActivityNamed", { account: a })}>
                 <span className="account-list-icon"><Wallet size={19} /></span>
-                <span className="account-list-name"><strong>{a}</strong><small>{t("tapToAdjustBalance")}</small></span>
+                <span className="account-list-name"><strong>{a}</strong><small>{t("tapToViewAccount")}</small></span>
                 <strong className="account-list-balance">{money(accountBalance(data, a))}</strong>
                 <PencilLine size={16} aria-hidden="true" />
               </button>
@@ -2427,22 +2461,24 @@ function SettingsView({
           ))}
         </div>
         <form
-          className="inline-form"
+          className="inline-form account-add-form"
           onSubmit={(e) => {
             e.preventDefault();
             const a = account.trim();
-            if (!a) return;
+            if (!a) { setAccountError(t("accountNameNeeded")); return; }
             if (
               data.accounts.some((x) => x.toLowerCase() === a.toLowerCase())
             ) {
-              notify(t("thisAccountAlreadyExists"));
+              setAccountError(t("thisAccountAlreadyExists"));
               return;
             }
+            const balance = Number(startingBalance || 0);
+            if (!Number.isSafeInteger(balance) || balance < 0 || balance > 1e12) { setAccountError(t("enterNewBalance")); return; }
             void commit(
-              { ...data, accounts: [...data.accounts, a] },
-              "Account added",
+              { ...data, accounts: [...data.accounts, a], transactions: balance > 0 ? [...data.transactions, { id: uid(), name: t("openingBalance"), amount: balance, type: "income", kind: "opening_balance", date: today(), pocketId: "", account: a, note: "" }] : data.transactions },
+              t("accountAdded"),
             ).then((ok) => {
-              if (ok) setAccount("");
+              if (ok) { setAccount(""); setStartingBalance(""); setAccountError(""); onOpenAccount(a); }
             });
           }}
         >
@@ -2451,9 +2487,10 @@ function SettingsView({
             placeholder={t("newAccountName")}
             maxLength={50}
             value={account}
-            onChange={(e) => setAccount(e.target.value)}
-            required
+            onChange={(e) => { setAccount(e.target.value); setAccountError(""); }}
           />
+          <label className="field">{t("startingBalanceAmount")}<MoneyInput min="0" value={startingBalance} onValueChange={(value) => { setStartingBalance(value); setAccountError(""); }} /></label>
+          {accountError && <p className="field-error" role="alert">{accountError}</p>}
           <button className="button secondary" disabled={busy}>
             <Plus size={16} />
             {t("addAccount2")}

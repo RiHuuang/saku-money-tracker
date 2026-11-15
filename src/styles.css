@@ -3804,11 +3804,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .budget-overview > button { display: grid; gap: 4px; align-content: start; color: var(--ink); text-align: left; border-radius: 10px; cursor: pointer; }
 .budget-overview > button:hover { background: var(--surface-muted); }
 .budget-overview > button.shortfall-tile strong, .budget-overview > button.shortfall-tile span { color: var(--danger); }
+.account-activity-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 26px; }
+.account-activity-actions .button { min-height: 44px; }
+.account-add-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; }
+.account-add-form > input { width: 100%; }
+.account-add-form .field { min-width: 0; }
+.account-add-form .field input { width: 100%; }
+.account-add-form .field-error { grid-column: 1 / -1; }
+@media (max-width: 600px) { .account-add-form { grid-template-columns: 1fr; } .account-add-form > input { width: 100%; } }
+@media (max-width: 600px) { .account-activity-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .account-activity-actions .button:first-child { grid-column: 1 / -1; } }
 .balance-panel::after { content: ""; position: absolute; width: 190px; height: 190px; border: 1px solid #ffffff22; border-radius: 50%; right: -70px; bottom: -115px; pointer-events: none; }
 .balance-panel .balance-number { font-variant-numeric: tabular-nums; letter-spacing: -.045em; }
 .balance-panel .balance-footer { position: relative; z-index: 1; }
 .balance-panel .availability-explainer { color: #d8eee1; font-size: 11px; line-height: 1.35; margin-top: 8px; max-width: 50ch; }
 .metric-panel, .chart-panel, .credit-card-item, .ledger, .pocket-card, .settings-content section, .empty, .insight-stats > div { background: var(--surface); border-color: var(--line); color: var(--ink); border-radius: 18px; }
+.ring-legend > div, .donut-center > span, .donut-center small { color: var(--muted); }
+.ring-legend strong { color: var(--ink); }
 .metric-panel { border: 0; box-shadow: 0 2px 13px #173f2510; }
 .metric-panel strong, .pocket-value strong, .credit-card-values strong, .rule-row strong, .due-row strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .account-balance-item, .quick-entry { background: var(--surface); border-color: var(--line); color: var(--ink); border-radius: 12px; }

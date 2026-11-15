@@ -45,7 +45,7 @@ export function AccountsOverview({ data, monthTransactions, onClose, onEdit }: {
       <section className="budget-breakdown">
         <h2>{t("everyAccountAtAGlance")}</h2>
         <div className="breakdown-header"><span>{t("account")}</span><span>{t("moneyIn")}</span><span>{t("moneyOut")}</span><span>{t("balance")}</span></div>
-        {rows.map((row) => <button type="button" className="breakdown-row" key={row.account} onClick={() => onEdit(row.account)} aria-label={t("editAccountNamed", { account: row.account })}>
+        {rows.map((row) => <button type="button" className="breakdown-row" key={row.account} onClick={() => onEdit(row.account)} aria-label={t("viewAccountActivityNamed", { account: row.account })}>
           <span><span className="legend-dot" style={{ background: accountColor(data, row.account) }} aria-hidden="true" /><strong>{row.account}</strong></span>
           <span>{money(row.income)}</span>
           <span>{money(row.expense)}</span>

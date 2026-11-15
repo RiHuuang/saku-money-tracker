@@ -261,4 +261,10 @@ export const id = {
   adjustPlan: "Atur rencana",
   movePocketContentsTo: "Pindahkan transaksi dan item tersimpan ke",
   chooseDestinationPocket: "Pilih kantong tujuan untuk item ini.",
+  accountActivity: "Aktivitas akun",
+  viewAccountActivityNamed: "Lihat aktivitas {account}",
+  tapToViewAccount: "Lihat akun",
+  startingBalanceAmount: "Saldo awal (Rp)",
+  accountAdded: "Akun ditambahkan",
+  fixBalanceFor: "Perbaiki saldo {account}",
 } satisfies Record<keyof typeof en, string>;

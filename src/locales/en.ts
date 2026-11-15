@@ -259,4 +259,10 @@ export const en = {
   adjustPlan: "Adjust plan",
   movePocketContentsTo: "Move its transactions and saved items to",
   chooseDestinationPocket: "Choose the pocket that will receive these items.",
+  accountActivity: "Account activity",
+  viewAccountActivityNamed: "View {account} activity",
+  tapToViewAccount: "View account",
+  startingBalanceAmount: "Starting balance (Rp)",
+  accountAdded: "Account added",
+  fixBalanceFor: "Fix {account} balance",
 } as const;
