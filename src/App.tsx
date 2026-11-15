@@ -21,7 +21,6 @@ import {
   FileCheck2,
   LayoutDashboard,
   Info,
-  Leaf,
   LockKeyhole,
   LogOut,
   Menu,
@@ -192,7 +191,7 @@ export default function App() {
     [month, setMonth] = useState(today().slice(0, 7)),
     [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
     [editStack, setEditStack] = useState<Exclude<Edit, null>[]>([]),
-    [toast, setToast] = useState<string | { message: string; action: { label: string; run: () => void } }>(""),
+    [toast, setToast] = useState<string | { message: string; action: { label: string; run: () => void }; secondaryAction?: { label: string; run: () => void } }>(""),
     [busy, setBusy] = useState(false),
     [cloud, setCloud] = useState<CloudState | null>(null),
     [loginBusy, setLoginBusy] = useState(false),
@@ -477,7 +476,10 @@ export default function App() {
       const stepper = document.querySelector("[data-back-step]");
       if (stepper) { stepper.dispatchEvent(new Event("saku-back")); return; }
       if (edit) setEdit(null);
+      else if (editingAccount) setEditingAccount("");
+      else if (catchUpSheet) setCatchUpSheet(null);
       else if (selectedAccount) setSelectedAccount("");
+      else if (accountsOpen) setAccountsOpen(false);
       else if (selectedPocketId) closePocket();
       else {
         if (backDestination(view, viewHistory)) backView();
@@ -487,7 +489,7 @@ export default function App() {
     return () => {
       void listener.then((h) => h.remove());
     };
-  }, [edit, view, viewHistory, selectedAccount, selectedPocketId, pocketReturnView]);
+  }, [edit, view, viewHistory, editingAccount, catchUpSheet, selectedAccount, accountsOpen, selectedPocketId, pocketReturnView]);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const openQuickAdd = (url?: string) => {
@@ -514,7 +516,7 @@ export default function App() {
       setToast(
         e instanceof Error
           ? t("couldNotSaveDetail", { detail: e.message })
-          : "Could not save. Please try again.",
+          : t("saveFailedTryAgain"),
       );
       return false;
     } finally {
@@ -683,7 +685,6 @@ export default function App() {
   const weekTransactions = data.transactions.filter((t) => isSpending(t) && new Date(`${t.date}T12:00:00`) >= weekStart && t.date <= today());
   const weekSpend = weekTransactions.reduce((n, t) => n + personalAmount(t), 0);
   const weekTop = data.pockets.map((p) => ({ name: p.name, amount: weekTransactions.filter((t) => t.pocketId === p.id).reduce((n, t) => n + personalAmount(t), 0) })).sort((a, b) => b.amount - a.amount)[0];
-  const currentAvailable = summary(data, today().slice(0, 7)).available;
   const catchUpDays = catchUpDismissed === today() ? [] : catchUpGap(data, today());
   const catchUpAnchorChecked = catchUpDays.length > 0 && data.checkedDays.includes(shiftDate(catchUpDays[0], -1)) && !data.transactions.some((t) => t.date === shiftDate(catchUpDays[0], -1) && t.kind !== "opening_balance");
   const showCatchUp = catchUpDays.length > 0 && data.transactions.some((t) => t.date <= shiftDate(today(), -2));
@@ -824,7 +825,7 @@ export default function App() {
               <h1>{selectedPocket && view === "pockets" ? selectedPocket.name : titles[view][1]}{selectedPocket && view === "pockets" && <button type="button" className="pocket-heading-edit" aria-label={t("editPocket")} onClick={() => setEdit({ type: "pocket", value: selectedPocket })}><PencilLine size={17} /></button>}</h1>
             </div>
             <div className="heading-actions">
-              {view !== "settings" && view !== "more" && (
+              {!["settings", "more", "check", "plans"].includes(view) && (
                 <div className="month-picker">
                   <IconButton
                     label={t("previousMonth")}
@@ -887,7 +888,7 @@ export default function App() {
                   <div className="balance-top">
                     <span>
                       <Wallet size={17} />
-                      {t("recordedCash")}
+                      {t("cash")}
                     </span>
                     <span className="balance-badge">IDR</span>
                   </div>
@@ -898,10 +899,10 @@ export default function App() {
                   <div className="balance-footer">
                     <span>
                       <span className="tiny-square" />
-                      {t("budgetAvailability")}
+                      {t("freeToSpend")}
                       <button type="button" className="availability-info-button" aria-label={t("availabilityInfo")} aria-expanded={showAvailabilityInfo} onClick={(event) => { event.stopPropagation(); setShowAvailabilityInfo((value) => !value); }}><Info size={15} /></button>
                     </span>
-                    <strong>{money(stats.available)} {t("available")}</strong>
+                    <strong>{money(stats.available)}</strong>
                   </div>
                   {showAvailabilityInfo && <p className="availability-explainer">{t("availabilityExplainer")}</p>}
                   <button type="button" className="balance-cta" onClick={(event) => { event.stopPropagation(); go("insights"); }}>{t("viewInsights")} <ArrowRight size={16} /></button>
@@ -957,10 +958,10 @@ export default function App() {
                 </div>
               </section>
               <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <button type="button" className="account-balance-item" key={item.account} aria-label={t("accountCardLabel", { account: item.account, amount: money(item.balance) })} onClick={() => setSelectedAccount(item.account)}><span className="account-balance-icon" style={{ color: accountColor(data, item.account) }}><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></button>)}</section>
-              {accountsOpen && <AccountsOverview data={data} monthTransactions={stats.transactions} onClose={() => setAccountsOpen(false)} onEdit={(account) => setSelectedAccount(account)} />}
+              {accountsOpen && !selectedAccount && <AccountsOverview data={data} monthTransactions={stats.transactions} onClose={() => setAccountsOpen(false)} onEdit={(account) => setSelectedAccount(account)} />}
               <section className="daily-strip" aria-label={t("quickEntriesLabel")}>
-                <div className="daily-check"><span>{t("currentWeek")}</span><strong>{money(weekSpend)} {t("spent")}</strong><small>{weekTop?.amount ? t("largestPocket", { name: weekTop.name }) : t("noSpending")}</small><small>{money(currentAvailable)} {t("currentPlanAvailable")}</small></div>
-<div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={t("removeShortcut", { name: f.name })} aria-label={t("removeShortcut", { name: f.name })} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, t("quickEntryRemoved"))}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
+                <div className="daily-check"><span>{t("currentWeek")}</span><strong>{money(weekSpend)} {t("spent")}</strong><small>{weekTop?.amount ? t("largestPocket", { name: weekTop.name }) : t("noSpending")}</small></div>
+<div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={t("removeShortcut", { name: f.name })} aria-label={t("removeShortcut", { name: f.name })} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, "").then((ok) => { if (ok) setToast({ message: t("quickEntryRemoved"), action: { label: t("undo"), run: () => { const current = latest.current.data; if (current && !current.favorites.some((item) => item.id === f.id)) { const index = data.favorites.indexOf(f); void commit({ ...current, favorites: [...current.favorites.slice(0, index), f, ...current.favorites.slice(index)] }, t("quickEntryRestored")); } } } }); })}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
               </section>
               <section className="pockets-section">
                 <div className="section-heading">
@@ -969,7 +970,6 @@ export default function App() {
                       {t("pocketsHeading")}{" "}
                       <span>{stats.pockets.length}</span>
                     </h2>
-                    <p>{t("pocketsSubheading")}</p>
                   </div>
                   <button className="text-button" onClick={() => { setSelectedPocketId(null); go("pockets"); }}>
                     {t("allPockets")} <ArrowRight size={16} />
@@ -997,7 +997,6 @@ export default function App() {
                   />
                 )}
               </section>
-              <button className="insights-link" onClick={() => go("insights")}><BarChart3 size={19} /><span><strong>{t("exploreSpending")}</strong><small>{t("cashFlowTrends")}</small></span><ArrowRight size={18} /></button>
               <section className="charts-grid home-charts">
                 <div className="chart-panel">
                   <div className="section-heading">
@@ -1056,9 +1055,6 @@ export default function App() {
                   compactView
                 />
               </section>
-              <div className="bottom-note">
-                <Leaf size={15} />{t("awareness")}
-              </div>
             </>
           )}
           {view === "transactions" && (
@@ -1252,6 +1248,7 @@ export default function App() {
               languagePreference={languagePreference}
               onLanguageChange={(preference) => { setLanguagePreference(preference); void saveLanguage(preference).catch(() => setToast(t("languageSaveError"))); }}
               onOpenAccount={(account) => setSelectedAccount(account)}
+              onRemoveAccount={(account) => { const index = data.accounts.indexOf(account); void commit({ ...data, accounts: data.accounts.filter((item) => item !== account) }, "").then((ok) => { if (ok) setToast({ message: t("accountRemoved"), action: { label: t("undo"), run: () => { const current = latest.current.data; if (current && !current.accounts.includes(account)) void commit({ ...current, accounts: [...current.accounts.slice(0, index), account, ...current.accounts.slice(index)] }, t("accountRestored")); } } }); }); }}
               appLock={appLock}
               onAppLockChange={changeAppLock}
               reminder={reminder}
@@ -1261,8 +1258,13 @@ export default function App() {
           </>}
         </main>
       </div>
-      {editingAccount && <AccountEditor data={data} account={editingAccount} busy={busy} onClose={() => setEditingAccount("")} onAdjust={(account) => { setEditingAccount(""); setEdit({ type: "balance_adjustment", account }); }} onSave={async (next, message, renamed) => {
+      {editingAccount && <AccountEditor data={data} account={editingAccount} busy={busy} onClose={() => setEditingAccount("")} onAdjust={(account) => setEdit({ type: "balance_adjustment", account })} onSave={async (next, message, renamed) => {
         const ok = await commit(next, message);
+        if (ok && !renamed && !next.accounts.includes(editingAccount)) {
+          const removed = editingAccount;
+          const index = data.accounts.indexOf(removed);
+          setToast({ message: t("accountRemoved"), action: { label: t("undo"), run: () => { const current = latest.current.data; if (current && !current.accounts.includes(removed)) void commit({ ...current, accounts: [...current.accounts.slice(0, index), removed, ...current.accounts.slice(index)] }, t("accountRestored")); } } });
+        }
         if (ok && !next.accounts.includes(editingAccount)) setSelectedAccount("");
         if (ok && renamed) {
           setSelectedAccount(renamed.to);
@@ -1302,7 +1304,7 @@ export default function App() {
           const transactions = edit.value
             ? data.transactions.map((item) => item.id === transaction.id ? transaction : item)
             : [...data.transactions, transaction];
-          if (await commit({ ...data, transactions }, edit.value ? t("balanceAdjustmentUpdated") : t("accountBalanceAdjusted"))) setEdit(null);
+          if (await commit({ ...data, transactions }, edit.value ? t("balanceAdjustmentUpdated") : t("accountBalanceAdjusted"))) { setEdit(null); setEditingAccount(""); }
         }}
         onDelete={async (id) => {
           if (await commit({ ...data, transactions: data.transactions.filter((item) => item.id !== id) }, t("balanceAdjustmentRemoved"))) setEdit(null);
@@ -1347,10 +1349,10 @@ export default function App() {
                 edit.value ? translate("transactionUpdated") : translate("transactionAdded"),
               )
             ) {
-              if (!edit.value) setToast({ message: translate("transactionAdded"), action: { label: translate("undo"), run: () => {
+              if (!edit.value) setToast({ message: t.date.slice(0, 7) === month ? translate("transactionAdded") : translate("transactionAddedInMonth", { month: monthLabel(t.date.slice(0, 7)) }), action: { label: translate("undo"), run: () => {
                 const current = latest.current.data;
                 if (current?.transactions.some((item) => item.id === t.id)) void commit({ ...current, transactions: current.transactions.filter((item) => item.id !== t.id) }, translate("transactionRemoved"));
-              } } });
+              } }, ...(t.date.slice(0, 7) === month ? {} : { secondaryAction: { label: translate("view"), run: () => { setMonth(t.date.slice(0, 7)); go("transactions"); setToast(""); } } }) });
               if (!keepOpen) setEdit(null);
               return true;
             }
@@ -1455,7 +1457,8 @@ export default function App() {
             if (await commit(next, t("yourOwnLittleFreshStart"))) {
               setEdit(null);
               setMonth(today().slice(0, 7));
-              go("pockets");
+              go("overview");
+              setEdit({ type: "transaction" });
             }
           }}
         /></Suspense>
@@ -1465,6 +1468,7 @@ export default function App() {
           <Check size={17} />
           {typeof toast === "string" ? toast : toast.message}
           {typeof toast !== "string" && <button type="button" className="toast-action" onClick={toast.action.run}>{toast.action.label}</button>}
+          {typeof toast !== "string" && toast.secondaryAction && <button type="button" className="toast-action" onClick={toast.secondaryAction.run}>{toast.secondaryAction.label}</button>}
           <button aria-label={t("dismissMessage")} onClick={() => setToast("")}>
             <X size={16} />
           </button>
@@ -1731,7 +1735,7 @@ function TransactionEditor({
     // An existing row, a quick entry or a pocket page already chose the pocket; only a blank new entry learns it from the name.
     [pocketChosen, setPocketChosen] = useState(Boolean(transaction || favorite || initialPocketId)),
     [pickingDate, setPickingDate] = useState(() => ![daysAgo(0), daysAgo(1), daysAgo(2)].includes(transaction?.date || initialDate || today())),
-    [account, setAccount] = useState(transaction && transaction.kind !== "card_purchase" ? transaction.account : favorite && !favorite.cardId ? favorite.account : initialAccount || data.accounts[0]),
+    [account, setAccount] = useState(transaction && transaction.kind !== "card_purchase" ? transaction.account : favorite && !favorite.cardId ? favorite.account : initialAccount || [...data.transactions].reverse().find((item) => data.accounts.includes(item.account) && item.kind !== "account_transfer")?.account || data.accounts[0]),
     [transferFrom, setTransferFrom] = useState(transferOutgoing?.account || initialAccount || data.accounts[0]),
     [transferTo, setTransferTo] = useState(transferIncoming?.account || data.accounts.find((item) => item !== (initialAccount || data.accounts[0])) || data.accounts[0]),
     [cardId, setCardId] = useState(transaction?.kind === "card_purchase" ? transaction.cardId || "" : initialCardId || favorite?.cardId || ""),
@@ -1800,8 +1804,8 @@ function TransactionEditor({
       }
       const transferId = transaction?.transferId || uid();
       await onTransfer([
-        { id: transferOutgoing?.id || uid(), transferId, kind: "account_transfer", name: `Transfer to ${transferTo}`, amount: Number(amount), type: "expense", date, pocketId: "", account: transferFrom, note: note.trim(), verified: false },
-        { id: transferIncoming?.id || uid(), transferId, kind: "account_transfer", name: `Transfer from ${transferFrom}`, amount: Number(amount), type: "income", date, pocketId: "", account: transferTo, note: note.trim(), verified: false },
+        { id: transferOutgoing?.id || uid(), transferId, kind: "account_transfer", name: t("transferToName", { account: transferTo }), amount: Number(amount), type: "expense", date, pocketId: "", account: transferFrom, note: note.trim(), verified: false },
+        { id: transferIncoming?.id || uid(), transferId, kind: "account_transfer", name: t("transferFromName", { account: transferFrom }), amount: Number(amount), type: "income", date, pocketId: "", account: transferTo, note: note.trim(), verified: false },
       ], transaction?.transferId);
       return;
     }
@@ -1867,7 +1871,7 @@ function TransactionEditor({
     <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "income" ? "selected" : ""} onClick={() => setMode("income")}><ArrowDownLeft size={16} />{t("income")}</button>
     <button type="button" disabled={special || !!transaction?.split || (!!transaction && transaction.kind !== "account_transfer")} className={mode === "transfer" ? "selected" : ""} onClick={() => setMode("transfer")}><ArrowRight size={16} />{t("transfer")}</button>
   </div>;
-  if (mode === "transfer") return <Modal title={transaction ? t("editTransfer") : t("addTransaction")} subtitle={t("transferSubtitle")} onClose={onClose}>
+  if (mode === "transfer") return <Modal title={transaction ? t("editTransfer") : t("addTransaction")} onClose={onClose}>
     <form onSubmit={(e) => void submit(e)}><fieldset disabled={busy}>{modeControl}
       {data.accounts.length < 2 && <p className="form-error" role="alert">{t("anotherAccountTransfer")}</p>}
       <label className="field">{t("amount")}<div className="amount-input" ref={amountField}><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={(value) => { setAmount(value); setFieldError(null); }} aria-invalid={fieldError?.field === "amount"} /></div>{fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
@@ -1882,11 +1886,6 @@ function TransactionEditor({
   return (
     <Modal
       title={transaction ? t("editTransaction") : t("addTransaction")}
-      subtitle={
-        transaction
-          ? t("editSubtitle")
-          : t("addSubtitle")
-      }
       onClose={onClose}
     >
       <form onSubmit={(e) => void submit(e)}>
@@ -1941,7 +1940,6 @@ function TransactionEditor({
             <label className="field">
               {t("pocket")}
               <ChoiceField hideLabel label={t("pocket")} value={pocket} onValueChange={(value) => { setPocket(value); setPocketChosen(true); setFieldError(null); }} options={pocketChoices} />
-              <small>{pocket ? t("countsPocket") : t("categorizeHelp")}</small>
               {fieldError?.field === "pocket" && <span className="field-error" role="alert">{fieldError.message}</span>}
             </label>
           )}
@@ -1968,7 +1966,7 @@ function TransactionEditor({
           {shared && type === "expense" && !special && <div className="form-columns"><label className="field">{t("peopleIncludingYou")}<input type="number" min={2} max={30} value={people} onChange={(e) => { setPeople(e.target.value); setFieldError(null); }} /></label><label className="field">{t("yourShareRupiah")}<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={(value) => { setOwnAmount(value); setFieldError(null); }} />{fieldError?.field === "share" && <span className="field-error" role="alert">{fieldError.message}</span>}</label><p className="editor-help">{t("sharedPaymentHelp")}</p></div>}
           {!special && <label className="checkbox-label editor-option"><input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} /> {t("repeatMonthly")}</label>}
           {!transaction && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={saveFavorite} onChange={(e) => setSaveFavorite(e.target.checked)} /> {t("saveQuick")}</label>}
-          {transaction?.split && <div className="repayment-review"><strong>{t("sharedPayment")}</strong><p>{t("othersOweRepaid", { amount: money(transaction.amount - transaction.split.ownAmount), repaid: money(data.transactions.filter((item) => item.forTransactionId === transaction.id).reduce((n, item) => n + item.amount, 0)) })}</p><div className="plans-fields"><label className="field">{t("repaymentRupiah")}<MoneyInput min={1} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">{t("receivedIn")}<ChoiceField hideLabel label={t("repaymentAccount")} value={repayAccount} onValueChange={setRepayAccount} options={accountChoices} /></label><label className="field">{t("receivedOn")}<input type="date" min={transaction.date} max={today()} value={repayDate} onChange={(e) => setRepayDate(e.target.value)} /></label></div><button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount))} onClick={() => void onRepay(transaction.id, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>{t("recordRepayment")}</button></div>}
+          {transaction?.split && <div className="repayment-review"><strong>{t("sharedPayment")}</strong><p>{t("othersOweRepaid", { amount: money(transaction.amount - transaction.split.ownAmount), repaid: money(data.transactions.filter((item) => item.forTransactionId === transaction.id).reduce((n, item) => n + item.amount, 0)) })}</p><div className="plans-fields"><label className="field">{t("repaymentRupiah")}<MoneyInput min={1} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">{t("receivedIn")}<ChoiceField hideLabel label={t("repaymentAccount")} value={repayAccount} onValueChange={setRepayAccount} options={accountChoices} /></label><label className="field">{t("receivedOn")}<LongDateInput min={transaction.date} max={today()} value={repayDate} onValueChange={setRepayDate} /></label></div><button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount))} onClick={() => void onRepay(transaction.id, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>{t("recordRepayment")}</button></div>}
           <label className="field">
             {t("note")} <span className="optional">{t("optional")}</span>
             <textarea
@@ -2010,13 +2008,6 @@ function TransactionEditor({
                   <Trash2 size={18} />
                 </IconButton>
               )}
-              <button
-                type="button"
-                className="button secondary"
-                onClick={onClose}
-              >
-                {t("cancel")}
-              </button>
               {!transaction && <button className="button secondary" type="button" onClick={(event) => { keepOpen.current = true; event.currentTarget.form?.requestSubmit(); keepOpen.current = false; }}>{t("saveAnother")}</button>}
               <button className="button primary" type="submit">
                 {busy
@@ -2218,26 +2209,32 @@ function PocketTransferEditor({ data, month, busy, toPocketId, initialAmount, on
 
 function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean; busy: boolean; error: string; onLogin: () => Promise<void> }) {
   const [accepted, setAccepted] = useState(false);
+  const [agreementError, setAgreementError] = useState(false);
+  const agreementField = useRef<HTMLInputElement>(null);
   return <main className="login-screen">
     <section className="login-panel">
       <span className="brand-mark"><SakuMark /></span><h1>Saku</h1>
       <p>{t("loginTagline")}</p>
       <details className="agreement"><summary>{t("agreementSummaryTitle")}</summary><p>{t("agreementSummary")} {t("readThe")} <a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a> {t("and")} <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a>.</p></details>
-      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
-      <button className="button primary login-button" disabled={!accepted || busy || !configured} onClick={() => void onLogin()}><CircleUserRound size={18} />{busy ? t("connecting") : t("continueGoogle")}</button>
+      <label className="checkbox-label"><input ref={agreementField} type="checkbox" checked={accepted} onChange={(e) => { setAccepted(e.target.checked); setAgreementError(false); }} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
+      {agreementError && <p className="field-error" role="alert">{t("tickAgreementFirst")}</p>}
+      <button className="button primary login-button" disabled={busy || !configured} onClick={() => { if (!accepted) { setAgreementError(true); agreementField.current?.focus(); return; } void onLogin(); }}><CircleUserRound size={18} />{busy ? t("connecting") : t("continueGoogle")}</button>
       {!configured && <p className="form-error">{t("signInNotConfigured")}</p>}{error && <p className="form-error" role="alert">{error}</p>}
     </section>
   </main>;
 }
 function AgreementUpdate({ busy, error, onAccept, onSignOut }: { busy: boolean; error: string; onAccept: () => Promise<void>; onSignOut: () => Promise<void> }) {
   const [accepted, setAccepted] = useState(false);
+  const [agreementError, setAgreementError] = useState(false);
+  const agreementField = useRef<HTMLInputElement>(null);
   return <main className="login-screen">
     <section className="login-panel">
       <span className="brand-mark"><ShieldCheck /></span><h1>{t("agreementUpdated")}</h1>
       <p>{t("agreementUpdateBody")}</p>
       <p>{t("readThe")} <a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a> {t("and")} <a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a>.</p>
-      <label className="checkbox-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
-      <button className="button primary login-button" disabled={!accepted || busy} onClick={() => void onAccept()}><Check size={18} />{busy ? t("saving") : t("acceptContinue")}</button>
+      <label className="checkbox-label"><input ref={agreementField} type="checkbox" checked={accepted} onChange={(e) => { setAccepted(e.target.checked); setAgreementError(false); }} />{t("acceptAgreement", { version: AGREEMENT_VERSION })}</label>
+      {agreementError && <p className="field-error" role="alert">{t("tickAgreementFirst")}</p>}
+      <button className="button primary login-button" disabled={busy} onClick={() => { if (!accepted) { setAgreementError(true); agreementField.current?.focus(); return; } void onAccept(); }}><Check size={18} />{busy ? t("saving") : t("acceptContinue")}</button>
       <button className="button text-button" disabled={busy} onClick={() => void onSignOut()}><LogOut size={16} />{t("signOutInstead")}</button>
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>
@@ -2267,6 +2264,7 @@ function SettingsView({
   languagePreference,
   onLanguageChange,
   onOpenAccount,
+  onRemoveAccount,
   appLock,
   onAppLockChange,
   reminder,
@@ -2287,6 +2285,7 @@ function SettingsView({
   languagePreference: LanguagePreference;
   onLanguageChange: (preference: LanguagePreference) => void;
   onOpenAccount: (account: string) => void;
+  onRemoveAccount: (account: string) => void;
   appLock: AppLockSettings;
   onAppLockChange: (next: AppLockSettings, confirm: boolean) => Promise<boolean>;
   reminder: ReminderSettings;
@@ -2444,15 +2443,7 @@ function SettingsView({
                   <IconButton
                     label={t("deleteAccountNamed", { account: a })}
                     disabled={busy}
-                    onClick={() =>
-                      void commit(
-                        {
-                          ...data,
-                          accounts: data.accounts.filter((x) => x !== a),
-                        },
-                        t("accountRemoved"),
-                      )
-                    }
+                    onClick={() => onRemoveAccount(a)}
                   >
                     <Trash2 size={16} />
                   </IconButton>
@@ -2515,7 +2506,7 @@ function SettingsView({
               notify(t("googleAccountConnected"));
             })}>
               <CircleUserRound size={18} />
-              {cloudBusy ? "Connecting..." : "Continue with Google"}
+              {t(cloudBusy ? "connecting" : "continueGoogle")}
             </button>
             {!cloud?.configured && <small className="cloud-note">{t("googleSignInIsAvailable")}</small>}
           </div>

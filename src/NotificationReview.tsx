@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, BellRing, Check, X } from "lucide-react";
+import { ArrowRight, BellRing, Check, Info, X } from "lucide-react";
 import { money, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowFirstDueMonth, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
@@ -27,6 +27,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   const [saving, setSaving] = useState(false);
   const [checkins, setCheckins] = useState<BalanceCheckin[]>([]);
   const [captureOff, setCaptureOff] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   useEffect(() => { void loadCheckins().then(setCheckins); }, []);
   useEffect(() => { void notificationCapture.status().then((status) => setCaptureOff(!status.granted || status.paused)).catch(() => {}); }, []);
   async function updateCheckins(next: BalanceCheckin[]) { setCheckins(next); await saveCheckins(next).catch(() => {}); }
@@ -167,7 +168,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   });
   if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> {captureOff ? <>{t("notificationCaptureOff")} <button className="text-button" onClick={onSettings}>{t("openNotificationSettings")}</button></> : t("notificationsEmpty")}</p></section></>;
   return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
-    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div><div className="catchup-bulk"><p className="catchup-swipe-hint">{t("swipeHint")}</p><div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
+    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")} <button type="button" className="icon-button" aria-label={t("aboutNotifications")} aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><Info size={16} /></button></h3>{showHelp && <p>{t("notificationsHelp")}</p>}</div></div><div className="catchup-bulk"><p className="catchup-swipe-hint">{t("swipeHint")}</p><div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), offset = gestures.offset(row.id);
       const state: RowState = row.decision === "skip" ? "skip" : rowReady ? "ready" : row.decision === "later" ? "later" : "review";

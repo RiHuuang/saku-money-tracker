@@ -1323,18 +1323,18 @@ main {
 .empty {
   text-align: center;
   padding: 42px 20px;
-  color: #8fa09b;
+  color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
 .empty h3 {
   margin: 13px 0 6px;
-  color: #495f58;
+  color: var(--ink);
 }
 .empty p {
   font-size: 12px;
-  color: #94a19d;
+  color: var(--muted);
   margin-bottom: 20px;
 }
 .loading {
@@ -1842,6 +1842,10 @@ main {
 .ledger .transaction-list {
   border: 0;
   padding: 0;
+}
+.ledger .empty {
+  background: transparent;
+  border: 0;
 }
 .ledger-total {
   display: flex;

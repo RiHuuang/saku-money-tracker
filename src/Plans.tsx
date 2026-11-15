@@ -87,7 +87,7 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
     if (!validAmount(amount)) { notify(translate("enterAPaymentAmountIn")); return; }
     if (!data.accounts.includes(payAccount)) { notify(translate("chooseASourceAccountFor")); return; }
     if (!validDate(payDate) || payDate > today()) { notify(translate("chooseAValidPaymentDate")); return; }
-    const transaction: Transaction = { id: uid(), name: `Payment to ${card.name}`, amount, type: "expense", kind: "card_payment", cardId: card.id, date: payDate, pocketId: "", account: payAccount, note: "" };
+    const transaction: Transaction = { id: uid(), name: translate("paymentToName", { card: card.name }), amount, type: "expense", kind: "card_payment", cardId: card.id, date: payDate, pocketId: "", account: payAccount, note: "" };
     if (await commit({ ...data, transactions: [...data.transactions, transaction] }, translate("cardPaymentRecorded"))) { setPayAmount(""); setPayCard(""); }
   }
   function editRule(rule?: RecurringRule) {

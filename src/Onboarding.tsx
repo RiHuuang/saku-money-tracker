@@ -81,7 +81,7 @@ export default function Onboarding({ busy, suggestedName, userId, onClose, onSta
     let next = emptyData();
     next.name = name.trim();
     next.accounts = chosenAccounts.map((item) => item.name);
-    next.transactions = chosenAccounts.filter((item) => Number(item.balance) > 0).map((item) => ({ id: uid(), name: t("openingBalance"), amount: Number(item.balance), type: "income" as const, kind: "opening_balance" as const, date: today(), pocketId: "", account: item.name, note: "Opening balance when starting Saku" }));
+    next.transactions = chosenAccounts.filter((item) => Number(item.balance) > 0).map((item) => ({ id: uid(), name: t("openingBalance"), amount: Number(item.balance), type: "income" as const, kind: "opening_balance" as const, date: today(), pocketId: "", account: item.name, note: t("onboardingOpeningNote") }));
     if (hasCard && cardName.trim() && validAmount(Number(cardLimit))) next.creditCards = [{ id: uid(), name: cardName.trim(), limit: Number(cardLimit), openingDebt: Number(cardDebt || 0), dueDay: Math.min(28, Math.max(1, Number(dueDay) || 15)) }];
     if (incomeValue > 0 && plan.rows.length) {
       // Setup is the first plan, not a change to undo: no snapshot is kept.
