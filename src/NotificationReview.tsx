@@ -3,7 +3,7 @@ import { ArrowRight, BellRing, Check, X } from "lucide-react";
 import { money, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowFirstDueMonth, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
-import { learnMerchant } from "./merchants";
+import { learnMerchant, learnNotificationPocket, suggestMerchant } from "./merchants";
 import { cleanMerchantNames } from "./cloud";
 import { loadCleaningOptIn, namesToClean } from "./merchantCleaning";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
@@ -30,7 +30,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
   async function updateCheckins(next: BalanceCheckin[]) { setCheckins(next); await saveCheckins(next).catch(() => {}); }
   async function acceptCheckin(checkin: BalanceCheckin) {
     try {
-      if (await commit({ ...data, transactions: [...data.transactions, checkinAdjustment(data, checkin)] }, `${checkin.account} balance adjusted`)) await updateCheckins(checkins.filter((item) => item.id !== checkin.id));
+      if (await commit({ ...data, transactions: [...data.transactions, checkinAdjustment(data, checkin)] }, t("accountBalanceAdjusted"))) await updateCheckins(checkins.filter((item) => item.id !== checkin.id));
     } catch { notify(t("adjustmentError")); }
   }
   const load = async () => {
@@ -48,7 +48,7 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
       try {
         // Each answer becomes a merchant rule, so a name is sent at most once.
         const results = await cleanMerchantNames(userId, names);
-        const merchantRules = results.reduce((rules, result) => learnMerchant({ ...data, merchantRules: rules }, result.name, { name: result.cleanName, pocketId: "" }), data.merchantRules);
+        const merchantRules = results.reduce((rules, result) => learnMerchant({ ...data, merchantRules: rules }, result.name, { name: result.cleanName, pocketId: suggestMerchant({ ...data, merchantRules: rules }, result.name)?.pocketId || "" }, new Date().toISOString(), true), data.merchantRules);
         if (merchantRules !== data.merchantRules) await commit({ ...data, merchantRules }, t("merchantNamesTidied"));
       } catch { /* Raw names stay usable; cleaning is a convenience. */ }
     })();
@@ -96,11 +96,11 @@ export default function NotificationReview({ data, userId, commit, busy, notify,
         const account = accountFor(row);
         const created = importedTransactions(row, account, "notification", data, row.pairedWith);
         additions.push(...created.map((transaction) => ({ ...transaction, note: `${importRowName(row) !== row.name.trim() ? `${row.name.trim()} · ` : ""}${t("notificationSource", { app: row.appName })}` })));
-        if (row.direction === "expense" && row.activity === "purchase") merchantRules = learnMerchant({ ...data, merchantRules }, row.name, { name: importRowName(row), pocketId: row.pocketId });
+        if (row.direction === "expense" && row.activity === "purchase") merchantRules = learnNotificationPocket({ ...data, merchantRules }, row.name, row.pocketId);
         done.add(row.id);
         if (row.pairedWith) done.add(row.pairedWith);
       }
-      if (!(await commit({ ...data, transactions: [...data.transactions, ...additions], merchantRules }, `${ready.length} notification ${ready.length === 1 ? "row" : "rows"} added`))) return;
+      if (!(await commit({ ...data, transactions: [...data.transactions, ...additions], merchantRules }, t("notificationRowsAdded", { count: ready.length })))) return;
       // A balance printed in a saved notification can be checked once its payment is in the ledger.
       const reported = ready.filter((row) => row.balance !== null && data.accounts.includes(accountFor(row))).map((row) => ({ id: row.id, account: accountFor(row), appName: row.appName, reported: row.balance!, occurredAt: row.occurredAt }));
       if (reported.length) await updateCheckins(mergeCheckins(checkins, reported));

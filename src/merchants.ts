@@ -19,11 +19,20 @@ export function suggestMerchant(data: Pick<Data, "merchantRules" | "pockets">, r
 }
 
 // Remember what the user settled on whenever it differs from what Saku would have suggested.
-export function learnMerchant(data: Pick<Data, "merchantRules" | "pockets">, raw: string, final: { name: string; pocketId: string }, now = new Date().toISOString()): MerchantRule[] {
+export function learnMerchant(data: Pick<Data, "merchantRules" | "pockets">, raw: string, final: { name: string; pocketId: string }, now = new Date().toISOString(), automaticName = false): MerchantRule[] {
   const key = merchantKey(raw), name = final.name.trim().slice(0, 100);
   if (!key || !name) return data.merchantRules;
   const suggestion = suggestMerchant(data, raw);
-  if (suggestion && suggestion.name.toLocaleLowerCase("id-ID") === name.toLocaleLowerCase("id-ID") && suggestion.pocketId === final.pocketId) return data.merchantRules;
-  const next = [...data.merchantRules.filter((rule) => rule.key !== key), { key, name, pocketId: final.pocketId, updatedAt: now }];
+  if (suggestion && suggestion.name.toLocaleLowerCase("id-ID") === name.toLocaleLowerCase("id-ID") && suggestion.pocketId === final.pocketId && (!automaticName || data.merchantRules.find((rule) => rule.key === key)?.automaticName)) return data.merchantRules;
+  const next = [...data.merchantRules.filter((rule) => rule.key !== key), { key, name, pocketId: final.pocketId, updatedAt: now, ...(automaticName ? { automaticName: true } : {}) }];
   return next.length > MERCHANT_RULE_LIMIT ? [...next].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)).slice(-MERCHANT_RULE_LIMIT) : next;
+}
+
+export function learnNotificationPocket(data: Pick<Data, "merchantRules" | "pockets">, raw: string, pocketId: string): MerchantRule[] {
+  const key = merchantKey(raw);
+  if (!key) return data.merchantRules;
+  const existing = data.merchantRules.find((rule) => rule.key === key);
+  if (!existing) return learnMerchant(data, raw, { name: raw, pocketId });
+  if (existing.pocketId === pocketId) return data.merchantRules;
+  return data.merchantRules.map((rule) => rule.key === key ? { ...rule, pocketId, updatedAt: new Date().toISOString() } : rule);
 }

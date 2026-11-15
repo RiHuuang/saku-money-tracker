@@ -33,7 +33,8 @@ import { balanceIssue, evidenceIssues, extractionPrompt, hasTransactionEvidence,
 import { readPdf } from "./pdfReader";
 import { localStatementAI, nativeAIAvailable, type ModelProgress, type ModelStatus } from "./localStatementAI";
 import { download } from "./storage";
-import { ChoiceField, IconButton, Modal, MoneyInput, SegmentedChoice } from "./components";
+import { ChoiceField, IconButton, LongDateInput, Modal, MoneyInput, SegmentedChoice } from "./components";
+import { t } from "./i18n";
 
 export default function Statements({
   data,
@@ -375,7 +376,7 @@ export default function Statements({
           {pdf.candidates.map((c) => <div className="pdf-candidate" key={c.id}>
             <div className="pdf-source"><strong>Page {c.page}</strong><span>{c.sourceLine}</span></div>
             <div className="pdf-fields">
-              <label className="field">Date<input type="date" value={c.date} onChange={(e) => editCandidate(pdf.id, c.id, { date: e.target.value })} /></label>
+              <label className="field">Date<LongDateInput value={c.date} onValueChange={(date) => editCandidate(pdf.id, c.id, { date })} /></label>
               <label className="field">Description<input value={c.name} maxLength={100} onChange={(e) => editCandidate(pdf.id, c.id, { name: e.target.value })} /></label>
               <label className="field">Amount (Rp)<MoneyInput min={1} value={c.amount || ""} onValueChange={(value) => editCandidate(pdf.id, c.id, { amount: Number(value) })} /></label>
               <SegmentedChoice label="Direction" value={c.type} onValueChange={(value) => editCandidate(pdf.id, c.id, { type: value as "income" | "expense" })} options={[{ value: "expense", label: "Money out" }, { value: "income", label: "Money in" }]} />
@@ -612,7 +613,7 @@ export default function Statements({
                 <p>{row?.date || transaction?.date} · {row?.account || transaction?.account}</p>
                 {source && <div className="review-source"><span>Statement page {source.page}</span><p>{source.sourceLine}</p></div>}
                 {original && <div className="review-source comparison"><span>Currently in Saku</span><p>{original.date} · {original.name} · {money(original.amount)}</p></div>}
-                {row?.status === "missing" && row.type === "expense" && !data.creditCards.some((card) => card.name === row.account) && <ChoiceField label="Pocket" value={selection[row.id] || ""} onValueChange={(value) => setSelection((current) => ({ ...current, [row.id]: value }))} options={[{ value: "", label: "Unassigned" }, ...data.pockets.filter((pocket) => pocket.createdMonth <= row.date.slice(0, 7)).map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
+                {row?.status === "missing" && row.type === "expense" && !data.creditCards.some((card) => card.name === row.account) && <ChoiceField label={t("pocket")} value={selection[row.id] || ""} onValueChange={(value) => setSelection((current) => ({ ...current, [row.id]: value }))} options={[{ value: "", label: t("unassigned") }, ...data.pockets.filter((pocket) => pocket.createdMonth <= row.date.slice(0, 7)).map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
               </div><div className="review-deck-actions"><button className="button secondary" onClick={() => decideCurrent(false)}><X size={17} />{declineLabel}</button><button className="button primary" onClick={() => decideCurrent(true)}><Check size={17} />{acceptLabel}</button></div></div>;
             })() : <div className="review-deck-done"><CheckCheck size={34} /><h3>All cards sorted</h3><p>Review the staged summary below before anything changes.</p><button className="button primary" onClick={() => setDeckOpen(false)}>Done</button></div>}
           </Modal>}

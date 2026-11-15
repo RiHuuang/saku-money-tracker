@@ -25,7 +25,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { compact, groupDigits, isIncome, isSpending, money, personalAmount, type Pocket, type Transaction } from "./domain";
+import { compact, groupDigits, isIncome, isSpending, longDate, money, personalAmount, validDate, type Pocket, type Transaction } from "./domain";
 
 const icons: Record<string, LucideIcon> = {
   utensils: Utensils,
@@ -56,6 +56,9 @@ export function MoneyInput({ value, onValueChange, ...props }: Omit<InputHTMLAtt
       input.setSelectionRange(position, position);
     });
   }} />;
+}
+export function LongDateInput({ value, onValueChange, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & { value: string; onValueChange: (value: string) => void }) {
+  return <span className="long-date-input"><span aria-hidden="true">{validDate(value) ? longDate(value) : translate("pick")}</span><input {...props} type="date" value={value} onChange={(event) => onValueChange(event.target.value)} /></span>;
 }
 export type ChoiceOption = {
   value: string;
@@ -266,7 +269,7 @@ export function Modal({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current!;
     el.showModal();
     return () => el.close();
@@ -380,7 +383,7 @@ export function TransactionList({
   if (!transactions.length)
     return (
       <Empty
-        title="A clean slate"
+        title={translate("cleanSlate")}
         detail={translate("transactionsAppearHere")}
       />
     );
@@ -390,7 +393,7 @@ export function TransactionList({
         const p = pockets.find((p) => p.id === t.pocketId);
         return (
           <div className="transaction-group-entry" key={t.id}>
-          {groupDates && (index === 0 || transactions[index - 1].date !== t.date) && <h3 className="transaction-date-heading">{new Date(`${t.date}T12:00:00`).toLocaleDateString(localeTag(), { weekday: "long", day: "numeric", month: "long" })}</h3>}
+          {groupDates && (index === 0 || transactions[index - 1].date !== t.date) && <h3 className="transaction-date-heading">{longDate(t.date)}</h3>}
           <button
             className="transaction-row"
             onClick={() => onEdit(t)}
@@ -402,7 +405,7 @@ export function TransactionList({
             />
             <span className="transaction-description">
               <strong>
-                {t.name}
+                {t.kind === "balance_adjustment" ? (t.note && t.note !== "Balance adjustment" && t.note !== "Penyesuaian saldo" ? t.note : translate("balanceAdjustmentLabel")) : t.name}
                 {t.verified && (
                   <Check
                     size={13}
@@ -412,8 +415,8 @@ export function TransactionList({
                 )}
               </strong>
               <span>
-                {t.kind === "account_transfer" ? translate("accountTransfer") : t.kind === "balance_adjustment" ? translate("balanceAdjustmentLabel") : t.kind === "opening_balance" ? translate("openingBalance") : t.kind === "card_payment" ? translate("cardPayment") : t.kind === "reimbursement" ? translate("repaidByFriend") : t.type === "income" ? translate("income") : p?.name || translate("unassigned")}{" "}
-                <span className="dot">·</span> {t.account}
+                {t.kind === "balance_adjustment" ? t.account : <>{t.kind === "account_transfer" ? translate("accountTransfer") : t.kind === "opening_balance" ? translate("openingBalance") : t.kind === "card_payment" ? translate("cardPayment") : t.kind === "reimbursement" ? translate("repaidByFriend") : t.type === "income" ? translate("income") : p?.name || translate("unassigned")}{" "}
+                <span className="dot">·</span> {t.account}</>}
               </span>
             </span>
             <span className="transaction-date">
@@ -427,13 +430,13 @@ export function TransactionList({
             >
               {t.type === "income" ? "+" : "−"}
               {money(isSpending(t) ? personalAmount(t) : t.amount)}
-              {t.split && <small>of {money(t.amount)} paid</small>}
-              <small>
+              {t.split && <small>{translate("ofAmountPaid", { amount: money(t.amount) })}</small>}
+              {!groupDates && <small>
                 {new Date(`${t.date}T12:00:00`).toLocaleDateString(localeTag(), {
                   day: "numeric",
                   month: "short",
                 })}
-              </small>
+              </small>}
             </span>
             <ChevronRight className="row-chevron" size={15} />
           </button>

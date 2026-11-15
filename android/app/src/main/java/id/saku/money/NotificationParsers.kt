@@ -25,7 +25,7 @@ object NotificationParsers {
     private val outgoing = Regex("""(?i)\b(?:pembayaran|bayar|dibayar|pembelian|beli|transfer|kirim|dikirim|debit|qris|tarik\s+tunai|transaksi|keluar|paid|payment|purchase|transaction|sent|spent|spending|debited|transferred)\b""")
     private val cancelled = Regex("""(?i)\b(?:cancell?ed|reversed)\b""")
     private val merchantLead = Regex("""(?i)\b(?:di|ke|kepada|dari|untuk|at|to|from)\s+([^.,!\n]+)""")
-    private val merchantStop = Regex("""(?i)\s+(?:(?:rp\.?|idr)\s?\d|at\s+[^.]*\bcategory\b|(?:sebesar|senilai|pada|tgl|tanggal|berhasil|sukses|telah|sudah|dengan|pakai|via|menggunakan|ref|no\.?|ke\s+(?:rekening|akun|saldo|nomor|kamu|anda|kantong))\b).*$""")
+    private val merchantStop = Regex("""(?i)\s+(?:(?:rp\.?|idr)\s?\d|at\s+[^.]*\bcategory\b|di\s+kategori\b|(?:sebesar|senilai|pada|tgl|tanggal|berhasil|sukses|telah|sudah|dengan|pakai|via|menggunakan|ref|no\.?|ke\s+(?:rekening|akun|saldo|nomor|kamu|anda|kantong))\b).*$""")
     private val notAName = Regex("""(?i)^(?:rekening|akun|saldo|nomor|rp|idr|kamu|anda)\b""")
     private val topUpTarget = Regex("""(?i)\b(?:top\s?-?up|isi\s+saldo)\s+(?!rp|idr|\d|berhasil|sukses|sebesar|senilai)([^.,!\n]+)""")
 
@@ -89,7 +89,7 @@ object NotificationParsers {
 
     private fun merchant(message: String): String {
         val body = message.replace(Regex("""(?i)(?<!isi\s)\b(?:sisa\s+)?saldo\b.*$"""), "")
-        val clean = { value: String -> value.replace(merchantStop, "").trim().trimEnd('.', ',', '!').replace(Regex("""(?i)\s+category$"""), "") }
+        val clean = { value: String -> value.replace(merchantStop, "").trim().trimEnd('.', ',', '!').replace(Regex("""(?i)\s+category$"""), "").replace(Regex("""(?i)^kategori\s+"""), "") }
         val raw = topUpTarget.find(body)?.groupValues?.get(1)?.let(clean)
             ?: merchantLead.findAll(body).map { clean(it.groupValues[1]) }.firstOrNull { it.isNotEmpty() && !it.first().isDigit() && !notAName.containsMatchIn(it) }
         return raw?.take(60).orEmpty()

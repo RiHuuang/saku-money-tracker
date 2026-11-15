@@ -75,8 +75,8 @@ export function AccountEditor({ data, account, busy, onClose, onSave, onAdjust }
     <form className="account-editor" onSubmit={(event) => { event.preventDefault(); void rename(); }}>
       <label className="field">{t("accountName")}<input value={name} maxLength={50} onChange={(event) => { setName(event.target.value); setError(""); }} aria-invalid={!!error} aria-describedby={error ? "account-name-error" : undefined} /></label>
       {error && <p className="field-error" id="account-name-error" role="alert">{error}</p>}
-      <button className="button primary" disabled={busy || name.trim() === account}><PencilLine size={16} />{t("saveName")}</button>
-      <button type="button" className="button secondary" disabled={busy} onClick={() => { onClose(); onAdjust(account); }}><SlidersHorizontal size={16} />{t("fixBalance")}</button>
+      {name.trim() !== account && <button className="button primary" disabled={busy}><PencilLine size={16} />{t("saveName")}</button>}
+      <button type="button" className="button secondary" disabled={busy} onClick={() => onAdjust(account)}><SlidersHorizontal size={16} />{t("fixBalance")}</button>
       {removable && <button type="button" className="button danger-button" disabled={busy} onClick={() => void onSave({ ...data, accounts: data.accounts.filter((item) => item !== account) }, t("accountRemoved")).then((ok) => { if (ok) onClose(); })}><Trash2 size={16} />{t("removeAccount")}</button>}
       {!removable && data.accounts.length > 1 && <p className="cloud-note"><Wallet size={14} /> {t("accountHasHistory")}</p>}
     </form>

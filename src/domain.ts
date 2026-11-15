@@ -89,7 +89,7 @@ export type Data = {
 };
 export type PocketPlanSnapshot = { id: string; appliedAt: string; month: string; incomeBefore?: number; incomeKindBefore?: "fixed" | "variable"; pocketsBefore: Pocket[]; createdPocketIds: string[] };
 export const POCKET_PLAN_HISTORY = 3;
-export type MerchantRule = { key: string; name: string; pocketId: string; updatedAt: string };
+export type MerchantRule = { key: string; name: string; pocketId: string; updatedAt: string; automaticName?: boolean };
 export const COLORS = [
   "#15786e",
   "#8270ce",
@@ -118,6 +118,14 @@ export const daysAgo = (days: number) => {
 };
 export const today = () => daysAgo(0);
 export const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(localeTag(), { weekday: "short", day: "numeric", month: "short" });
+export const longDate = (date: string) => {
+  const value = new Date(`${date}T12:00:00`);
+  const locale = localeTag();
+  const weekday = value.toLocaleDateString(locale, { weekday: "long" });
+  const day = value.toLocaleDateString(locale, { day: "numeric" });
+  const month = value.toLocaleDateString(locale, { month: "long" });
+  return `${weekday}, ${day} ${month} ${value.getFullYear()}`;
+};
 // Before merchant memory (P1-5), a name matches only exactly, ignoring case and outer spaces.
 const entryKey = (name: string) => name.trim().toLocaleLowerCase("id-ID");
 const everydayExpense = (t: Transaction) => t.type === "expense" && (!t.kind || t.kind === "card_purchase");
@@ -454,7 +462,7 @@ export function validateData(input: unknown): Data {
     new Set(d.checkedDays).size !== d.checkedDays.length ||
     !Array.isArray(d.merchantRules) ||
     d.merchantRules.length > 500 ||
-    d.merchantRules.some((rule) => !rule || typeof rule.key !== "string" || !rule.key || rule.key.length > 100 || typeof rule.name !== "string" || !rule.name.trim() || rule.name.length > 100 || typeof rule.pocketId !== "string" || typeof rule.updatedAt !== "string" || rule.updatedAt.length > 40) ||
+    d.merchantRules.some((rule) => !rule || typeof rule.key !== "string" || !rule.key || rule.key.length > 100 || typeof rule.name !== "string" || !rule.name.trim() || rule.name.length > 100 || typeof rule.pocketId !== "string" || typeof rule.updatedAt !== "string" || rule.updatedAt.length > 40 || rule.automaticName !== undefined && typeof rule.automaticName !== "boolean") ||
     new Set(d.merchantRules.map((rule) => rule.key)).size !== d.merchantRules.length ||
     d.pockets.length > 1000 ||
     d.transactions.length > 100000 ||

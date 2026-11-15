@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, validateData } from "./domain";
-import { MERCHANT_RULE_LIMIT, learnMerchant, merchantKey, normalizeMerchant, suggestMerchant } from "./merchants";
+import { MERCHANT_RULE_LIMIT, learnMerchant, learnNotificationPocket, merchantKey, normalizeMerchant, suggestMerchant } from "./merchants";
 
 test("normalizeMerchant strips payment rails, codes and city suffixes", () => {
   const fixtures: [string, string][] = [
@@ -48,6 +48,16 @@ test("rules referencing a deleted pocket fall back to Unassigned and survive a r
   const { merchantRules: _, ...old } = emptyData();
   assert.deepEqual(validateData(JSON.parse(JSON.stringify(old))).merchantRules, []);
   assert.throws(() => validateData({ ...emptyData(), merchantRules: [{ key: "", name: "x", pocketId: "", updatedAt: "" }] }));
+});
+
+test("notification pocket memory preserves an automatic name across edits and backup validation", () => {
+  const data = emptyData();
+  data.merchantRules = learnMerchant(data, "QRIS ALFAMART 0123", { name: "Alfamart", pocketId: "" }, "2026-10-25T10:00:00Z", true);
+  data.merchantRules = learnNotificationPocket(data, "QRIS ALFAMART 0456", "food");
+  assert.equal(data.merchantRules[0].name, "Alfamart");
+  assert.equal(data.merchantRules[0].automaticName, true);
+  assert.equal(data.merchantRules[0].pocketId, "food");
+  assert.equal(validateData(JSON.parse(JSON.stringify(data))).merchantRules[0].automaticName, true);
 });
 
 test("the rule list stays bounded, dropping the oldest first", () => {

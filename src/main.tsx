@@ -7,9 +7,10 @@ import "@fontsource/plus-jakarta-sans/700.css";
 import App from "./App";
 import ErrorBoundary from "./ErrorBoundary";
 import { AppUpdateProvider } from "./appUpdate";
-import { loadTheme, paintTheme, watchSystemTheme } from "./appearance";
+import { loadSystemTheme, loadTheme, paintTheme, watchSystemTheme } from "./appearance";
 import "./styles.css";
-void loadTheme().catch(() => "system" as const).then((preference) => {
+void loadTheme().catch(() => "system" as const).then(async (preference) => {
+  await loadSystemTheme();
   paintTheme(preference);
   watchSystemTheme();
   ReactDOM.createRoot(document.getElementById("root")!).render(

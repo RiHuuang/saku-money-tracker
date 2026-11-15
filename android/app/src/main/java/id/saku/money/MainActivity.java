@@ -1,6 +1,7 @@
 package id.saku.money;
 
 import com.getcapacitor.BridgeActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import android.os.Bundle;
 import android.content.res.Configuration;
 import android.provider.Settings;
@@ -16,6 +17,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        AppCompatDelegate.setDefaultNightMode(SakuAppearance.INSTANCE.nightMode(this));
         registerPlugin(LocalStatementAIPlugin.class);
         registerPlugin(GoogleAuthPlugin.class);
         registerPlugin(HomeWidgetPlugin.class);

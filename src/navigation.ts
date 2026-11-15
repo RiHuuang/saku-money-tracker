@@ -2,8 +2,9 @@ export type View = "overview" | "transactions" | "pockets" | "plans" | "more" | 
 
 export const moreViews: View[] = ["more", "insights", "plans", "settings"];
 
-export function backDestination(view: View, previousView: View): View | null {
-  if (moreViews.includes(view) && view !== "more") return "more";
-  if (view === "more") return previousView === "more" ? "overview" : previousView;
-  return view === "overview" ? null : "overview";
+export const pushSheet = <T>(stack: readonly T[], sheet: T): T[] => [...stack, sheet];
+export const popSheet = <T>(stack: readonly T[]): T[] => stack.slice(0, -1);
+
+export function backDestination(view: View, history: readonly View[]): View | null {
+  return history.at(-1) ?? (view === "overview" ? null : "overview");
 }

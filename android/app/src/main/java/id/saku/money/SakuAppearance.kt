@@ -3,8 +3,6 @@ package id.saku.money
 import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
-import android.os.Build
-import android.view.View
 import androidx.appcompat.app.AppCompatDelegate
 
 object SakuAppearance {
@@ -17,18 +15,13 @@ object SakuAppearance {
             else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         }
     }
+    fun systemDark(context: Context): Boolean = context.applicationContext.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
     fun nightMode(context: Context): Int = when (preference(context)) {
         "dark" -> AppCompatDelegate.MODE_NIGHT_YES
         "light" -> AppCompatDelegate.MODE_NIGHT_NO
         else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
     }
     fun applyChrome(activity: Activity) {
-        val dark = isDark(activity)
-        val background = if (dark) 0xff101d18.toInt() else 0xfff7f6f0.toInt()
-        activity.window.statusBarColor = background
-        activity.window.navigationBarColor = background
-        if (Build.VERSION.SDK_INT >= 29) activity.window.isNavigationBarContrastEnforced = false
-        @Suppress("DEPRECATION")
-        activity.window.decorView.systemUiVisibility = if (dark) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        if (android.os.Build.VERSION.SDK_INT >= 29) activity.window.isNavigationBarContrastEnforced = false
     }
 }
