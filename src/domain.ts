@@ -297,13 +297,13 @@ export function dueDate(rule: RecurringRule, month: string) {
   const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
   return `${month}-${String(Math.min(rule.day, lastDay)).padStart(2, "0")}`;
 }
-export function dueRules(data: Data, through = today()) {
+export function dueRules(data: Data, through = today(), includeUpcomingThisMonth = false) {
   const currentMonth = through.slice(0, 7);
   return data.recurring.filter((r) => r.active).flatMap((rule) => {
     const rows: { rule: RecurringRule; date: string }[] = [];
     for (let m = rule.startMonth > shiftMonth(currentMonth, -11) ? rule.startMonth : shiftMonth(currentMonth, -11); m <= currentMonth; m = shiftMonth(m, 1)) {
       const date = dueDate(rule, m);
-      if (date <= through && !rule.skippedMonths?.includes(m) && !data.transactions.some((t) => t.recurringRuleId === rule.id && (t.occurrenceMonth || t.date.slice(0, 7)) === m))
+      if ((date <= through || includeUpcomingThisMonth && m === currentMonth) && !rule.skippedMonths?.includes(m) && !data.transactions.some((t) => t.recurringRuleId === rule.id && (t.occurrenceMonth || t.date.slice(0, 7)) === m))
         rows.push({ rule, date });
     }
     return rows;

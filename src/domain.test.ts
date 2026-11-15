@@ -431,6 +431,15 @@ test("recurring bills show only unrecorded, unskipped occurrences", () => {
   assert.doesNotThrow(() => validateData(d));
 });
 
+test("a bill paid early is recorded today and does not reappear on its due day", () => {
+  const d = emptyData();
+  d.recurring = [{ id: "rent", name: "Rent", amount: 100000, type: "expense", pocketId: "home", account: "BCA", day: 20, startMonth: "2026-11", active: true }];
+  assert.deepEqual(dueRules(d, "2026-11-11"), []);
+  assert.deepEqual(dueRules(d, "2026-11-11", true).map(({ date }) => date), ["2026-11-20"]);
+  d.transactions.push({ id: "early", name: "Rent", amount: 100000, type: "expense", pocketId: "home", account: "BCA", date: "2026-11-11", note: "", recurringRuleId: "rent", occurrenceMonth: "2026-11" });
+  assert.deepEqual(dueRules(d, "2026-11-20", true), []);
+});
+
 test("catchUpGap counts days since the last real entry or checked day, capped at 14", () => {
   const data = emptyData();
   data.accounts = ["Cash"];

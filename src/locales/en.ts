@@ -294,4 +294,9 @@ export const en = {
   chooseBudgetDestination: "Choose a pocket to receive the budget.",
   chooseDifferentPocket: "Choose a different pocket.",
   budgetMoveExceedsAvailable: "Up to {amount} can be moved from this pocket.",
+  upcomingBillsThisMonth: "Later this month",
+  payNow: "Pay now",
+  billsToRecord: "Bills to record",
+  viewBills: "View bills",
+  cardCreditAfterPayment: "This leaves {credit} as card credit. Available credit will be {available}.",
 } as const;

@@ -296,4 +296,9 @@ export const id = {
   chooseBudgetDestination: "Pilih kantong tujuan anggaran.",
   chooseDifferentPocket: "Pilih kantong yang berbeda.",
   budgetMoveExceedsAvailable: "Paling banyak {amount} dapat dipindahkan dari kantong ini.",
+  upcomingBillsThisMonth: "Nanti bulan ini",
+  payNow: "Bayar sekarang",
+  billsToRecord: "Tagihan untuk dicatat",
+  viewBills: "Lihat tagihan",
+  cardCreditAfterPayment: "Sisa {credit} menjadi saldo kredit kartu. Kredit tersedia menjadi {available}.",
 } satisfies Record<keyof typeof en, string>;
