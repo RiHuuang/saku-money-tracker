@@ -1865,7 +1865,7 @@ function TransactionEditor({
     ...data.creditCards.map((item) => ({ value: `card:${item.id}`, label: item.name, description: t("creditAvailableAmount", { amount: money(Math.max(0, item.limit - cardBalance(data, item.id))) }) })),
   ];
   const pocketStats = summary(data, date.slice(0, 7)).pockets;
-  const pocketChoices = [{ value: "", label: t("unassigned"), description: t("categorizeLater") }, ...pocketStats.map((item) => ({ value: item.id, label: item.name, description: t("remainingAmount", { amount: money(Math.max(0, item.limit - item.spent)) }) }))];
+  const pocketChoices = [{ value: "", label: t("unassigned") }, ...pocketStats.map((item) => ({ value: item.id, label: item.name, description: t("remainingAmount", { amount: money(Math.max(0, item.limit - item.spent)) }) }))];
   const modeControl = <div className="segmented form-segment transaction-modes">
     <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "expense" ? "selected" : ""} onClick={() => setMode("expense")}><ArrowUpRight size={16} />{t("expense")}</button>
     <button type="button" disabled={special || !!transaction?.split || transaction?.kind === "account_transfer"} className={mode === "income" ? "selected" : ""} onClick={() => setMode("income")}><ArrowDownLeft size={16} />{t("income")}</button>
