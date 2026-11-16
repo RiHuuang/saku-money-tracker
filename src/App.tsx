@@ -1108,12 +1108,6 @@ export default function App() {
                   <span>{t("createPocket")}</span>
                 </button>
               </div>
-              <div className="inline-note">
-                <CalendarDays size={18} />
-                <span>
-                  {t("budgetsRenewMonthly", { month: monthLabel(month) })}
-                </span>
-              </div>
             </>
           )}
           {view === "insights" && (
