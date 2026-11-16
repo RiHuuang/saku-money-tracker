@@ -1880,7 +1880,7 @@ function TransactionEditor({
       <label className="field">{t("date")}<LongDateInput max={today()} value={date} onValueChange={(value) => { setDate(value); setFieldError(null); }} aria-invalid={fieldError?.field === "date"} />{fieldError?.field === "date" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
       <label className="field">{t("note")} <span className="optional">{t("optional")}</span><textarea rows={2} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="form-footer">{transaction?.transferId && <button type="button" className="button danger" onClick={() => void onDeleteTransfer(transaction.transferId!)}>{t("delete")}</button>}<button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button><button className="button primary" disabled={busy}>{busy ? t("saving") : t("saveTransfer")}<Check size={16} /></button></div>
+      <div className="form-footer">{transaction?.transferId && <button type="button" className="button danger" onClick={() => void onDeleteTransfer(transaction.transferId!)}>{t("delete")}</button>}<button className="button primary" disabled={busy}>{busy ? t("saving") : t("saveTransfer")}<Check size={16} /></button></div>
     </fieldset></form>
   </Modal>;
   return (
