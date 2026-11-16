@@ -563,6 +563,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
                 {duplicate && !alreadySaved && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => void updateRow(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
                 {row.decision === "ready" && !rowReady && !alreadySaved && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
                 {!alreadySaved && !reviewChoices && <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: row.name || t("unnamedTransaction") })}><button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} disabled={saving} onClick={() => decide(row.id, "ready")}>{t("addToSaku")}</button><button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} disabled={saving} onClick={() => decide(row.id, "later")}>{t("reviewLater")}</button><button type="button" className={row.decision === "skip" ? "selected" : ""} aria-pressed={row.decision === "skip"} disabled={saving} onClick={() => decide(row.id, "skip")}>{t("dontImport")}</button></div></div>}
+                <button type="button" className="button primary notification-done" onClick={() => setEditingRow("")}>{t("done")}</button>
               </div></div></Modal>}
             </div>;
   };
