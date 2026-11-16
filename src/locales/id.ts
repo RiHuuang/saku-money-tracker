@@ -291,4 +291,8 @@ export const id = {
   screenshotSource: "tangkapan layar",
   onboardingOpeningNote: "Saldo awal saat mulai memakai Saku",
   saveFailedTryAgain: "Tidak dapat menyimpan. Coba lagi.",
+  chooseBudgetSource: "Pilih kantong asal anggaran.",
+  chooseBudgetDestination: "Pilih kantong tujuan anggaran.",
+  chooseDifferentPocket: "Pilih kantong yang berbeda.",
+  budgetMoveExceedsAvailable: "Paling banyak {amount} dapat dipindahkan dari kantong ini.",
 } satisfies Record<keyof typeof en, string>;

@@ -289,4 +289,8 @@ export const en = {
   screenshotSource: "screenshot",
   onboardingOpeningNote: "Opening balance when starting Saku",
   saveFailedTryAgain: "Could not save. Please try again.",
+  chooseBudgetSource: "Choose a pocket to move budget from.",
+  chooseBudgetDestination: "Choose a pocket to receive the budget.",
+  chooseDifferentPocket: "Choose a different pocket.",
+  budgetMoveExceedsAvailable: "Up to {amount} can be moved from this pocket.",
 } as const;

@@ -2202,9 +2202,31 @@ function PocketDeleteEditor({ data, pocket, busy, onClose, onAddPocket, onSave }
 }
 
 function PocketTransferEditor({ data, month, busy, toPocketId, initialAmount, onClose, onSave }: { data: Data; month: string; busy: boolean; toPocketId?: string; initialAmount?: number; onClose: () => void; onSave: (move: Data["pocketTransfers"][number]) => Promise<void> }) {
-  const stats = summary(data, month), [from, setFrom] = useState(() => stats.pockets.filter((p) => p.id !== toPocketId).sort((a, b) => (b.limit - b.spent) - (a.limit - a.spent))[0]?.id || ""), [to, setTo] = useState(toPocketId || data.pockets.find((p) => p.id !== from)?.id || ""), [amount, setAmount] = useState(initialAmount ? String(initialAmount) : ""), [error, setError] = useState("");
-  const choices = stats.pockets.map((p) => ({ value: p.id, label: p.name, description: `${money(Math.max(0, p.limit - p.spent))} remaining` }));
-  return <Modal title={t("movePocketBudget")} subtitle={t("adjustMonthOnly", { month: monthLabel(month) })} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); const source = stats.pockets.find((p) => p.id === from), value = Number(amount); if (from === to || !source || !validAmount(value) || value > Math.max(0, source.limit - source.spent)) { setError(t("chooseTwoDifferentPocketsAnd")); return; } void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month }); }}><fieldset disabled={busy}><label className="field">{t("from")}<ChoiceField hideLabel label={t("pocketToMoveFrom")} value={from} onValueChange={setFrom} options={choices} /></label><label className="field">{t("to")}<ChoiceField hideLabel label={t("pocketToMoveTo")} value={to} onValueChange={setTo} options={choices} /></label><label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput required value={amount} onValueChange={setAmount} /></div></label>{error && <p className="form-error">{error}</p>}<div className="form-footer"><button className="button primary">{t("moveBudget")}</button></div></fieldset></form></Modal>;
+  const stats = summary(data, month);
+  const [from, setFrom] = useState(() => stats.pockets.filter((p) => p.id !== toPocketId).sort((a, b) => (b.limit - b.spent) - (a.limit - a.spent))[0]?.id || "");
+  const [to, setTo] = useState(toPocketId || data.pockets.find((p) => p.id !== from)?.id || "");
+  const [amount, setAmount] = useState(initialAmount ? String(initialAmount) : "");
+  const [fieldError, setFieldError] = useState<{ field: "from" | "to" | "amount"; message: string } | null>(null);
+  const choices = stats.pockets.map((p) => ({ value: p.id, label: p.name, description: t("remainingAmount", { amount: money(Math.max(0, p.limit - p.spent)) }) }));
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const source = stats.pockets.find((p) => p.id === from);
+    const value = Number(amount);
+    if (!source) { setFieldError({ field: "from", message: t("chooseBudgetSource") }); return; }
+    if (!stats.pockets.some((p) => p.id === to)) { setFieldError({ field: "to", message: t("chooseBudgetDestination") }); return; }
+    if (from === to) { setFieldError({ field: "to", message: t("chooseDifferentPocket") }); return; }
+    if (!validAmount(value)) { setFieldError({ field: "amount", message: t("wholeRupiahError") }); return; }
+    const available = Math.max(0, source.limit - source.spent);
+    if (value > available) { setFieldError({ field: "amount", message: t("budgetMoveExceedsAvailable", { amount: money(available) }) }); return; }
+    setFieldError(null);
+    void onSave({ id: uid(), fromPocketId: from, toPocketId: to, amount: value, month });
+  }
+  return <Modal title={t("movePocketBudget")} subtitle={t("adjustMonthOnly", { month: monthLabel(month) })} onClose={onClose}><form onSubmit={submit}><fieldset disabled={busy}>
+    <label className="field">{t("from")}<ChoiceField hideLabel label={t("pocketToMoveFrom")} value={from} onValueChange={(value) => { setFrom(value); setFieldError(null); }} options={choices} />{fieldError?.field === "from" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
+    <label className="field">{t("to")}<ChoiceField hideLabel label={t("pocketToMoveTo")} value={to} onValueChange={(value) => { setTo(value); setFieldError(null); }} options={choices} />{fieldError?.field === "to" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
+    <label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput value={amount} onValueChange={(value) => { setAmount(value); setFieldError(null); }} aria-invalid={fieldError?.field === "amount"} /></div>{fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
+    <div className="form-footer"><button className="button primary">{t("moveBudget")}</button></div>
+  </fieldset></form></Modal>;
 }
 
 function LoginScreen({ configured, busy, error, onLogin }: { configured: boolean; busy: boolean; error: string; onLogin: () => Promise<void> }) {
