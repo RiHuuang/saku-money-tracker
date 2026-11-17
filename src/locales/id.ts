@@ -204,6 +204,7 @@ export const id = {
   planWithSaku: "Rencanakan dengan Saku",
   planWithSakuHelp: "Saran dari pemasukan dan pengeluaranmu",
   plannerNeedsIncome: "Isi pemasukan bulananmu untuk melihat saran Saku.",
+  plannerNeedsPocket: "Tambahkan kantong untuk membuat rencana.",
   pocketBills: "Tagihan",
   pocketIdeas: "Ide kantong",
   pocketInstalment: "Cicilan",

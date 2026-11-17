@@ -27,6 +27,7 @@ export default function PocketPlanner({ data, month, userId, busy, onApply, onRo
   const [custom, setCustom] = useState("");
   const [confirmRollback, setConfirmRollback] = useState("");
   const [asked, setAsked] = useState(false);
+  const [missing, setMissing] = useState<"income" | "pocket" | "">("");
   const existing = data.pockets.filter((pocket) => pocket.createdMonth <= month);
   const pockets = useMemo<PlanPocket[]>(() => [
     ...existing.map((pocket) => ({ key: pocket.id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64), pocketId: pocket.id, name: pocket.name, icon: pocket.icon })),
@@ -44,19 +45,30 @@ export default function PocketPlanner({ data, month, userId, busy, onApply, onRo
     setCustom("");
   }
   async function apply() {
-    if (busy || !incomeValue || !plan.rows.length) return;
+    if (busy || plan.state === "thinking") return;
+    if (!incomeValue) {
+      setMissing("income");
+      document.getElementById("planner-income")?.focus();
+      return;
+    }
+    if (!plan.rows.length) {
+      setMissing("pocket");
+      document.getElementById("planner-custom-pocket")?.focus();
+      return;
+    }
     if (await onApply({ income: incomeValue, kind, items: plan.rows.map((row) => ({ pocketId: row.pocketId, name: row.name, icon: row.icon, amount: row.amount })) })) onClose();
   }
   return <Modal title={t("planWithSaku")} subtitle={t("planWithSakuHelp")} onClose={onClose}>
     <div className="planner">
-      <label className="field">{t("monthlyIncome")}<div className="amount-input"><span>Rp</span><MoneyInput value={income} placeholder="8.000.000" onValueChange={setIncome} /></div><small>{kind === "variable" ? t("incomeVariableHelp") : t("incomeFixedHelp")}</small></label>
+      <label className="field">{t("monthlyIncome")}<div className="amount-input"><span>Rp</span><MoneyInput id="planner-income" value={income} placeholder="8.000.000" aria-invalid={missing === "income"} aria-describedby={missing === "income" ? "planner-income-error" : undefined} onValueChange={(value) => { setIncome(value); setMissing(""); }} /></div><small>{kind === "variable" ? t("incomeVariableHelp") : t("incomeFixedHelp")}</small>{missing === "income" && <span className="field-error" id="planner-income-error" role="alert">{t("plannerNeedsIncome")}</span>}</label>
       <SegmentedChoice compact label={t("incomeKind")} value={kind} onValueChange={(value) => setKind(value as "fixed" | "variable")} options={[{ value: "fixed", label: t("incomeFixed") }, { value: "variable", label: t("incomeVariable") }]} />
       <div className="onboarding-chips is-pockets" role="group" aria-label={t("pocketIdeas")}>{ideas.map((name) => <button type="button" key={name} onClick={() => add(name)}><Plus size={14} aria-hidden="true" />{name}</button>)}</div>
-      <form className="onboarding-custom" onSubmit={(event) => add(custom, event)}><input value={custom} maxLength={40} placeholder={t("customPocket")} aria-label={t("customPocket")} onChange={(event) => setCustom(event.target.value)} /><button className="button secondary" type="submit" disabled={!custom.trim()}><Plus size={16} />{t("addPocket")}</button></form>
+      <form className="onboarding-custom" onSubmit={(event) => { add(custom, event); setMissing(""); }}><input id="planner-custom-pocket" value={custom} maxLength={40} placeholder={t("customPocket")} aria-label={t("customPocket")} aria-invalid={missing === "pocket"} aria-describedby={missing === "pocket" ? "planner-pocket-error" : undefined} onChange={(event) => { setCustom(event.target.value); setMissing(""); }} /><button className="button secondary" type="submit" disabled={!custom.trim()}><Plus size={16} />{t("addPocket")}</button></form>
+      {missing === "pocket" && <p className="field-error" id="planner-pocket-error" role="alert">{t("plannerNeedsPocket")}</p>}
       {incomeValue > 0 && plan.rows.length > 0 ? <>
         <AllocationEditor income={incomeValue} rows={plan.rows} data={data} state={plan.state} previous={previous} disabled={busy} onChange={plan.setRows} onSpread={plan.spread} onRemove={(key) => setAdded(added.filter((name) => newKey(name) !== key))} />
         {userId && <button type="button" className="text-button onboarding-ask" disabled={plan.state === "thinking"} onClick={() => { setAsked(true); void plan.refine(); }}><Sparkles size={14} aria-hidden="true" />{asked ? t("askSakuAgain") : t("askSakuRefine")}</button>}
-      </> : <p className="field-help">{t("plannerNeedsIncome")}</p>}
+      </> : null}
       {!!data.pocketPlans?.length && <section className="planner-history" aria-label={t("earlierPlans")}>
         <h3><History size={15} aria-hidden="true" /> {t("earlierPlans")}</h3>
         {data.pocketPlans.map((item) => <div className="planner-history-row" key={item.id}>
@@ -69,7 +81,7 @@ export default function PocketPlanner({ data, month, userId, busy, onApply, onRo
       </section>}
       <div className="form-footer planner-footer">
         <button type="button" className="button secondary" onClick={onClose}>{t("keepMyPockets")}</button>
-        <button type="button" className="button primary" disabled={busy || !incomeValue || !plan.rows.length || plan.state === "thinking"} onClick={() => void apply()}>{changes && incomeValue ? t("applyChanges", { count: changes }) : t("applyPlan")}</button>
+        <button type="button" className="button primary" disabled={busy || plan.state === "thinking"} onClick={() => void apply()}>{changes && incomeValue ? t("applyChanges", { count: changes }) : t("applyPlan")}</button>
       </div>
     </div>
   </Modal>;

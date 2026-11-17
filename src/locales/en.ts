@@ -202,6 +202,7 @@ export const en = {
   planWithSaku: "Plan with Saku",
   planWithSakuHelp: "Suggestions from your income and real spending",
   plannerNeedsIncome: "Enter your monthly income to see Saku's suggestion.",
+  plannerNeedsPocket: "Add a pocket to make a plan.",
   pocketBills: "Bills",
   pocketIdeas: "Pocket ideas",
   pocketInstalment: "Instalments",
