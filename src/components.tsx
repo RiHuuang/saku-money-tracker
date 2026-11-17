@@ -169,7 +169,7 @@ export function SegmentedChoice({ value, options, onValueChange, label, disabled
     </div>
   </div>;
 }
-export function FitMoney({ amount }: { amount: number }) {
+export function FitMoney({ amount, prefix = "" }: { amount: number; prefix?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     const element = ref.current!;
@@ -187,8 +187,8 @@ export function FitMoney({ amount }: { amount: number }) {
     fit();
     void document.fonts.ready.then(() => { lastWidth = 0; fit(); });
     return () => observer.disconnect();
-  }, [amount]);
-  return <span ref={ref} className="fit-money">{money(amount)}</span>;
+  }, [amount, prefix]);
+  return <span ref={ref} className="fit-money">{prefix}{money(amount)}</span>;
 }
 export function PocketIcon({
   name,
@@ -350,7 +350,7 @@ export function PocketCard({
       </div>
       <h3>{p.name}</h3>
       <div className={`pocket-value ${remaining < 0 ? "negative" : ""}`}>
-        <strong className="pocket-money">{remaining < 0 && "−"}<FitMoney amount={Math.abs(remaining)} /></strong>
+        <strong className="pocket-money"><FitMoney amount={Math.abs(remaining)} prefix={remaining < 0 ? "−" : ""} /></strong>
         {remaining < 0 ? <span className="pocket-over-chip"><TriangleAlert size={13} />{translate("over")}</span> : <span>{translate("left")}</span>}
       </div>
       <div className="progress">
