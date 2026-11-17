@@ -7,7 +7,7 @@ import { learnMerchant, learnNotificationPocket, suggestMerchant } from "./merch
 import { cleanMerchantNames } from "./cloud";
 import { loadCleaningOptIn, namesToClean } from "./merchantCleaning";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
-import { inboxRows, type NotificationRow } from "./notificationRows";
+import { inboxRows, notificationStatusTap, type NotificationRow } from "./notificationRows";
 import { ChoiceField, Modal } from "./components";
 import { useRowGestures } from "./rowGestures";
 import { useHiddenWhileScrollingUp } from "./scrollReveal";
@@ -171,6 +171,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), offset = gestures.offset(row.id);
       const state: RowState = row.decision === "skip" ? "skip" : rowReady ? "ready" : row.decision === "later" ? "later" : "review";
+      const statusTap = notificationStatusTap(row.decision, rowReady);
       const hint = rowReady || row.decision === "skip" ? "" : importRowReviewIssue(row, account, data, duplicate);
       return <div className="catchup-row" key={row.id} data-state={state} data-swipe={offset > 40 ? "add" : offset < -40 ? "skip" : undefined} data-add-label={t("swipeAdd")} data-skip-label={t("swipeSkip")}>
         <button type="button" className="catchup-row-summary" aria-haspopup="dialog" style={offset ? { transform: `translateX(${offset}px)` } : undefined} {...gestures.handlers(row.id, busy || saving)}>
@@ -179,7 +180,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
         </button>
         <div className="notification-row-controls">
           {row.direction === "expense" && row.activity === "purchase" && <button type="button" className="notification-pocket-chip" onClick={() => setEditingRow(row.id)}>{data.pockets.find((pocket) => pocket.id === row.pocketId)?.name || t("noPocket")}</button>}
-          {row.pairedWith && row.decision === "skip" && rows.some((other) => other.id === row.pairedWith && ["transfer", "topup"].includes(other.activity)) ? <RowStatus state={state} label={t("recordedWithTransfer")} /> : <button type="button" className="notification-status-toggle" aria-label={t(row.decision === "skip" ? "markRowToAdd" : "markRowToSkip")} onClick={() => decide(row.id, row.decision === "skip" ? "ready" : "skip")}><RowStatus state={state} label={row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : row.decision === "later" ? t("reviewLater") : t("openReview")} /></button>}
+          {row.pairedWith && row.decision === "skip" && rows.some((other) => other.id === row.pairedWith && ["transfer", "topup"].includes(other.activity)) ? <RowStatus state={state} label={t("recordedWithTransfer")} /> : <button type="button" className="notification-status-toggle" aria-label={t(statusTap === "review" ? "checkThisRow" : statusTap === "ready" ? "markRowToAdd" : "markRowToSkip")} onClick={() => statusTap === "review" ? setEditingRow(row.id) : decide(row.id, statusTap)}><RowStatus state={state} label={row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : row.decision === "later" ? t("reviewLater") : t("openReview")} /></button>}
         </div>
         {editingRow === row.id && <Modal title={importRowName(row)} subtitle={`${friendlyDate(row.date)} · ${row.direction === "expense" ? "−" : "+"}${money(row.amount)}`} onClose={() => setEditingRow("")}><div className="catchup-row-details">
           <div className="catchup-row-main"><label className="catchup-field">{t("description")}<input value={row.cleanName ?? importRowName(row)} placeholder={row.name} maxLength={100} onChange={(event) => edit(row.id, { cleanName: event.target.value })} /></label></div>

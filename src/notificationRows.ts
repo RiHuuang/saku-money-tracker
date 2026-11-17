@@ -14,6 +14,11 @@ const same = (a: string, b: string) => a.trim().toLocaleLowerCase("id-ID") === b
 
 export type NotificationRow = ImportRow & { occurredAt: number; appName: string; balance: number | null; pairedWith?: string };
 
+export function notificationStatusTap(decision: ImportRow["decision"], ready: boolean): "review" | "ready" | "skip" {
+  if (decision === "skip") return "ready";
+  return ready ? "skip" : "review";
+}
+
 export function inboxRows(items: readonly InboxItem[], data: Data): NotificationRow[] {
   const accounts = [...data.accounts, ...data.creditCards.map((card) => card.name)];
   const rows = items.map((item): NotificationRow => {
