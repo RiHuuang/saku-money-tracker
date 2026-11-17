@@ -1087,7 +1087,7 @@ export default function App() {
                   <strong>{money(stats.shortfall > 0 ? stats.shortfall : stats.available)}</strong>
                 </button>
               </div>
-              <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><div className="section-actions"><button className="button secondary" onClick={() => setEdit({ type: "plan" })}><Sparkles size={16} />{t("planWithSaku")}</button><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div></div>
+              <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><div className="section-actions"><button className="button secondary" onClick={() => setEdit({ type: "plan" })}><Sparkles size={16} />{t("planWithSaku")}</button><button className="button secondary" onClick={() => data.pockets.length < 2 ? setToast(t("addAnotherPocketFirst")) : setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div></div>
               <div className="pocket-grid all-pockets">
                 {stats.pockets.map((p) => (
                   <PocketCard
