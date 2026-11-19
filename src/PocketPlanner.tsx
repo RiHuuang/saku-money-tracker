@@ -41,7 +41,10 @@ export default function PocketPlanner({ data, month, userId, busy, onApply, onRo
   function add(name: string, event?: FormEvent) {
     event?.preventDefault();
     const value = name.trim().slice(0, 40);
-    if (value && !pockets.some((pocket) => pocket.name.toLocaleLowerCase("id-ID") === value.toLocaleLowerCase("id-ID"))) setAdded([...added, value].slice(0, 10));
+    if (value && !pockets.some((pocket) => pocket.name.toLocaleLowerCase("id-ID") === value.toLocaleLowerCase("id-ID"))) {
+      setAdded([...added, value].slice(0, 10));
+      setMissing("");
+    }
     setCustom("");
   }
   async function apply() {
@@ -63,7 +66,7 @@ export default function PocketPlanner({ data, month, userId, busy, onApply, onRo
       <label className="field">{t("monthlyIncome")}<div className="amount-input"><span>Rp</span><MoneyInput id="planner-income" value={income} placeholder="8.000.000" aria-invalid={missing === "income"} aria-describedby={missing === "income" ? "planner-income-error" : undefined} onValueChange={(value) => { setIncome(value); setMissing(""); }} /></div><small>{kind === "variable" ? t("incomeVariableHelp") : t("incomeFixedHelp")}</small>{missing === "income" && <span className="field-error" id="planner-income-error" role="alert">{t("plannerNeedsIncome")}</span>}</label>
       <SegmentedChoice compact label={t("incomeKind")} value={kind} onValueChange={(value) => setKind(value as "fixed" | "variable")} options={[{ value: "fixed", label: t("incomeFixed") }, { value: "variable", label: t("incomeVariable") }]} />
       <div className="onboarding-chips is-pockets" role="group" aria-label={t("pocketIdeas")}>{ideas.map((name) => <button type="button" key={name} onClick={() => add(name)}><Plus size={14} aria-hidden="true" />{name}</button>)}</div>
-      <form className="onboarding-custom" onSubmit={(event) => { add(custom, event); setMissing(""); }}><input id="planner-custom-pocket" value={custom} maxLength={40} placeholder={t("customPocket")} aria-label={t("customPocket")} aria-invalid={missing === "pocket"} aria-describedby={missing === "pocket" ? "planner-pocket-error" : undefined} onChange={(event) => { setCustom(event.target.value); setMissing(""); }} /><button className="button secondary" type="submit" disabled={!custom.trim()}><Plus size={16} />{t("addPocket")}</button></form>
+      <form className="onboarding-custom" onSubmit={(event) => add(custom, event)}><input id="planner-custom-pocket" value={custom} maxLength={40} placeholder={t("customPocket")} aria-label={t("customPocket")} aria-invalid={missing === "pocket"} aria-describedby={missing === "pocket" ? "planner-pocket-error" : undefined} onChange={(event) => { setCustom(event.target.value); setMissing(""); }} /><button className="button secondary" type="submit" disabled={!custom.trim()}><Plus size={16} />{t("addPocket")}</button></form>
       {missing === "pocket" && <p className="field-error" id="planner-pocket-error" role="alert">{t("plannerNeedsPocket")}</p>}
       {incomeValue > 0 && plan.rows.length > 0 ? <>
         <AllocationEditor income={incomeValue} rows={plan.rows} data={data} state={plan.state} previous={previous} disabled={busy} onChange={plan.setRows} onSpread={plan.spread} onRemove={(key) => setAdded(added.filter((name) => newKey(name) !== key))} />
