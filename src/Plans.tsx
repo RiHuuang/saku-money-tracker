@@ -2,7 +2,7 @@ import { localeTag, t as translate } from "./i18n";
 import { useState, type FormEvent } from "react";
 import { CalendarDays, CreditCard as CreditCardIcon, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
-  accountBalance, cardBalance, cardDue, dueRules, installmentAmounts, money, shiftMonth, today, uid, validAmount, validDate,
+  accountBalance, cardBalance, cardDue, dueRules, installmentAmounts, money, recurringStartMonth, shiftMonth, today, uid, validAmount, validDate,
   type CreditCard, type Data, type RecurringRule, type Transaction,
 } from "./domain";
 import { ChoiceField, LongDateInput, Modal, MoneyInput, SegmentedChoice } from "./components";
@@ -36,7 +36,7 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
   const [ruleMethod, setRuleMethod] = useState(`bank:${data.accounts[0]}`);
   const [ruleInstallments, setRuleInstallments] = useState("1");
   const [ruleDay, setRuleDay] = useState(String(Number(today().slice(-2))));
-  const [ruleMonth, setRuleMonth] = useState(month);
+  const [ruleMonth, setRuleMonth] = useState(recurringStartMonth(undefined));
   const [deleteId, setDeleteId] = useState("");
   const occurrences = dueRules(data, today(), true);
   const pending = occurrences.filter(({ date }) => date <= today());
@@ -94,12 +94,13 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
     if (await commit({ ...data, transactions: [...data.transactions, transaction] }, translate("cardPaymentRecorded"))) { setPayAmount(""); setPayCard(""); }
   }
   function editRule(rule?: RecurringRule) {
-    setRuleDraft(rule || { id: "", name: "", amount: 0, type: "expense", pocketId: data.pockets[0]?.id || "", account: data.accounts[0], day: Number(today().slice(-2)), startMonth: month, active: true });
+    const startMonth = recurringStartMonth(rule);
+    setRuleDraft(rule || { id: "", name: "", amount: 0, type: "expense", pocketId: data.pockets[0]?.id || "", account: data.accounts[0], day: Number(today().slice(-2)), startMonth, active: true });
     setRuleName(rule?.name || ""); setRuleAmount(rule ? String(rule.amount) : "");
     setRuleType(rule?.type || "expense"); setRulePocket(rule?.pocketId || data.pockets[0]?.id || "");
     setRuleMethod(rule?.cardId ? `card:${rule.cardId}` : `bank:${rule?.account || data.accounts[0]}`);
     setRuleInstallments(String(rule?.installments || 1));
-    setRuleDay(String(rule?.day || Number(today().slice(-2)))); setRuleMonth(rule?.startMonth || month);
+    setRuleDay(String(rule?.day || Number(today().slice(-2)))); setRuleMonth(startMonth);
   }
   async function saveRule(e: FormEvent) {
     e.preventDefault();

@@ -297,6 +297,9 @@ export function dueDate(rule: RecurringRule, month: string) {
   const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
   return `${month}-${String(Math.min(rule.day, lastDay)).padStart(2, "0")}`;
 }
+export function recurringStartMonth(rule: Pick<RecurringRule, "startMonth"> | undefined, referenceDate = today()) {
+  return rule?.startMonth || referenceDate.slice(0, 7);
+}
 export function dueRules(data: Data, through = today(), includeUpcomingThisMonth = false) {
   const currentMonth = through.slice(0, 7);
   return data.recurring.filter((r) => r.active).flatMap((rule) => {
