@@ -25,6 +25,8 @@ export const id = {
   statementBalanceReviewHelp: "Gunakan saldo yang dicek di aplikasi bank.",
   statementClosingBalance: "Saldo bank pada tanggal ini (Rp)",
   statementCurrentBalance: "Saldo bank hari ini (Rp)",
+  statementEnterClosingBalance: "Masukkan saldo bank pada tanggal ini dalam rupiah bulat.",
+  statementEnterCurrentBalance: "Masukkan saldo bank hari ini dalam rupiah bulat.",
   statementBalanceEffect: "Tanggal pilihan: {before} → {after}. Hari ini: {currentBefore} → {currentAfter}.",
   statementBalanceBlocked: "Bertentangan dengan saldo terverifikasi, atau tidak ada perubahan.",
   statementConfirmAdjustment: "Konfirmasi penyesuaian saldo",

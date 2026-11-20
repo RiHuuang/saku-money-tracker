@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData, accountBalance } from "./domain";
-import { previewStatementAdjustment, statementBalanceAdjustment } from "./statementBalances";
+import { previewStatementAdjustment, statementBalanceAdjustment, statementBalanceReason, statementBalanceReviewIssue } from "./statementBalances";
 
 const ledger = () => ({ ...emptyData(), accounts: ["Jago"], transactions: [
   { id: "opening", name: "Opening", amount: 35000, type: "income" as const, date: "2020-10-01", account: "Jago", pocketId: "", note: "" },
@@ -43,4 +43,17 @@ test("unknown current balances and conflicting intermediate verified balances bl
 test("conflicting same-day verified balances block adjustment", () => {
  const data=ledger();
  assert.equal(previewStatementAdjustment(data,{account:"Jago",date:now,balance:20000},[{account:"Jago",date:now,balance:30000}],now).canApply,false);
+});
+
+test("statement balance review keeps its action available and identifies the field to fix", () => {
+  const data = ledger();
+  const complete = { account: "Jago", date: now, target: "35000", current: "35000" };
+  assert.equal(statementBalanceReviewIssue(data, { ...complete, account: "" }, true, now), "account");
+  assert.equal(statementBalanceReviewIssue(data, { ...complete, date: "2020-11-08" }, true, now), "date");
+  assert.equal(statementBalanceReviewIssue(data, { ...complete, target: "" }, true, now), "target");
+  assert.equal(statementBalanceReviewIssue(data, { ...complete, current: "1.5" }, true, now), "current");
+  assert.equal(statementBalanceReviewIssue(data, complete, false, now), "effect");
+  assert.equal(statementBalanceReviewIssue(data, complete, true, now), null);
+  assert.equal(statementBalanceReason("", "Balance adjustment"), "Balance adjustment");
+  assert.equal(statementBalanceReason("  Checked against bank  ", "Balance adjustment"), "Checked against bank");
 });

@@ -23,6 +23,8 @@ export const en = {
   statementBalanceReviewHelp: "Use balances checked in your bank app.",
   statementClosingBalance: "Bank balance on this date (Rp)",
   statementCurrentBalance: "Bank balance today (Rp)",
+  statementEnterClosingBalance: "Enter the bank balance for this date in whole rupiah.",
+  statementEnterCurrentBalance: "Enter today's bank balance in whole rupiah.",
   statementBalanceEffect: "Selected date: {before} → {after}. Today: {currentBefore} → {currentAfter}.",
   statementBalanceBlocked: "Conflicts with a checked balance, or no change is needed.",
   statementConfirmAdjustment: "Confirm balance adjustment",
