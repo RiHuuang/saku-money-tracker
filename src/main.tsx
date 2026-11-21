@@ -1,3 +1,4 @@
+import "./csp";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "@fontsource/plus-jakarta-sans/400.css";

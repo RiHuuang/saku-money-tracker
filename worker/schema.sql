@@ -85,3 +85,11 @@ CREATE TABLE IF NOT EXISTS consents (
   withdrawn_at INTEGER,
   PRIMARY KEY(uid, purpose)
 );
+
+-- CSP violation counts by day and directive only (worker/csp-report.js creates it lazily too).
+CREATE TABLE IF NOT EXISTS csp_reports (
+  day TEXT NOT NULL,
+  directive TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(day, directive)
+);

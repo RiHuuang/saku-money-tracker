@@ -11,6 +11,7 @@ import { BUDGET_RESERVATION, budgetMessages, parseBudgetAnswer, validateBudgetIn
 import { aiImportAvailable, answerBank, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, parseImportSummary, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
 import { bcaCheckMessages, bcaMessages, jakartaToday, looksLikeBcaStatement, mergeBcaReads, parseBcaAnswer } from "./import-bca.js";
 import { withSecurityHeaders } from "./security-headers.js";
+import { CSP_REPORT_TABLE, cspDirectives } from "./csp-report.js";
 import { CONSENT_TABLE, consentPurposeFor, hasConsent, recordConsent, validateConsentInput } from "./consent.js";
 export { UserLiveUpdates } from "./live.js";
 
@@ -503,6 +504,16 @@ async function route(request, env) {
   if (request.method === "OPTIONS" && /^\/v[12]\//.test(path)) return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-headers": "authorization,content-type,x-saku-version,x-saku-user-id,x-saku-app-build", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" } });
   if (request.method === "GET" && ["/", "/privacy", "/terms", "/account-deletion"].includes(path) && path !== "/") return legalPage(path, env, legalLanguage(url));
   if (request.method === "GET" && path === "/health") return reply({ ok: true });
+  // Counts CSP violations by day and directive only; no URLs, samples or identifiers are kept (master plan 1D).
+  if (request.method === "POST" && path === "/v1/csp-report") {
+    const directives = Number(request.headers.get("content-length") || 0) > 16_000 ? [] : cspDirectives(await request.text().catch(() => ""));
+    if (directives.length) {
+      await env.DB.prepare(CSP_REPORT_TABLE).run();
+      const day = new Date().toISOString().slice(0, 10);
+      await env.DB.batch(directives.map((directive) => env.DB.prepare("INSERT INTO csp_reports(day,directive,count) VALUES(?,?,1) ON CONFLICT(day,directive) DO UPDATE SET count=count+1").bind(day, directive)));
+    }
+    return new Response(null, { status: 204 });
+  }
   if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, "cache-control": "public, max-age=300" });
   if (["GET", "HEAD"].includes(request.method) && path === "/download/saku.apk") return androidReleaseResponse(request, env, await androidReleaseManifest(env), false);
   const androidDownload = path.match(/^\/download\/android\/(\d+)\.apk$/);

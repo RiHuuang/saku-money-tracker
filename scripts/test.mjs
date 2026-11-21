@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 
 const directory = await mkdtemp(join(tmpdir(), "saku-tests-"));
 try {
-  const tests = ["src/domain.test.ts", "src/reconciliationBatches.test.ts", "src/importTransactions.test.ts", "src/importFlow.test.ts", "src/appearance.test.ts", "src/appUpdateLogic.test.ts", "src/merchants.test.ts", "src/appLock.test.ts", "src/notificationRows.test.ts", "src/merchantCleaning.test.ts", "src/balanceCheckins.test.ts", "src/statementBalances.test.ts", "src/transactionMerge.test.ts", "src/i18n.test.ts", "src/reminders.test.ts", "src/backupCrypto.test.ts", "src/statementMatch.test.ts", "src/allocation.test.ts"];
+  const tests = ["src/domain.test.ts", "src/reconciliationBatches.test.ts", "src/importTransactions.test.ts", "src/importFlow.test.ts", "src/appearance.test.ts", "src/appUpdateLogic.test.ts", "src/merchants.test.ts", "src/appLock.test.ts", "src/notificationRows.test.ts", "src/merchantCleaning.test.ts", "src/balanceCheckins.test.ts", "src/statementBalances.test.ts", "src/transactionMerge.test.ts", "src/i18n.test.ts", "src/reminders.test.ts", "src/backupCrypto.test.ts", "src/statementMatch.test.ts", "src/allocation.test.ts", "src/csp.test.ts"];
   const outputs = tests.map((file) => join(directory, file.split("/").at(-1).replace(".ts", ".mjs")));
   await Promise.all(tests.map((entryPoints, index) => build({ entryPoints: [entryPoints], outfile: outputs[index], bundle: true, platform: "node", format: "esm" })));
   const child = spawn(process.execPath, ["--test", ...outputs], { stdio: "inherit" });
@@ -34,6 +34,7 @@ try {
     await import("../worker/merchant-clean.test.mjs");
     await import("../worker/legal.test.mjs");
     await import("../worker/security-headers.test.mjs");
+    await import("../worker/csp-report.test.mjs");
     await import("../worker/refresh-reuse.test.mjs");
     await import("../worker/sessions-route.test.mjs");
     await import("../worker/monthly-check-route.test.mjs");
