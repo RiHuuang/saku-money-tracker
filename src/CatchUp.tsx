@@ -9,7 +9,7 @@ import { analyzeStatement, applyVerdict, balanceMismatch, type Verdict } from ".
 import { parseStatementPage, statementTotals, statementCurrency } from "./statementLines";
 import { money, today, uid, validAmount, validDate, type Data, type Transaction } from "./domain";
 import { deleteImportDraft, importConsentKey, listImportDrafts, putImportDraft, type ImportDraft, type ImportRow, type StatementSummary } from "./importDraft";
-import { runImportSources } from "./importFlow";
+import { pdfPasswords, runImportSources } from "./importFlow";
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { openImportPages } from "./importPages";
 import { ChoiceField, LongDateInput, Modal } from "./components";
@@ -215,9 +215,13 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
         try { documentPages = await openImportPages(current.file, "", draftRef.current!.month); }
         catch (error) {
           if (error instanceof Error && /password/i.test(error.message)) {
-            const password = window.prompt(t("pdfPasswordPrompt", { name: current.name })) || "";
-            if (!password) throw new Error(t("pdfPasswordRequired"));
-            documentPages = await openImportPages(current.file, password, draftRef.current!.month);
+            const typed = window.prompt(t("pdfPasswordPrompt", { name: current.name })) || "";
+            if (!typed) throw new Error(t("pdfPasswordRequired"));
+            for (const password of pdfPasswords(typed)) {
+              try { documentPages = await openImportPages(current.file, password, draftRef.current!.month); break; }
+              catch (wrong) { if (!(wrong instanceof Error && /password/i.test(wrong.message))) throw wrong; }
+            }
+            if (!documentPages) throw new Error(t("pdfPasswordWrong", { name: current.name }));
           } else throw error;
         }
         for await (const page of documentPages.pages) {

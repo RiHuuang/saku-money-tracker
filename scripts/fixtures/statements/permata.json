@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic Permata CASA statement: day/month dates, Debet and Kredit with 0,00 in the unused column (made-up names).",
+ "month": "2026-10",
+ "bank": "permata",
+ "text": "PT Bank Permata Tbk\nRekening Tabungan PermataBank\nPeriode Laporan: Oktober 2026\nTgl Trx. Tgl Valuta Uraian Trx. Debet Kredit Saldo\nSaldo Awal 4.000.000,00\n02/10 02/10 TRANSFER KE DEWI LESTARI 300.000,00 0,00 3.700.000,00\n14/10 14/10 SETORAN DARI PT ANUGRAH SENTOSA 0,00 2.500.000,00 6.200.000,00\n25/10 25/10 PEMBAYARAN LISTRIK PLN 412.500,00 0,00 5.787.500,00\nSaldo Akhir 5.787.500,00",
+ "rows": [
+  [
+   "2026-10-02",
+   300000,
+   "expense"
+  ],
+  [
+   "2026-10-14",
+   2500000,
+   "income"
+  ],
+  [
+   "2026-10-25",
+   412500,
+   "expense"
+  ]
+ ],
+ "names": [
+  "DEWI LESTARI",
+  "PT ANUGRAH SENTOSA",
+  "PLN"
+ ]
+}

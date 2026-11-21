@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic Maybank Tabungan iB statement: KODE column, blank unused amount column, Indonesian number format (made-up names).",
+ "month": "2026-10",
+ "bank": "maybank",
+ "text": "PT Bank Maybank Indonesia Tbk\nRINGKASAN REKENING MAYBANK\nTabungan iB\nTANGGAL KODE KETERANGAN DEBIT KREDIT SALDO\nSALDO AWAL 19.507.587,00\n03/10 2061 TRANSFER KE ARIF RAHMAN 500.000,00 19.007.587,00\n10/10 1202 TRANSFER DARI CV MITRA USAHA 1.250.000,00 20.257.587,00\n22/10 2202 BI-FAST KE NADIA PUTRI 300.000,00 19.957.587,00\nSALDO AKHIR 19.957.587,00",
+ "rows": [
+  [
+   "2026-10-03",
+   500000,
+   "expense"
+  ],
+  [
+   "2026-10-10",
+   1250000,
+   "income"
+  ],
+  [
+   "2026-10-22",
+   300000,
+   "expense"
+  ]
+ ],
+ "names": [
+  "ARIF RAHMAN",
+  "CV MITRA USAHA",
+  "NADIA PUTRI"
+ ]
+}

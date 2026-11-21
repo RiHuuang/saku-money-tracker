@@ -29,7 +29,7 @@ object NotificationParsers {
     private val notAName = Regex("""(?i)^(?:rekening|akun|saldo|nomor|rp|idr|kamu|anda)\b""")
     private val topUpTarget = Regex("""(?i)\b(?:top\s?-?up|isi\s+saldo)\s+(?!rp|idr|\d|berhasil|sukses|sebesar|senilai)([^.,!\n]+)""")
 
-    // Same accepted shapes as wholeRupiah in worker/import-ai.js.
+    // Stricter than wholeRupiah in worker/import-ai.js, which also accepts OCR-flipped marks (42.940.00): notification text is never OCR'd.
     fun wholeRupiah(printed: String): Long? {
         val value = printed.trim()
         val digits = when {

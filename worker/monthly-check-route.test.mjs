@@ -53,13 +53,13 @@ try {
   assert.match(importMessages(bcaInput)[0].content, /Attach that continuation/);
   assert.doesNotMatch(importMessages({ ...bcaInput, source: "bca" })[0].content, /Attach that continuation/, "older BCA clients retain their prompt");
   calls = [];
-  response = await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "auto", text: "Bank Mandiri\n10/10/2026 Synthetic cafe 28.000" });
+  response = await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "auto", text: "PT Bank Neo Commerce Tbk\n10/10/2026 Synthetic cafe 28.000" });
   assert.equal(response.status, 422);
   assert.equal((await response.json()).error, "unsupported_bank");
   assert.equal(calls.length, 0, "an unsupported statement costs nothing");
   response = await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "bca", text: "PT Bank Jago Tbk\n10/10/2026 Synthetic cafe 28.000" });
   assert.equal((await response.json()).error, "not_bca", "2.4.0 clients keep the BCA-only answer");
-  assert.equal((await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "mandiri", text: "x".repeat(100) })).status, 400);
+  assert.equal((await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "allo", text: "x".repeat(100) })).status, 400);
   // Only the first page prints a header: a later page keeps the bank the app already settled on.
   calls = [];
   response = await post("/v1/import/extract", { kind: "text", month: "2026-10", source: "gopay", text: "10/10/2026 Synthetic cafe 28.000" });

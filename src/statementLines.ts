@@ -16,6 +16,30 @@ export function statementCurrency(text: string): string {
   return text.match(/\bMATA\s+UANG\s*:\s*([A-Z]{3})\b/i)?.[1].toUpperCase() || "IDR";
 }
 
+export type TextPiece = { str: string; transform: number[]; width: number };
+
+// pdf.js text items to lines, top to bottom. Parts of one row share a baseline give or take half a glyph, even
+// across any fixed grid line, so rows cluster by distance. Rotated text is a watermark (BRI tiles its logo
+// diagonally); table text is never rotated.
+export function pageLines(items: readonly TextPiece[]): string[] {
+  const lines: { y: number; reach: number; parts: TextPiece[] }[] = [];
+  const level = items.filter(({ transform: [a, b] }) => Math.abs(b) <= Math.abs(a) * 0.05);
+  for (const item of level.sort((p, q) => q.transform[5] - p.transform[5])) {
+    const line = lines.at(-1);
+    const reach = Math.max(2, Math.abs(item.transform[3]) / 2);
+    if (line && line.y - item.transform[5] <= Math.min(line.reach, reach)) line.parts.push(item);
+    else lines.push({ y: item.transform[5], reach, parts: [item] });
+  }
+  return lines.map(({ parts }) => {
+    let right = -Infinity;
+    return parts.sort((p, q) => p.transform[4] - q.transform[4]).map((part) => {
+      const gap = part.transform[4] - right;
+      right = Math.max(right, part.transform[4] + part.width);
+      return `${gap > 2 ? " " : ""}${part.str}`;
+    }).join("").trim();
+  }).filter(Boolean);
+}
+
 const MONTHS: Record<string, number> = { jan: 1, januari: 1, january: 1, feb: 2, februari: 2, february: 2, mar: 3, maret: 3, march: 3, apr: 4, april: 4, mei: 5, may: 5, jun: 6, juni: 6, june: 6, jul: 7, juli: 7, july: 7, agu: 8, agt: 8, agustus: 8, aug: 8, august: 8, sep: 9, sept: 9, september: 9, okt: 10, oktober: 10, oct: 10, october: 10, nov: 11, november: 11, des: 12, desember: 12, dec: 12, december: 12 };
 const OPENING = /\b(?:saldo\s+awal|opening\s+balance|saldo\s+sebelumnya|beginning\s+balance|previous\s+balance)\b/i;
 const CLOSING = /\b(?:saldo\s+akhir|closing\s+balance|ending\s+balance)\b/i;
@@ -32,6 +56,8 @@ export function moneyToken(raw: string): { sen: number; sign: -1 | 0 | 1 } | nul
   if (/^[+-]/.test(token)) { sign = token.startsWith("-") ? -1 : 1; token = token.slice(1); }
   token = token.replace(/^(?:Rp\.?|IDR)/i, "");
   if (/^-/.test(token)) { sign = -1; token = token.slice(1); }
+  // BSI's older statements print debits with a trailing minus: 303,201.91-
+  if (!sign && /\d-$/.test(token)) { sign = -1; token = token.slice(0, -1); }
   let whole: string, fraction = "00";
   if (/^\d{1,3}(?:,\d{3})*\.\d{2}$/.test(token)) [whole, fraction] = [token.slice(0, -3).replace(/,/g, ""), token.slice(-2)];
   else if (/^\d{1,3}(?:\.\d{3})*,\d{2}$/.test(token)) [whole, fraction] = [token.slice(0, -3).replace(/\./g, ""), token.slice(-2)];
@@ -52,17 +78,31 @@ function resolveYear(month: number, reviewMonth: string, printedYear?: number) {
   return year;
 }
 
-// A row starts with its date: 02/10, 02-10-2026, 2 Okt, 02 OCT 2026.
-export function leadingDate(line: string, reviewMonth: string): { date: string; evidence: string; rest: string } | null {
-  const match = line.match(/^(\d{1,2})[/\-. ](\d{1,2}|[A-Za-z]{3,9})(?:[/\-. ](\d{4}|\d{2}))?(?=\s|$)/);
+// A row starts with its date: 02/10, 02-10-2026, 2 Okt, 02 OCT 2026, 2026-10-02. The year repeats the first
+// separator, so "03/10 2061" is 3 October followed by a transaction code, not a date in 2061.
+function readDate(body: string, reviewMonth: string) {
+  const iso = body.match(/^(\d{4})-(\d{2})-(\d{2})(?=\s|$)/);
+  const match = iso || body.match(/^(\d{1,2})([/\-. ])(\d{1,2}|[A-Za-z]{3,9})(?:\2(\d{4}|\d{2}))?(?=\s|$)/);
   if (!match) return null;
-  const day = Number(match[1]);
-  const month = /^\d+$/.test(match[2]) ? Number(match[2]) : MONTHS[match[2].toLowerCase()] || 0;
+  const [dayText, monthText, yearText] = iso ? [iso[3], iso[2], iso[1]] : [match[1], match[3], match[4]];
+  const day = Number(dayText);
+  const month = /^\d+$/.test(monthText) ? Number(monthText) : MONTHS[monthText.toLowerCase()] || 0;
   if (!month || month > 12 || day < 1 || day > 31 || !/^\d{4}-\d{2}$/.test(reviewMonth)) return null;
-  const year = resolveYear(month, reviewMonth, match[3] ? Number(match[3]) : undefined);
+  const year = resolveYear(month, reviewMonth, yearText ? Number(yearText) : undefined);
   const value = new Date(Date.UTC(year, month - 1, day));
   if (value.getUTCDate() !== day) return null;
-  return { date: value.toISOString().slice(0, 10), evidence: match[0], rest: line.slice(match[0].length).trim() };
+  // "DD MM" with only a space between could be a row number and a day; anything else is unmistakably a date.
+  const unmistakable = !!(iso || yearText || match[2] !== " " || !/^\d+$/.test(monthText));
+  return { date: value.toISOString().slice(0, 10), evidence: match[0], rest: body.slice(match[0].length).trim(), unmistakable };
+}
+
+// Mandiri and BSI print a row number first ("1 01 Okt 2026", "1 2026-10-01"). The number is skipped only when an
+// unmistakable date follows it, so "1 01 Okt" is never read as 1 January.
+export function leadingDate(line: string, reviewMonth: string): { date: string; evidence: string; rest: string } | null {
+  const numbered = line.match(/^\d{1,4}\s+(?=\d)/);
+  const afterNumber = numbered ? readDate(line.slice(numbered[0].length), reviewMonth) : null;
+  const dated = afterNumber?.unmistakable ? afterNumber : readDate(line, reviewMonth);
+  return dated && { date: dated.date, evidence: dated.evidence, rest: dated.rest };
 }
 
 // Trailing money and direction markers: "… 50,000.00 DB 1,184,567.89".
@@ -75,6 +115,8 @@ function trailing(rest: string) {
     const word = words[cut - 1];
     const money = moneyToken(word);
     if (money) { tail.unshift({ kind: "money", ...money }); cut--; continue; }
+    // "IDR 150.000 IDR 2.850.000": a currency word belongs to the amount after it.
+    if (tail.length && /^(?:Rp\.?|IDR)$/i.test(word)) { cut--; continue; }
     // The marker sits after the amount ("45,500.00 DB") or between amount and balance ("500,000.00 DB 1,500,000.00").
     if (DEBIT.test(word) && !marker && tail.length < 2) { marker = -1; cut--; continue; }
     if (CREDIT.test(word) && !marker && tail.length < 2) { marker = 1; cut--; continue; }
@@ -100,7 +142,7 @@ export function statementTotals(text: string): StatementTotals {
 
 const activityFor = (name: string, direction: "income" | "expense"): ImportRow["activity"] => {
   if (/\b(?:biaya|adm(?:in)?|fee|pajak|tax|materai|meterai)\b/i.test(name)) return "fee";
-  if (/\b(?:bunga|interest)\b/i.test(name)) return direction === "income" ? "interest" : "fee";
+  if (/\b(?:bunga|interest|bagi\s+hasil)\b/i.test(name)) return direction === "income" ? "interest" : "fee";
   if (/\bkartu\s+kredit\b|\bcredit\s+card\s+payment\b/i.test(name) && direction === "expense") return "card_payment";
   if (/\b(?:flazz|top[\s-]?up|isi\s+saldo)\b/i.test(name)) return "topup";
   return direction === "income" ? "income" : "purchase";
@@ -130,7 +172,8 @@ function parseBalancePage(text: string, reviewMonth: string, carry?: number): Pa
       // Its closing is still checked below against the carried running balance.
       if (rows.length && /^SALDO AWAL\s*:/i.test(line)) continue;
       const money = line.split(" ").map(moneyToken).filter(Boolean).at(-1);
-      if (!money) return null;
+      // No amount: a column title ("… Saldo Akhir"), not a balance. Rows still need a proven opening.
+      if (!money) continue;
       const value = money.sign === -1 ? -money.sen : money.sen;
       if (balance !== undefined && balance !== value) return null;
       balance = value; verified = true; open = null;
@@ -138,7 +181,8 @@ function parseBalancePage(text: string, reviewMonth: string, carry?: number): Pa
     }
     if (CLOSING.test(line)) {
       const money = line.split(" ").map(moneyToken).filter(Boolean).at(-1);
-      if (!money || balance === undefined) return null;
+      if (!money) continue;
+      if (balance === undefined) return null;
       if (balance !== (money.sign === -1 ? -money.sen : money.sen)) return null;
       verified = true; open = null;
       continue;
@@ -146,6 +190,8 @@ function parseBalancePage(text: string, reviewMonth: string, carry?: number): Pa
     if (SUMMARY.test(line)) { open = null; continue; }
     const dated = leadingDate(line, reviewMonth);
     if (!dated) {
+      // A wrapped time ("08:15:00 WIB") belongs to the row's date, not its description.
+      if (open && /^\d{1,2}:\d{2}(?::\d{2})?(?:\s*WI(?:B|TA?))?$/i.test(line)) continue;
       if (open && /^REKENING TAHAPAN/m.test(text)) {
         if (FOOTER.test(line)) { open = null; continue; }
         // BCA repeats the amount, then prints a note and recipient underneath.
@@ -160,6 +206,8 @@ function parseBalancePage(text: string, reviewMonth: string, carry?: number): Pa
       continue;
     }
     const { description, tail, marker } = trailing(dated.rest);
+    // Split Debet/Kredit columns print a zero in the unused one; the running balance then proves the direction.
+    if (tail.length === 3 && !tail[0].sen !== !tail[1].sen) tail.splice(tail[0].sen ? 1 : 0, 1);
     // A dated line with no amount (a header or a wrapped reference) can't be proven.
     if (!tail.length || tail.length > 2 || !description) return null;
     if (balance === undefined) return null;

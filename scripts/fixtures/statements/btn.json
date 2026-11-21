@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic bale by BTN e-statement: a currency word before each whole-rupiah amount (made-up names).",
+ "month": "2026-10",
+ "bank": "btn",
+ "text": "PT Bank Tabungan Negara (Persero) Tbk\ne-Statement Tabungan BTN\nTgl & Waktu Jenis Transaksi Debit (IDR) Kredit (IDR) Saldo(IDR)\nSaldo Awal IDR 3.000.000\n01/10/2026 09:00 Transfer ke YUNI ASTUTI IDR 150.000 IDR 2.850.000\n12/10/2026 13:45 Transfer dari PT KARYA ABADI IDR 4.000.000 IDR 6.850.000\n30/10/2026 20:10 QRIS Tap KOPI NAKO IDR 28.000 IDR 6.822.000\nSaldo Akhir IDR 6.822.000",
+ "rows": [
+  [
+   "2026-10-01",
+   150000,
+   "expense"
+  ],
+  [
+   "2026-10-12",
+   4000000,
+   "income"
+  ],
+  [
+   "2026-10-30",
+   28000,
+   "expense"
+  ]
+ ],
+ "names": [
+  "YUNI ASTUTI",
+  "PT KARYA ABADI",
+  "KOPI NAKO"
+ ]
+}

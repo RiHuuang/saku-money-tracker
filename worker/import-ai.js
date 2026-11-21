@@ -42,12 +42,36 @@ export function importMessages(input) {
   return [{ role: "system", content: rules + modeRules }, { role: "user", content }];
 }
 
+// Each bank's own conventions for the prompt. Kept here, not in banks.js, so the app never bundles prompt text.
+const HINTS = {
+  bri: "This is a BRI statement. Its table has separate Debet, Kredit and Saldo columns: a positive Debet is expense and a positive Kredit is income. Saldo is the resulting balance, never a transaction. Teller/User ID values are references, not amounts. Use the transaction date before the time, not the report date.",
+  blu: "This is a blu by BCA (PT Bank Digital BCA) account history. Money moved to or from the user's own BCA account is still a transfer, not a purchase. bluSaving and bluDeposito moves inside blu are internal transfers.",
+  jago: "This is a Bank Jago account history. Moves between Kantong (pockets) inside Jago are internal transfers. 'Transfer masuk' is money in and 'Transfer keluar' is money out; keep the other party's name in name.",
+  seabank: "This is a SeaBank account history. Interest (Bunga) is income; tax on interest (Pajak) is a fee. ShopeePay top-ups are topup. Some amounts have sen: round each printed transaction amount to the nearest whole rupiah, with .50 or more rounded up (1,234.56 becomes 1235; 246.91 becomes 247). Keep Bunga and Pajak as separate transactions.",
+  gopay: "This is a GoPay wallet history. Top ups (Isi saldo) are money in from a bank and are topup; name them 'Isi saldo', not the bank they came from. GoPay Coins are rewards, not rupiah. GoPay Later is pay_later.",
+  dana: "This is a DANA wallet history. Isi saldo / Top up is money in from a bank and is topup. Kirim uang to a person is money out. DANA Paylater is pay_later.",
+  bsi: "This is a BSI (BYOND) statement or history. D marks money out and K money in; a minus before or after an amount (-2,500.00 or 303,201.91-) is money out. Amounts use commas for thousands. Bagi hasil is interest.",
+  mandiri: "This is a Bank Mandiri (Livin') statement or history. A row number may come before the date. Nominal is signed: minus is money out and plus is money in. Amounts use dots for thousands (1.000,00). A 'Biaya transfer' row is a fee. On a credit-card bill, CR marks a payment or refund.",
+  bni: "This is a BNI (wondr) statement or history. Each amount has a D/K flag: D is money out and K is money in. Amounts use commas for thousands (387,500.00). Only IDR amounts are rupiah. On a credit-card bill, CR marks a payment or refund.",
+  cimb: "This is a CIMB Niaga (OCTO) statement or history. Debet is money out and Credit is money in; when an amount has no sign, the change in Balance shows its direction. Amounts use commas for thousands. On a credit-card bill, CR marks a payment or refund.",
+  permata: "This is a Permata (Permata ME) statement or history. Debet is money out and Kredit is money in. Savings amounts use dots for thousands (58.689,08); credit-card bills use commas (227,711), and CR marks a payment or refund.",
+  ocbc: "This is an OCBC statement or history. DEBET is money out and KREDIT is money in; 0.00 in the other column means no amount. A 'Berita' line describes the row above it. Only IDR amounts are rupiah.",
+  maybank: "This is a Maybank statement or history. DEBIT is money out and KREDIT is money in; KODE is a code, not an amount. Ignore the RINGKASAN REKENING summary repeated on each page. Savings amounts use dots for thousands; current accounts use commas.",
+  danamon: "This is a Danamon (D-Bank PRO) statement or history. Debit amounts print with a minus and are money out; Kredit is money in. Amounts use dots for thousands (100.000,00). Months are Indonesian (Agu, Okt).",
+  btn: "This is a BTN (balé) statement or history. Debit is money out and Kredit is money in; amounts use dots for thousands. A KPR mortgage statement shows debt, not cash: return rows:[] for it.",
+  superbank: "This is a Superbank statement or history. Uang Keluar is money out and Uang Masuk is money in; amounts use dots for thousands. Moves between Tabungan Utama, Saku, Celengan and OVO Nabung are internal transfers. Interest and its tax are separate rows.",
+  jenius: "This is a Jenius (SMBC Indonesia) statement or history. Moves between the user's own Jenius accounts are internal transfers. On a credit-card bill, CR marks a payment or refund.",
+  linkaja: "This is a LinkAja wallet history. Uang Keluar is money out and Uang Masuk is money in; amounts are whole rupiah with dots for thousands.",
+  ovo: "This is an OVO wallet history. OVO Points are rewards, not rupiah. A top-up fee is its own fee row, separate from the top-up. Rp100.000.00 means 100000 rupiah.",
+  shopeepay: "This is a ShopeePay history. 'Saldo saat ini' is the balance, never a transaction. Isi saldo or top up is topup, SPayLater is pay_later, and Koin Shopee are rewards.",
+};
+
 // A known bank adds its own conventions; an unknown one asks the model to name the bank so the Worker can refuse
 // statements Saku can't read yet.
 function bankRules(input) {
   const bank = bankById(input.bank || (input.source !== "auto" ? input.source : ""));
   if (bank?.id === "bca" && input.source === "auto") return " This is a BCA e-statement. Descriptions may continue on the line after the dated amount row. Attach that continuation to the same transaction: if it names the recipient or merchant, use that name for cleanName rather than the generic TRSF E-BANKING or E-Banking label.";
-  if (bank?.hint) return ` ${bank.hint}`;
+  if (HINTS[bank?.id]) return ` ${HINTS[bank.id]}`;
   if (input.source === "auto" && !input.bank) return ` Also return bank at the top level of the JSON object: one of ${BANK_IDS.join(", ")} for the bank or wallet whose app or statement this is, or other.`;
   return "";
 }
@@ -97,8 +121,10 @@ function wholeRupiah(value) {
   if (typeof value !== "string") return 0;
   const printed = value.trim().replace(/^(?:Rp\.?|IDR)\s*/i, "").trim();
   let digits;
-  if (/^\d+(?:,00)?$/.test(printed)) digits = printed.replace(/,00$/, "");
-  else if (/^\d{1,3}(?:\.\d{3})+(?:,00)?$/.test(printed)) digits = printed.replace(/\./g, "").replace(/,00$/, "");
+  // Sen must be zero; anything else waits for review. Two digits after the last mark are sen whichever mark it is:
+  // OVO prints Rp100.000.00, and OCR turns 42,940.00 into 42.940.00.
+  if (/^\d+(?:[.,]00)?$/.test(printed)) digits = printed.replace(/[.,]00$/, "");
+  else if (/^\d{1,3}(?:\.\d{3})+(?:[.,]00)?$/.test(printed)) digits = printed.replace(/[.,]00$/, "").replace(/\./g, "");
   else if (/^\d{1,3}(?:,\d{3})+\.00$/.test(printed)) digits = printed.replace(/,/g, "").replace(/\.00$/, "");
   else return 0;
   const amount = Number(digits);
