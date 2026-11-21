@@ -1,6 +1,14 @@
 # Saku production release
 
-## Current direct APK release — November 14
+## Current direct APK release — November 21
+
+Saku 2.6.0 / build 18 ships the six reviewed UX updates from pull requests [#77](https://github.com/RiHuuang/saku-money-tracker/pull/77) through [#82](https://github.com/RiHuuang/saku-money-tracker/pull/82): clearer accounts and pockets, simpler forms and navigation, and early payment for repeating bills. The final merged source is `c46654db80aa05e46e50275d40769f355d9a2b3f`. It was verified on Stage as Worker version `1251763e-7bc3-4435-8a54-0f67c22093b2`, then deployed to production as Worker version `e4cf8c1a-cae2-4762-8334-9ea9cf55e506`. The public landing service is version `6cf11532-5baf-43ea-820d-b773a25b0181`.
+
+All 176 application tests, the production web build, Android release lint, direct and Play release unit tests, `assembleDirectRelease`, and `bundlePlayRelease` passed. Production Home, health, privacy, terms, account deletion, and Google sign-in routes responded successfully. The production ledger remained at revision 149 with 254 transactions, nine pockets, no test entry, and no pending Sheet mirror before and after deployment.
+
+The release-signed direct APK is `output/saku-2.6.0-build18-release.apk`, 43,265,187 bytes, with SHA-256 `8138E54607BFF0767F23FB5AF435EE5D599D02F839A5AC8B2BEBD114BFB4C425`. Its package is `id.saku.money`; APK v2 signature verification passed with signer SHA-1 `02:90:A5:5A:B9:24:7C:D1:DA:EA:CE:94:8F:48:BC:26:A8:0D:9F:33`. The live manifest reports 2.6.0/build 18 with minimum supported build 17. Both `/download/android/18.apk` and `/download/saku.apk` match the local byte count and SHA-256 exactly. The Play bundle was built only as a validation artifact and was not uploaded. Physical installation remains pending; the production release is available through Saku's in-app updater and public download.
+
+## Previous direct APK release — November 14
 
 Saku 2.5.0 / build 17 adds Monthly Check across statements, conservative duplicate and transfer review, dated balance protection, reversible reconciliation history, and income-based pocket planning. Review lists use short next actions; details open on demand. DANA summary files validate totals separately from activity screenshots. It is published from merged main commit `57ad5a7638125b91cb1a01f322f8d07a9b320d88` (PR #74), with production Worker `33c8c6f6-13a5-4c4b-9af4-726243b5a607`. See [completed verification](docs/monthly-check-readiness.md).
 
