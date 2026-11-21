@@ -1,7 +1,19 @@
 import { accountBalance, balanceAdjustment, today, validDate, type Data } from "./domain";
 
 export type VerifiedAccountBalance = { account: string; date: string; balance: number };
+export type StatementBalanceReviewIssue = "account" | "date" | "target" | "current" | "effect";
 const atDate = (data: Data, date: string) => ({ ...data, transactions: data.transactions.filter((row) => row.date <= date) });
+
+export function statementBalanceReviewIssue(data: Pick<Data, "accounts">, review: { account: string; date: string; target: string; current: string }, canApply: boolean, currentDate = today()): StatementBalanceReviewIssue | null {
+  const wholeBalance = (value: string) => value.trim() !== "" && Number.isSafeInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1e12;
+  if (!data.accounts.includes(review.account)) return "account";
+  if (!validDate(review.date) || review.date > currentDate) return "date";
+  if (!wholeBalance(review.target)) return "target";
+  if (!wholeBalance(review.current)) return "current";
+  return canApply ? null : "effect";
+}
+
+export const statementBalanceReason = (reason: string, fallback: string) => reason.trim() || fallback;
 
 // An old closing-balance correction carries forward into every later balance.
 // Preview that effect and require today's independently verified balance before saving.

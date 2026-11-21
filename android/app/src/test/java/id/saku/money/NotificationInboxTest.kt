@@ -78,6 +78,18 @@ class NotificationInboxTest {
     }
 
     @Test
+    fun removedNotificationCanBeRestoredOnceForUndo() {
+        val key = key()
+        val original = item("undo")
+        store(key).add(original)
+        store(key).remove(setOf(original.id))
+        assertTrue(store(key).items().isEmpty())
+        store(key).add(original)
+        store(key).add(original)
+        assertEquals(listOf(original), store(key).items())
+    }
+
+    @Test
     fun theInboxKeepsAtMostFiveHundredItems() {
         val key = key()
         var size = 0

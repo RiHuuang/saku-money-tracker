@@ -4,7 +4,14 @@ import { emptyData } from "./domain";
 import { importedTransactions, importRowAccount, importRowName, importRowReady, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
 import { learnMerchant, learnNotificationPocket } from "./merchants";
 import type { InboxItem } from "./notificationCapture";
-import { inboxRows } from "./notificationRows";
+import { inboxRows, notificationStatusTap } from "./notificationRows";
+
+test("notification status opens rows needing review without marking them skipped", () => {
+  assert.equal(notificationStatusTap("later", false), "review");
+  assert.equal(notificationStatusTap("ready", false), "review");
+  assert.equal(notificationStatusTap("ready", true), "skip");
+  assert.equal(notificationStatusTap("skip", false), "ready");
+});
 
 const at = new Date(2026, 9, 26, 12, 30).getTime();
 const ledger = () => {

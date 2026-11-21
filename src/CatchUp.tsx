@@ -1,5 +1,5 @@
 import { recordReconciliationBatch, undoReconciliationBatch } from "./reconciliationBatches";
-import { previewStatementAdjustment, statementBalanceAdjustment } from "./statementBalances";
+import { previewStatementAdjustment, statementBalanceAdjustment, statementBalanceReason, statementBalanceReviewIssue } from "./statementBalances";
 import { compareStatementSummary } from "./statementEvidence";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowLeftRight, ArrowRight, Check, FileImage, FileText, Link2, LockKeyhole, RotateCcw, Sparkles, Unlink, Upload, X } from "lucide-react";
@@ -63,7 +63,9 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     finally { savingRef.current = false; setSaving(false); }
   };
   const [balanceReview, setBalanceReview] = useState({ account: "", date: `${month}-01`, target: "", current: "", reason: "" });
-  useEffect(() => { setBalanceReview((value) => ({ ...value, date: `${month}-01`, target: "", current: "", reason: "" })); }, [month]);
+  const [balanceReviewError, setBalanceReviewError] = useState<{ field: "account" | "date" | "target" | "current" | "effect"; message: string } | null>(null);
+  const balanceAccountField = useRef<HTMLDivElement>(null), balanceDateField = useRef<HTMLLabelElement>(null), balanceTargetField = useRef<HTMLLabelElement>(null), balanceCurrentField = useRef<HTMLLabelElement>(null);
+  useEffect(() => { setBalanceReview((value) => ({ ...value, date: `${month}-01`, target: "", current: "", reason: "" })); setBalanceReviewError(null); }, [month]);
   const balancePreview = (() => { try { return balanceReview.target !== "" && balanceReview.current !== "" ? previewStatementAdjustment(data, { account: balanceReview.account, date: balanceReview.date, balance: Number(balanceReview.target) }, [...(data.statementBalanceObservations || []), { account: balanceReview.account, date: today(), balance: Number(balanceReview.current) }]) : null; } catch { return null; } })();
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
   const [draft, setDraft] = useState<ImportDraft | null>(null);
@@ -377,10 +379,19 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
   }
   async function saveBalanceAdjustment() {
     if (savingRef.current || busy || processingRef.current) return;
+    const issue = statementBalanceReviewIssue(data, balanceReview, !!balancePreview?.canApply);
+    if (issue) {
+      const problem = { field: issue, message: t(issue === "account" ? "chooseAnAccount" : issue === "date" ? "choosePastOrToday" : issue === "target" ? "statementEnterClosingBalance" : issue === "current" ? "statementEnterCurrentBalance" : "statementBalanceBlocked") };
+      setBalanceReviewError(problem);
+      const field = problem.field === "account" ? balanceAccountField.current : problem.field === "date" ? balanceDateField.current : problem.field === "target" ? balanceTargetField.current : problem.field === "current" ? balanceCurrentField.current : null;
+      requestAnimationFrame(() => { field?.scrollIntoView({ block: "center" }); field?.querySelector<HTMLElement>("button, input")?.focus(); });
+      return;
+    }
     savingRef.current = true; setSaving(true);
     try {
-      const entry = statementBalanceAdjustment(data, { account: balanceReview.account, date: balanceReview.date, balance: Number(balanceReview.target) }, [...(data.statementBalanceObservations || []), { account: balanceReview.account, date: today(), balance: Number(balanceReview.current) }], balanceReview.reason);
-      if (await monthlyCommit({ ...data, transactions: [...data.transactions, entry], statementBalanceObservations: [...(data.statementBalanceObservations || []), { id: uid(), account: balanceReview.account, date: balanceReview.date, balance: Number(balanceReview.target), evidence: balanceReview.reason }, { id: uid(), account: balanceReview.account, date: today(), balance: Number(balanceReview.current), evidence: balanceReview.reason }] }, t("importBatchSaved"))) setBalanceReview((value) => ({ ...value, target: "", current: "", reason: "" }));
+      const reason = statementBalanceReason(balanceReview.reason, t("balanceAdjustmentLabel"));
+      const entry = statementBalanceAdjustment(data, { account: balanceReview.account, date: balanceReview.date, balance: Number(balanceReview.target) }, [...(data.statementBalanceObservations || []), { account: balanceReview.account, date: today(), balance: Number(balanceReview.current) }], reason);
+      if (await monthlyCommit({ ...data, transactions: [...data.transactions, entry], statementBalanceObservations: [...(data.statementBalanceObservations || []), { id: uid(), account: balanceReview.account, date: balanceReview.date, balance: Number(balanceReview.target), evidence: reason }, { id: uid(), account: balanceReview.account, date: today(), balance: Number(balanceReview.current), evidence: reason }] }, t("importBatchSaved"))) { setBalanceReview((value) => ({ ...value, target: "", current: "", reason: "" })); setBalanceReviewError(null); }
     } catch (error) { setInfo(error instanceof Error ? error.message : t("checkThisRow")); }
     finally { savingRef.current = false; setSaving(false); }
   }
@@ -563,6 +574,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
                 {duplicate && !alreadySaved && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => void updateRow(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
                 {row.decision === "ready" && !rowReady && !alreadySaved && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
                 {!alreadySaved && !reviewChoices && <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: row.name || t("unnamedTransaction") })}><button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} disabled={saving} onClick={() => decide(row.id, "ready")}>{t("addToSaku")}</button><button type="button" className={row.decision === "later" ? "selected" : ""} aria-pressed={row.decision === "later"} disabled={saving} onClick={() => decide(row.id, "later")}>{t("reviewLater")}</button><button type="button" className={row.decision === "skip" ? "selected" : ""} aria-pressed={row.decision === "skip"} disabled={saving} onClick={() => decide(row.id, "skip")}>{t("dontImport")}</button></div></div>}
+                <button type="button" className="button primary notification-done" onClick={() => setEditingRow("")}>{t("done")}</button>
               </div></div></Modal>}
             </div>;
   };
@@ -645,13 +657,14 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     </details>)}</details>}
     {statementMode && !!data.reconciliationBatches?.some((batch) => !batch.undone) && <details className="catchup-panel monthly-tools"><summary>{t("statementRecentChecks")}</summary>{data.reconciliationBatches.filter((batch) => !batch.undone).map((batch) => <div className="monthly-history-row" key={batch.id}><time>{new Date(batch.createdAt).toLocaleDateString(localeTag())}</time><button className="button secondary" disabled={busy || saving || processing} onClick={() => void undoBatch(batch.id)}>{t("undoEntries")}</button></div>)}</details>}
     {statementMode && <details className="catchup-panel statement-evidence-form monthly-tools"><summary>{t("statementBalanceReview")}</summary><p>{t("statementBalanceReviewHelp")}</p>
-      <ChoiceField label={t("sakuAccount")} value={balanceReview.account} options={data.accounts.map((account) => ({ value: account, label: account }))} onValueChange={(account) => setBalanceReview((value) => ({ ...value, account }))} />
-      <label>{t("date")}<LongDateInput max={today()} value={balanceReview.date} onValueChange={(date) => setBalanceReview((value) => ({ ...value, date }))} /></label>
-      <label>{t("statementClosingBalance")}<input type="number" min="0" step="1" value={balanceReview.target} onChange={(event) => setBalanceReview((value) => ({ ...value, target: event.target.value }))} /></label>
-      <label>{t("statementCurrentBalance")}<input type="number" min="0" step="1" value={balanceReview.current} onChange={(event) => setBalanceReview((value) => ({ ...value, current: event.target.value }))} /></label>
+      <div ref={balanceAccountField}><ChoiceField label={t("sakuAccount")} value={balanceReview.account} options={data.accounts.map((account) => ({ value: account, label: account }))} onValueChange={(account) => { setBalanceReview((value) => ({ ...value, account })); setBalanceReviewError(null); }} />{balanceReviewError?.field === "account" && <span className="field-error" role="alert">{balanceReviewError.message}</span>}</div>
+      <label ref={balanceDateField}>{t("date")}<LongDateInput max={today()} value={balanceReview.date} onValueChange={(date) => { setBalanceReview((value) => ({ ...value, date })); setBalanceReviewError(null); }} aria-invalid={balanceReviewError?.field === "date"} />{balanceReviewError?.field === "date" && <span className="field-error" role="alert">{balanceReviewError.message}</span>}</label>
+      <label ref={balanceTargetField}>{t("statementClosingBalance")}<input type="number" min="0" max="1000000000000" step="1" value={balanceReview.target} aria-invalid={balanceReviewError?.field === "target"} onChange={(event) => { setBalanceReview((value) => ({ ...value, target: event.target.value })); setBalanceReviewError(null); }} />{balanceReviewError?.field === "target" && <span className="field-error" role="alert">{balanceReviewError.message}</span>}</label>
+      <label ref={balanceCurrentField}>{t("statementCurrentBalance")}<input type="number" min="0" max="1000000000000" step="1" value={balanceReview.current} aria-invalid={balanceReviewError?.field === "current"} onChange={(event) => { setBalanceReview((value) => ({ ...value, current: event.target.value })); setBalanceReviewError(null); }} />{balanceReviewError?.field === "current" && <span className="field-error" role="alert">{balanceReviewError.message}</span>}</label>
       <label>{t("description")}<input value={balanceReview.reason} maxLength={250} onChange={(event) => setBalanceReview((value) => ({ ...value, reason: event.target.value }))} /></label>
       {balancePreview && <p role="status">{t("statementBalanceEffect", { before: money(balancePreview.before), after: money(balancePreview.target), currentBefore: money(balancePreview.currentBefore), currentAfter: money(balancePreview.currentAfter) })} {!balancePreview.canApply && t("statementBalanceBlocked")}</p>}
-      <button className="button secondary" disabled={!balancePreview?.canApply || !balanceReview.reason.trim() || busy || saving || processing} onClick={() => void saveBalanceAdjustment()}>{t("statementConfirmAdjustment")}</button>
+      {balanceReviewError?.field === "effect" && <p className="field-error" role="alert">{balanceReviewError.message}</p>}
+      <button className="button secondary" disabled={busy || saving || processing} onClick={() => void saveBalanceAdjustment()}>{t("statementConfirmAdjustment")}</button>
     </details>}
     {statementMode && draft?.sources.filter((source) => source.summary).map((source) => {
       const result = compareStatementSummary(source.summary!, draft.rows.filter((row) => accountForRow(row) === confirmedImportAccount(source, data)));
