@@ -160,14 +160,14 @@ export function importRowReady(row: ImportRow, account: string, data: Data, curr
 export function importedTransactions(row: ImportRow, account: string, sourceName: string, data: Data, pairedRowId?: string, partnerDate?: string): Transaction[] {
   if (!importRowReady(row, account, data)) throw new Error("Review this row before saving");
   const name = importRowName(row);
-  const note = `${row.note ? `${row.note} · ` : ""}${name !== row.name.trim() ? `${row.name.trim()} · ` : ""}Imported from ${/\.pdf$/i.test(sourceName) ? "PDF statement" : "screenshot"}, page ${row.page}`;
+  const note = `${row.note ? `${row.note} · ` : ""}${name !== row.name.trim() ? `${row.name.trim()} · ` : ""}${t("importedFromSourcePage", { source: t(/\.pdf$/i.test(sourceName) ? "pdfStatementSource" : "screenshotSource"), page: row.page })}`;
   if (row.activity === "transfer" || row.activity === "topup") {
     const from = row.direction === "expense" ? account : row.counterparty!;
     const to = row.direction === "expense" ? row.counterparty! : account;
     const oppositeId = pairedRowId && pairedRowId !== row.id ? pairedRowId : `${row.id}:pair`;
     const bothSidesShown = !!pairedRowId && pairedRowId !== row.id;
-    const outgoing: Transaction = { id: row.direction === "expense" ? row.id : oppositeId, transferId: row.id, kind: "account_transfer", name: `Transfer to ${to}`.slice(0, 100), amount: row.amount, type: "expense", date: row.direction === "expense" ? row.date : partnerDate || row.date, pocketId: "", account: from, note, verified: row.direction === "expense" || bothSidesShown };
-    const incoming: Transaction = { id: row.direction === "income" ? row.id : oppositeId, transferId: row.id, kind: "account_transfer", name: `Transfer from ${from}`.slice(0, 100), amount: row.amount, type: "income", date: row.direction === "income" ? row.date : partnerDate || row.date, pocketId: "", account: to, note, verified: row.direction === "income" || bothSidesShown };
+    const outgoing: Transaction = { id: row.direction === "expense" ? row.id : oppositeId, transferId: row.id, kind: "account_transfer", name: t("transferToName", { account: to }).slice(0, 100), amount: row.amount, type: "expense", date: row.direction === "expense" ? row.date : partnerDate || row.date, pocketId: "", account: from, note, verified: row.direction === "expense" || bothSidesShown };
+    const incoming: Transaction = { id: row.direction === "income" ? row.id : oppositeId, transferId: row.id, kind: "account_transfer", name: t("transferFromName", { account: from }).slice(0, 100), amount: row.amount, type: "income", date: row.direction === "income" ? row.date : partnerDate || row.date, pocketId: "", account: to, note, verified: row.direction === "income" || bothSidesShown };
     return [outgoing, incoming];
   }
   const card = data.creditCards.find((item) => item.name === account);

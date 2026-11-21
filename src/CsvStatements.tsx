@@ -51,7 +51,7 @@ export default function Statements({ data, month, commit, busy, notify, cloudImp
     const additions = actionable.filter((row) => row.status === "missing" && decisions[row.id] === "add");
     if (additions.some((row) => row.date > today())) { notify(t("futureDatedRowsCannotBe")); return; }
     if (additions.some((row) => pockets[row.id] && !data.pockets.some((pocket) => pocket.id === pockets[row.id]))) { notify(t("chooseAPocketThatExisted")); return; }
-    const added: Transaction[] = additions.map((row) => ({ id: uid(), name: row.name, amount: row.amount, type: row.type, date: row.date, account: row.account, pocketId: row.type === "income" ? "" : pockets[row.id] || "", note: "Imported from CSV", verified: true }));
+    const added: Transaction[] = additions.map((row) => ({ id: uid(), name: row.name, amount: row.amount, type: row.type, date: row.date, account: row.account, pocketId: row.type === "income" ? "" : pockets[row.id] || "", note: t("importedFromCsv"), verified: true }));
     const updates = new Map(actionable.filter((row) => row.status === "different" && decisions[row.id] === "update").map((row) => [row.matchId, row]));
     const transactions = data.transactions.map((transaction) => { const row = updates.get(transaction.id); return row ? { ...transaction, name: row.name, amount: row.amount, type: row.type, date: row.date, verified: true } : transaction; });
     if (!added.length && !updates.size) return;

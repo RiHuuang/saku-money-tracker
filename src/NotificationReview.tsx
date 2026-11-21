@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, BellRing, Check, X } from "lucide-react";
+import { ArrowRight, BellRing, Check, Info, X } from "lucide-react";
 import { money, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowFirstDueMonth, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
@@ -27,6 +27,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   const [saving, setSaving] = useState(false);
   const [checkins, setCheckins] = useState<BalanceCheckin[]>([]);
   const [captureOff, setCaptureOff] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   useEffect(() => { void loadCheckins().then(setCheckins); }, []);
   useEffect(() => { void notificationCapture.status().then((status) => setCaptureOff(!status.granted || status.paused)).catch(() => {}); }, []);
   async function updateCheckins(next: BalanceCheckin[]) { setCheckins(next); await saveCheckins(next).catch(() => {}); }
@@ -167,7 +168,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   });
   if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> {captureOff ? <>{t("notificationCaptureOff")} <button className="text-button" onClick={onSettings}>{t("openNotificationSettings")}</button></> : t("notificationsEmpty")}</p></section></>;
   return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
-    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")}</h3><p>{t("notificationsHelp")}</p></div></div><div className="catchup-bulk"><p className="catchup-swipe-hint">{t("swipeHint")}</p><div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
+    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")} <button type="button" className="icon-button" aria-label={t("aboutNotifications")} aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><Info size={16} /></button></h3>{showHelp && <p>{t("notificationsHelp")}</p>}</div></div><div className="catchup-bulk"><p className="catchup-swipe-hint">{t("swipeHint")}</p><div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), offset = gestures.offset(row.id);
       const state: RowState = row.decision === "skip" ? "skip" : rowReady ? "ready" : row.decision === "later" ? "later" : "review";
@@ -188,7 +189,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
             <ChoiceField className="catchup-field" label={t("sakuAccount")} value={account} onValueChange={(value) => edit(row.id, { account: value, confirmedSeparate: false })} placeholder={t("chooseUsedAccount")} options={[...data.accounts.map((item) => ({ value: item, label: item })), ...data.creditCards.map((card) => ({ value: card.name, label: card.name, description: t("creditCard") }))]} />
             {data.accounts.includes(account) && data.accounts.length > 1 && ["purchase", "income", "transfer"].includes(row.activity) && <button type="button" className="text-button notification-transfer-toggle" aria-pressed={row.activity === "transfer"} onClick={() => toggleTransfer(row)}>{t("movedToMyOtherAccount")}</button>}
             {(row.activity === "transfer" || row.activity === "topup") && <ChoiceField className="catchup-field" label={t("otherAccount")} value={row.counterparty || ""} onValueChange={(value) => chooseOtherAccount(row, value)} placeholder={t("chooseOtherAccount")} options={data.accounts.filter((item) => item !== account).map((item) => ({ value: item, label: item }))} />}
-            {row.direction === "expense" && row.activity === "purchase" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={row.pocketId} onValueChange={(value) => edit(row.id, { pocketId: value })} options={[{ value: "", label: t("noPocket"), description: t("categorizeLater") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
+            {row.direction === "expense" && row.activity === "purchase" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={row.pocketId} onValueChange={(value) => edit(row.id, { pocketId: value })} options={[{ value: "", label: t("noPocket") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
             {data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && <label className="catchup-field">{t("firstDueMonth")}<input type="month" min={row.date.slice(0, 7)} value={importRowFirstDueMonth(row)} onChange={(event) => edit(row.id, { firstDueMonth: event.target.value })} /></label>}
             {duplicate && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => edit(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
             {row.decision === "ready" && !rowReady && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
