@@ -1,7 +1,7 @@
 import { recordConsentReceipt } from "./cloud";
 
 // Cloud AI purposes and the version of the wording the user agreed to. Must match worker/consent.js.
-export const CONSENT_VERSIONS = { ai_import: 1, merchant_tidy: 1, ai_budget: 1 } as const;
+export const CONSENT_VERSIONS = { ai_import: 1, merchant_tidy: 1, ai_budget: 1, notification_reader: 1 } as const;
 export type ConsentPurpose = keyof typeof CONSENT_VERSIONS;
 
 const receiptKey = (userId: string, purpose: ConsentPurpose) => `saku-consent-receipt-v1-${userId}-${purpose}-${CONSENT_VERSIONS[purpose]}`;

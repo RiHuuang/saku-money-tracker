@@ -6,7 +6,7 @@ import type { Data } from "./domain";
 import { notificationCapture, type CaptureStatus } from "./notificationCapture";
 import { loadCleaningOptIn, saveCleaningOptIn } from "./merchantCleaning";
 import { ensureConsentReceipt, withdrawConsentReceipt } from "./consent";
-import { ChoiceField, Modal } from "./components";
+import { ChoiceField } from "./components";
 import { captureHealth, showKeepRunning } from "./captureHealth";
 
 const ago = (at: number, now = Date.now()) => {
@@ -15,7 +15,7 @@ const ago = (at: number, now = Date.now()) => {
 };
 
 export default function NotificationAccess({ data, userId, notify }: { data: Data; userId?: string; notify: (message: string) => void }) {
-  const [status, setStatus] = useState<CaptureStatus | null>(null), [disclosure, setDisclosure] = useState(false), [busy, setBusy] = useState(false), [cleaning, setCleaning] = useState(false);
+  const [status, setStatus] = useState<CaptureStatus | null>(null), [busy, setBusy] = useState(false), [cleaning, setCleaning] = useState(false);
   // Set once the user has been sent to Android's settings, so the restricted-settings line shows only after a failed try.
   const [askedAccess, setAskedAccess] = useState(false), [appInfoOpened, setAppInfoOpened] = useState(false);
   useEffect(() => { void loadCleaningOptIn().then(setCleaning).catch(() => {}); }, []);
@@ -42,7 +42,13 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
   const reading = status.granted && enabled.length > 0;
   const health = captureHealth(status);
   const restrictedHelp = !status.granted && (appInfoOpened || askedAccess) && status.sdk !== undefined && status.sdk >= 33;
-  const openAccess = () => void run(async () => {
+  // Installed bank apps the user hasn't chosen yet. Nothing is ticked until the user taps the one button that names them.
+  const detected = enabled.length ? [] : status.apps.filter((app) => app.installed && app.packageName !== "com.android.shell");
+  const names = (enabled.length ? enabled : detected).map((app) => app.name).join(", ");
+  const turnOn = () => void run(async () => {
+    for (const app of detected) await notificationCapture.setApp({ packageName: app.packageName, account: accountFor(app.suggestedAccount) });
+    // The tap that names the apps, with the four facts on screen, is the consent (UU PDP); its receipt is kept.
+    if (userId) void ensureConsentReceipt(userId, "notification_reader").catch(() => { /* Retried on the next tap. */ });
     const result = await notificationCapture.openSettings();
     setAskedAccess(true);
     if (result?.opened === "app_info") setAppInfoOpened(true);
@@ -62,17 +68,16 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
       {app.account && <ChoiceField className="notification-app-account" label={t("sakuAccountFor", { app: app.name })} hideLabel value={data.accounts.includes(app.account) ? app.account : ""} disabled={busy} placeholder={t("chooseAnAccount")} onValueChange={(account) => void run(() => notificationCapture.setApp({ packageName: app.packageName, account }))} options={data.accounts.map((name) => ({ value: name, label: name }))} />}
     </div>)}</div>
     <label className="switch-row"><span>{t("tidyMerchantNames")}<small id="tidy-names-body" className="switch-help">{t("tidyMerchantNamesBody")}</small></span><input type="checkbox" role="switch" aria-describedby="tidy-names-body" checked={cleaning} onChange={(event) => { const next = event.target.checked; setCleaning(next); void saveCleaningOptIn(next).catch(() => notify(t("changeNotSaved"))); if (userId) void (next ? ensureConsentReceipt(userId, "merchant_tidy") : withdrawConsentReceipt(userId, "merchant_tidy")).catch(() => { /* Retried before the next tidy call. */ }); }} /></label>
-    <div className="settings-actions">{status.granted ? <button className="button secondary" disabled={busy} onClick={() => void notificationCapture.openSettings()}><Settings size={16} />{t("manageNotificationAccess")}</button> : <button className="button primary" disabled={busy || !enabled.length} onClick={() => setDisclosure(true)}><BellRing size={16} />{t("allowNotificationAccess")}</button>}</div>
-    {!status.granted && !enabled.length && <small className="cloud-note">{t("chooseAppFirst")}</small>}
+    {!status.granted && (enabled.length || detected.length) > 0 && <div className="notification-disclosure">
+      <p><strong>{t("whatSakuReads")}</strong> {t("whatSakuReadsBody", { apps: names })}</p>
+      <p><strong>{t("whatItKeeps")}</strong> {t("whatItKeepsBody")}</p>
+      <p><strong>{t("whereItStays")}</strong> {t("whereItStaysBody")}</p>
+      <p><strong>{t("howToStop")}</strong> {t("howToStopBody")}</p>
+    </div>}
+    <div className="settings-actions">{status.granted
+      ? <button className="button secondary" disabled={busy} onClick={() => void notificationCapture.openSettings()}><Settings size={16} />{t("manageNotificationAccess")}</button>
+      : <button className="button primary" disabled={busy || (!enabled.length && !detected.length)} onClick={turnOn}><BellRing size={16} />{t("turnOnReaderFor", { apps: names })}</button>}</div>
+    {!status.granted && !enabled.length && !detected.length && <small className="cloud-note">{t("chooseAppFirst")}</small>}
     {restrictedHelp && <p className="cloud-note">{t("restrictedSettingsHelp")}</p>}
-    {disclosure && <Modal title={t("beforeNotificationAccess")} subtitle={t("beforeNotificationAccessBody")} onClose={() => setDisclosure(false)}>
-      <div className="notification-disclosure">
-        <p><strong>{t("whatSakuReads")}</strong> {t("whatSakuReadsBody", { apps: enabled.map((app) => app.name).join(", ") })}</p>
-        <p><strong>{t("whatItKeeps")}</strong> {t("whatItKeepsBody")}</p>
-        <p><strong>{t("whereItStays")}</strong> {t("whereItStaysBody")}</p>
-        <p><strong>{t("howToStop")}</strong> {t("howToStopBody")}</p>
-      </div>
-      <div className="form-footer"><button className="button secondary" onClick={() => setDisclosure(false)}>{t("notNow")}</button><button className="button primary" onClick={() => { setDisclosure(false); openAccess(); }}>{t("continueToAndroidSettings")}</button></div>
-    </Modal>}
   </section>;
 }

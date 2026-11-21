@@ -52,6 +52,10 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   const skipped = rows.filter((row) => edits[row.id]?.decision === "skip");
   // Leaving out one half of a paired transfer leaves out its twin too, so nothing is stranded on the phone.
   const skippedIds = [...new Set(skipped.flatMap((row) => row.pairedWith ? [row.id, row.pairedWith] : [row.id]))];
+  // Rows "Add N" leaves out: not ready and not skipped. Said on the button bar, never silent.
+  const leftOut = rows.length - ready.length - skipped.length;
+  // Captured rows are deleted after 7 days; warn about those within a day of it.
+  const expiringSoon = rows.filter((row) => Date.now() - row.occurredAt > 6 * 86_400_000).length;
   const edit = (id: string, patch: Partial<NotificationRow>) => setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
   const chooseOtherAccount = (row: NotificationRow, value: string) => {
     const twin = value ? twinFor({ ...row, counterparty: value }) : undefined;
@@ -170,7 +174,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   });
   if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> {captureOff ? <>{t("notificationCaptureOff")} <button className="text-button" onClick={onSettings}>{t("openNotificationSettings")}</button></> : t("notificationsEmpty")}</p></section></>;
   return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
-    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")} <button type="button" className="icon-button" aria-label={t("aboutNotifications")} aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><Info size={16} /></button></h3>{showHelp && <p>{t("notificationsHelp")}</p>}</div></div><div className="catchup-bulk"><p className="catchup-swipe-hint">{t("swipeHint")}</p><div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
+    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")} <button type="button" className="icon-button" aria-label={t("aboutNotifications")} aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><Info size={16} /></button></h3>{showHelp && <p>{t("notificationsHelp")}</p>}</div></div><div className="catchup-bulk">{expiringSoon > 0 && <p className="catchup-expiry" role="status">{t("expireSoon", { count: expiringSoon })}</p>}<div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), offset = gestures.offset(row.id);
       const state: RowState = row.decision === "skip" ? "skip" : rowReady ? "ready" : row.decision === "later" ? "later" : "review";
@@ -181,6 +185,11 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
           <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date}>{friendlyDate(row.date)}</time><small className="catchup-row-account">{account || t("chooseAccount")} · {row.appName}</small></span><strong>{importRowName(row)}</strong>{importRowName(row) !== row.name.trim() && <small className="catchup-row-raw">{row.name}</small>}{row.pairedWith && row.decision === "skip" ? <small className="catchup-row-hint">{t("recordedWithTransfer")}</small> : hint && <small className="catchup-row-hint">{hint}</small>}</span>
           <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : "+"}{money(row.amount)}</strong></span>
         </button>
+        {duplicate && !row.confirmedSeparate && row.decision !== "skip" && <div className="duplicate-choice" role="group" aria-label={t("looksLikeDuplicate")}>
+          <span>{t("looksLikeDuplicate")}</span>
+          <button type="button" className="text-button" onClick={() => decide(row.id, "skip")}>{t("skipRow")}</button>
+          <button type="button" className="text-button" onClick={() => edit(row.id, { confirmedSeparate: true, decision: "ready" })}>{t("addAnyway")}</button>
+        </div>}
         <div className="notification-row-controls">
           {row.direction === "expense" && row.activity === "purchase" && <button type="button" className="notification-pocket-chip" onClick={() => setEditingRow(row.id)}>{data.pockets.find((pocket) => pocket.id === row.pocketId)?.name || t("noPocket")}</button>}
           {row.pairedWith && row.decision === "skip" && rows.some((other) => other.id === row.pairedWith && ["transfer", "topup"].includes(other.activity)) ? <RowStatus state={state} label={t("recordedWithTransfer")} /> : <button type="button" className="notification-status-toggle" aria-label={t(statusTap === "review" ? "checkThisRow" : statusTap === "ready" ? "markRowToAdd" : "markRowToSkip")} onClick={() => statusTap === "review" ? setEditingRow(row.id) : decide(row.id, statusTap)}><RowStatus state={state} label={row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : row.decision === "later" ? t("reviewLater") : t("openReview")} /></button>}
@@ -193,7 +202,6 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
             {(row.activity === "transfer" || row.activity === "topup") && <ChoiceField className="catchup-field" label={t("otherAccount")} value={row.counterparty || ""} onValueChange={(value) => chooseOtherAccount(row, value)} placeholder={t("chooseOtherAccount")} options={data.accounts.filter((item) => item !== account).map((item) => ({ value: item, label: item }))} />}
             {row.direction === "expense" && row.activity === "purchase" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={row.pocketId} onValueChange={(value) => edit(row.id, { pocketId: value })} options={[{ value: "", label: t("noPocket") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
             {data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && <label className="catchup-field">{t("firstDueMonth")}<input type="month" min={row.date.slice(0, 7)} value={importRowFirstDueMonth(row)} onChange={(event) => edit(row.id, { firstDueMonth: event.target.value })} /></label>}
-            {duplicate && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => edit(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
             {row.decision === "ready" && !rowReady && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
             <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: importRowName(row) })}>
               <button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} onClick={() => decide(row.id, "ready")}>{t("addToSaku")}</button>
@@ -205,6 +213,6 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
         </div></Modal>}
       </div>;
     })}
-    <div className={`catchup-save is-compact${saveBarHidden ? " is-hidden" : ""}`}><p><strong>{t("readyCount", { count: ready.length })}</strong>{skipped.length > 0 && <small>{t("skippedCount", { count: skipped.length })}</small>}</p><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}>{ready.length ? t("addCount", { count: ready.length }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
+    <div className={`catchup-save is-compact${saveBarHidden ? " is-hidden" : ""}`}><p><strong>{t("readyCount", { count: ready.length })}</strong>{skipped.length > 0 && <small>{t("skippedCount", { count: skipped.length })}</small>}{leftOut > 0 && <small>{t("needLookCount", { count: leftOut })}</small>}</p><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}>{ready.length ? t("addCount", { count: ready.length }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
   </section></>;
 }

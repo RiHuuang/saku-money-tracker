@@ -8,6 +8,8 @@ export const CONSENT_VERSIONS = Object.freeze({
   merchant_tidy: 1,
   // Pocket names and amounts sent when the user asks AI to suggest a plan.
   ai_budget: 1,
+  // Reading notifications from the bank apps the user named (on the phone only; the receipt is the record).
+  notification_reader: 1,
 });
 
 export const CONSENT_TABLE = "CREATE TABLE IF NOT EXISTS consents (uid TEXT NOT NULL, purpose TEXT NOT NULL, version INTEGER NOT NULL, granted_at INTEGER NOT NULL, withdrawn_at INTEGER, PRIMARY KEY(uid, purpose))";

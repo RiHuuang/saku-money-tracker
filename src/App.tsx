@@ -1769,13 +1769,15 @@ function TransactionEditor({
       const base64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
       canvas.width = 0; canvas.height = 0;
       const suggestion = receiptSuggestion((await localStatementAI.recognizeImage({ image: base64 })).text);
-      if (suggestion.amount) setAmount(String(suggestion.amount));
+      const filled = !!suggestion.amount && !amount;
+      if (filled) setAmount(String(suggestion.amount));
       if (suggestion.merchant && !name) setName(suggestion.merchant);
-      setScanInfo(suggestion.amount ? t("receiptAmountSuggested") : t("receiptNoTotal"));
+      setScanInfo(filled ? t("receiptAmountSuggested") : suggestion.amount ? "" : t("receiptNoTotal"));
     } catch (e) { setError(e instanceof Error ? e.message : t("receiptScanError")); }
     finally { setScanning(false); }
   }
   const amountField = useRef<HTMLDivElement>(null);
+  const receiptInput = useRef<HTMLInputElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
   const keepOpen = useRef(false);
   async function submit(e: FormEvent) {
@@ -1871,7 +1873,7 @@ function TransactionEditor({
   if (mode === "transfer") return <Modal title={transaction ? t("editTransfer") : t("addTransaction")} onClose={onClose}>
     <form onSubmit={(e) => void submit(e)}><fieldset disabled={busy}>{modeControl}
       {data.accounts.length < 2 && <p className="form-error" role="alert">{t("anotherAccountTransfer")}</p>}
-      <label className="field">{t("amount")}<div className="amount-input" ref={amountField}><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={(value) => { setAmount(value); setFieldError(null); }} aria-invalid={fieldError?.field === "amount"} /></div>{fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
+      <label className="field">{t("amount")}<div className="amount-input" ref={amountField}><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={(value) => { setAmount(value); setFieldError(null); }} aria-invalid={fieldError?.field === "amount"} />{!transaction && nativeAIAvailable && <><button type="button" className="icon-button amount-scan" aria-label={scanning ? t("readingReceipt") : t("scanReceipt")} title={t("scanReceipt")} disabled={scanning || busy} onClick={(event) => { event.preventDefault(); receiptInput.current?.click(); }}><Camera size={18} /></button><input ref={receiptInput} type="file" accept="image/*" capture="environment" hidden tabIndex={-1} onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></>}</div>{fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
       <div className="form-columns"><label className="field">{t("from")}<ChoiceField hideLabel label={t("from")} value={transferFrom} onValueChange={(value) => { setTransferFrom(value); setFieldError(null); }} options={accountChoices} /></label><label className="field">{t("to")}<ChoiceField hideLabel label={t("to")} value={transferTo} onValueChange={(value) => { setTransferTo(value); setFieldError(null); }} options={accountChoices} /></label></div>
       {fieldError?.field === "transfer" && <p className="field-error" role="alert">{fieldError.message}</p>}
       <label className="field">{t("date")}<LongDateInput max={today()} value={date} onValueChange={(value) => { setDate(value); setFieldError(null); }} aria-invalid={fieldError?.field === "date"} />{fieldError?.field === "date" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
@@ -1906,7 +1908,6 @@ function TransactionEditor({
             </div>
             {fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}
           </label>
-          {!transaction && nativeAIAvailable && <label className="button secondary receipt-capture"><Camera size={16} /> {scanning ? t("readingReceipt") : t("scanReceipt")}<input type="file" accept="image/*" capture="environment" disabled={scanning || busy} hidden onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></label>}
           {scanInfo && <p className="editor-help" role="status">{scanInfo}</p>}
           {error && <p className="field-error" role="alert">{error}</p>}
           <label className="field">
