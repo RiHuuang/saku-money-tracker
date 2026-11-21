@@ -19,6 +19,7 @@ import {
   budgetFor,
   demoData,
   dueRules,
+  recurringStartMonth,
   emptyData,
   exportCSV,
   extendPocketsToTransactions,
@@ -429,6 +430,20 @@ test("recurring bills show only unrecorded, unskipped occurrences", () => {
   d.transactions.push({ id: "paid", name: "Wi-Fi", amount: 100000, type: "expense", pocketId: "bills", account: "BCA", date: "2026-09-30", note: "", recurringRuleId: "wifi", occurrenceMonth: "2026-09" });
   assert.deepEqual(dueRules(d, "2026-10-31"), []);
   assert.doesNotThrow(() => validateData(d));
+});
+
+test("a bill paid early is recorded today and does not reappear on its due day", () => {
+  const d = emptyData();
+  d.recurring = [{ id: "rent", name: "Rent", amount: 100000, type: "expense", pocketId: "home", account: "BCA", day: 20, startMonth: "2026-11", active: true }];
+  assert.deepEqual(dueRules(d, "2026-11-11"), []);
+  assert.deepEqual(dueRules(d, "2026-11-11", true).map(({ date }) => date), ["2026-11-20"]);
+  d.transactions.push({ id: "early", name: "Rent", amount: 100000, type: "expense", pocketId: "home", account: "BCA", date: "2026-11-11", note: "", recurringRuleId: "rent", occurrenceMonth: "2026-11" });
+  assert.deepEqual(dueRules(d, "2026-11-20", true), []);
+});
+
+test("a new bill starts this month even when the app is browsing an older month", () => {
+  assert.equal(recurringStartMonth(undefined, "2026-11-19"), "2026-11");
+  assert.equal(recurringStartMonth({ startMonth: "2026-08" }, "2026-11-19"), "2026-08");
 });
 
 test("catchUpGap counts days since the last real entry or checked day, capped at 14", () => {

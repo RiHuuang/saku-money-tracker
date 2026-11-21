@@ -2,7 +2,7 @@ import { localeTag, t as translate } from "./i18n";
 import { useState, type FormEvent } from "react";
 import { CalendarDays, CreditCard as CreditCardIcon, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
-  accountBalance, cardBalance, cardDue, dueRules, installmentAmounts, money, shiftMonth, today, uid, validAmount, validDate,
+  accountBalance, cardBalance, cardDue, dueRules, installmentAmounts, money, recurringStartMonth, shiftMonth, today, uid, validAmount, validDate,
   type CreditCard, type Data, type RecurringRule, type Transaction,
 } from "./domain";
 import { ChoiceField, LongDateInput, Modal, MoneyInput, SegmentedChoice } from "./components";
@@ -14,10 +14,11 @@ type Props = {
   commit: (next: Data, message: string) => Promise<boolean>;
   notify: (message: string) => void;
   onNewPurchase: (cardId: string) => void;
+  initialTab?: "cards" | "bills";
 };
 
-export default function Plans({ data, month, busy, commit, notify, onNewPurchase }: Props) {
-  const [tab, setTab] = useState<"cards" | "bills">("cards");
+export default function Plans({ data, month, busy, commit, notify, onNewPurchase, initialTab = "cards" }: Props) {
+  const [tab, setTab] = useState<"cards" | "bills">(initialTab);
   const [cardDraft, setCardDraft] = useState<CreditCard | null>(null);
   const [cardName, setCardName] = useState("");
   const [limit, setLimit] = useState("");
@@ -35,9 +36,11 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
   const [ruleMethod, setRuleMethod] = useState(`bank:${data.accounts[0]}`);
   const [ruleInstallments, setRuleInstallments] = useState("1");
   const [ruleDay, setRuleDay] = useState(String(Number(today().slice(-2))));
-  const [ruleMonth, setRuleMonth] = useState(month);
+  const [ruleMonth, setRuleMonth] = useState(recurringStartMonth(undefined));
   const [deleteId, setDeleteId] = useState("");
-  const pending = dueRules(data);
+  const occurrences = dueRules(data, today(), true);
+  const pending = occurrences.filter(({ date }) => date <= today());
+  const upcoming = occurrences.filter(({ date, rule }) => date > today() && rule.type === "expense");
   const paymentCard = data.creditCards.find((card) => card.id === payCard);
   const paymentBalance = paymentCard ? cardBalance(data, paymentCard.id) : 0;
   const paymentAmount = Number(payAmount);
@@ -91,12 +94,13 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
     if (await commit({ ...data, transactions: [...data.transactions, transaction] }, translate("cardPaymentRecorded"))) { setPayAmount(""); setPayCard(""); }
   }
   function editRule(rule?: RecurringRule) {
-    setRuleDraft(rule || { id: "", name: "", amount: 0, type: "expense", pocketId: data.pockets[0]?.id || "", account: data.accounts[0], day: Number(today().slice(-2)), startMonth: month, active: true });
+    const startMonth = recurringStartMonth(rule);
+    setRuleDraft(rule || { id: "", name: "", amount: 0, type: "expense", pocketId: data.pockets[0]?.id || "", account: data.accounts[0], day: Number(today().slice(-2)), startMonth, active: true });
     setRuleName(rule?.name || ""); setRuleAmount(rule ? String(rule.amount) : "");
     setRuleType(rule?.type || "expense"); setRulePocket(rule?.pocketId || data.pockets[0]?.id || "");
     setRuleMethod(rule?.cardId ? `card:${rule.cardId}` : `bank:${rule?.account || data.accounts[0]}`);
     setRuleInstallments(String(rule?.installments || 1));
-    setRuleDay(String(rule?.day || Number(today().slice(-2)))); setRuleMonth(rule?.startMonth || month);
+    setRuleDay(String(rule?.day || Number(today().slice(-2)))); setRuleMonth(startMonth);
   }
   async function saveRule(e: FormEvent) {
     e.preventDefault();
@@ -115,7 +119,7 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
     if (await commit({ ...data, recurring: ruleDraft?.id ? data.recurring.map((r) => r.id === rule.id ? rule : r) : [...data.recurring, rule] }, ruleDraft?.id ? translate("billUpdated") : translate("billAdded"))) setRuleDraft(null);
   }
   async function postRule(rule: RecurringRule, scheduledDate: string) {
-    const date = scheduledDate > today() ? scheduledDate : today();
+    const date = today();
     if (rule.type === "expense" && !data.pockets.some((p) => p.id === rule.pocketId)) {
       notify(translate("thisBillNeedsAPocket")); return;
     }
@@ -175,10 +179,11 @@ export default function Plans({ data, month, busy, commit, notify, onNewPurchase
         <label className="field">{translate("amountRp")}<MoneyInput min={1} required value={payAmount} onValueChange={setPayAmount} /></label>
         <ChoiceField label={translate("paidFrom")} value={payAccount} onValueChange={setPayAccount} options={data.accounts.map((account) => ({ value: account, label: account, description: translate("recordedBalanceAmount", { amount: money(accountBalance(data, account)) }) }))} />
         <label className="field">{translate("date")}<LongDateInput max={today()} required value={payDate} onValueChange={setPayDate} /></label>
-      </div>{paymentCreditAfter > 0 && <p className="plans-payment-credit">This payment will leave {money(paymentCreditAfter)} as card credit. Available credit will be {money(paymentCard.limit - paymentBalance + paymentAmount)}.</p>}<div className="plans-form-actions"><button className="button primary" disabled={busy}>{translate("recordPayment")}</button><button type="button" className="button secondary" onClick={() => setPayCard("")}>{translate("cancel")}</button></div></form></Modal>}
+      </div>{paymentCreditAfter > 0 && <p className="plans-payment-credit">{translate("cardCreditAfterPayment", { credit: money(paymentCreditAfter), available: money(paymentCard.limit - paymentBalance + paymentAmount) })}</p>}<div className="plans-form-actions"><button className="button primary" disabled={busy}>{translate("recordPayment")}</button><button type="button" className="button secondary" onClick={() => setPayCard("")}>{translate("cancel")}</button></div></form></Modal>}
     </> : <>
       <div className="section-heading plans-heading"><div><h2>{translate("recurringBills")}</h2><p>{translate("plannedPerYear", { amount: money(data.recurring.filter((r) => r.active && r.type === "expense").reduce((n, r) => n + r.amount * 12, 0)) })}</p></div><button className="button secondary" onClick={() => editRule()}><Plus size={16} /> {translate("addBill")}</button></div>
       {pending.length > 0 && <section className="due-list"><h3>{translate("readyToRecord")}</h3>{pending.map(({ rule, date }) => <div key={`${rule.id}:${date}`} className="due-row"><CalendarDays size={17} /><div><strong>{rule.name}</strong><small>{translate("dueOn", { date })} · {rule.account}</small></div><strong>{money(rule.amount)}</strong><button className="button primary" disabled={busy} onClick={() => void postRule(rule, date)}>{rule.cardId ? translate("markCharged") : rule.type === "income" ? translate("recordIncome") : translate("markPaid")}</button><button className="text-button" disabled={busy} onClick={() => void skipRule(rule, date)}>{translate("skip")}</button></div>)}</section>}
+      {upcoming.length > 0 && <section className="due-list"><h3>{translate("upcomingBillsThisMonth")}</h3>{upcoming.map(({ rule, date }) => <div key={`${rule.id}:${date}`} className="due-row"><CalendarDays size={17} /><div><strong>{rule.name}</strong><small>{translate("dueOn", { date })} · {rule.account}</small></div><strong>{money(rule.amount)}</strong><button className="button primary" disabled={busy} onClick={() => void postRule(rule, date)}>{translate("payNow")}</button></div>)}</section>}
       {!data.recurring.length && <p className="plans-empty">{translate("addRentSubscriptionsSalaryOr")}</p>}
       <div className="rule-list">{data.recurring.map((rule) => <article className="rule-row" key={rule.id}><span className="rule-symbol"><RotateCcw size={17} /></span><div className="rule-description"><strong>{rule.name}</strong><small>{translate("dayNumber", { day: rule.day })} · {rule.account} · {rule.active ? translate("active") : translate("paused")}</small></div><div className="rule-money"><strong>{money(rule.amount)}</strong><small>{translate("perYear", { amount: money(rule.amount * 12) })}</small></div><div className="rule-actions"><button className="text-button" onClick={() => editRule(rule)}>{translate("edit")}</button><button className="text-button" disabled={busy} onClick={() => void toggleRule(rule)}>{rule.active ? translate("pause") : translate("resume")}</button><button className="text-button" aria-label={translate("removeNamed", { name: rule.name })} title={translate("removeNamed", { name: rule.name })} onClick={() => setDeleteId(rule.id)}><Trash2 size={15} /></button></div></article>)}</div>
       {deleteId && (() => { const rule = data.recurring.find((item) => item.id === deleteId); return rule && <Modal title={translate("removeNamedQuestion", { name: rule.name })} subtitle={translate("pastTransactionsStayInYour")} onClose={() => setDeleteId("")}><div className="plans-form-actions"><button className="button danger" disabled={busy} onClick={() => void deleteRule(rule)}>{translate("removeRecurringItem")}</button><button className="button secondary" onClick={() => setDeleteId("")}>{translate("cancel")}</button></div></Modal>; })()}

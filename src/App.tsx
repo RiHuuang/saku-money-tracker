@@ -48,6 +48,7 @@ import {
   cardBalance,
   catchUpGap,
   dayLabel,
+  dueRules,
   emptyData,
   exportCSV,
   extendPocketsToTransactions,
@@ -215,6 +216,7 @@ export default function App() {
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("");
+  const [plansTab, setPlansTab] = useState<"cards" | "bills">("cards");
   setActiveLanguage(languagePreference);
   const [viewHistory, setViewHistory] = useState<View[]>([]);
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
@@ -685,6 +687,7 @@ export default function App() {
   const weekTransactions = data.transactions.filter((t) => isSpending(t) && new Date(`${t.date}T12:00:00`) >= weekStart && t.date <= today());
   const weekSpend = weekTransactions.reduce((n, t) => n + personalAmount(t), 0);
   const weekTop = data.pockets.map((p) => ({ name: p.name, amount: weekTransactions.filter((t) => t.pocketId === p.id).reduce((n, t) => n + personalAmount(t), 0) })).sort((a, b) => b.amount - a.amount)[0];
+  const dueBills = dueRules(data).filter(({ rule }) => rule.type === "expense");
   const catchUpDays = catchUpDismissed === today() ? [] : catchUpGap(data, today());
   const catchUpAnchorChecked = catchUpDays.length > 0 && data.checkedDays.includes(shiftDate(catchUpDays[0], -1)) && !data.transactions.some((t) => t.date === shiftDate(catchUpDays[0], -1) && t.kind !== "opening_balance");
   const showCatchUp = catchUpDays.length > 0 && data.transactions.some((t) => t.date <= shiftDate(today(), -2));
@@ -959,6 +962,7 @@ export default function App() {
               </section>
               <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <button type="button" className="account-balance-item" key={item.account} aria-label={t("accountCardLabel", { account: item.account, amount: money(item.balance) })} onClick={() => setSelectedAccount(item.account)}><span className="account-balance-icon" style={{ color: accountColor(data, item.account) }}><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></button>)}</section>
               {accountsOpen && !selectedAccount && <AccountsOverview data={data} monthTransactions={stats.transactions} onClose={() => setAccountsOpen(false)} onEdit={(account) => setSelectedAccount(account)} />}
+              {!!dueBills.length && <section className="due-list home-due-bills"><div className="section-heading"><h2>{t("billsToRecord")}</h2><button className="text-button" type="button" onClick={() => { setPlansTab("bills"); go("plans"); }}>{t("viewBills")} <ArrowRight size={16} /></button></div>{dueBills.slice(0, 3).map(({ rule, date }) => <button type="button" className="due-row" key={`${rule.id}:${date}`} onClick={() => { setPlansTab("bills"); go("plans"); }}><CalendarDays size={17} /><span><strong>{rule.name}</strong><small>{t("dueOn", { date })}</small></span><strong>{money(rule.amount)}</strong><ArrowRight size={16} /></button>)}</section>}
               <section className="daily-strip" aria-label={t("quickEntriesLabel")}>
                 <div className="daily-check"><span>{t("currentWeek")}</span><strong>{money(weekSpend)} {t("spent")}</strong><small>{weekTop?.amount ? t("largestPocket", { name: weekTop.name }) : t("noSpending")}</small></div>
 <div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={t("removeShortcut", { name: f.name })} aria-label={t("removeShortcut", { name: f.name })} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, "").then((ok) => { if (ok) setToast({ message: t("quickEntryRemoved"), action: { label: t("undo"), run: () => { const current = latest.current.data; if (current && !current.favorites.some((item) => item.id === f.id)) { const index = data.favorites.indexOf(f); void commit({ ...current, favorites: [...current.favorites.slice(0, index), f, ...current.favorites.slice(index)] }, t("quickEntryRestored")); } } } }); })}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
@@ -1224,7 +1228,7 @@ export default function App() {
               {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
             </Suspense>
           )}
-          {view === "plans" && <Suspense fallback={<p className="loading-view">{t("loadingPlans")}</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} /></Suspense>}
+          {view === "plans" && <Suspense fallback={<p className="loading-view">{t("loadingPlans")}</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} initialTab={plansTab} /></Suspense>}
           {view === "settings" && (
             <SettingsView
               data={data}
