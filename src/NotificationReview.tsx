@@ -3,9 +3,10 @@ import { ArrowRight, BellRing, Check, Info, X } from "lucide-react";
 import { money, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowFirstDueMonth, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
-import { learnMerchant, learnNotificationPocket, suggestMerchant } from "./merchants";
+import { learnNotificationPocket } from "./merchants";
 import { cleanMerchantNames } from "./cloud";
-import { loadCleaningOptIn, namesToClean } from "./merchantCleaning";
+import { applyTidiedNames, loadCleaningOptIn, namesToClean } from "./merchantCleaning";
+import { ensureConsentReceipt } from "./consent";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
 import { inboxRows, notificationStatusTap, type NotificationRow } from "./notificationRows";
 import { ChoiceField, Modal } from "./components";
@@ -41,21 +42,6 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
     catch { setItems([]); notify(t("notificationReadError")); }
   };
   useEffect(() => { void load(); }, []);
-  const [cleaned, setCleaned] = useState(false);
-  useEffect(() => {
-    if (cleaned || !items?.length || !userId) return;
-    setCleaned(true);
-    void (async () => {
-      const names = namesToClean(inboxRows(items, data), data);
-      if (!names.length || !(await loadCleaningOptIn())) return;
-      try {
-        // Each answer becomes a merchant rule, so a name is sent at most once.
-        const results = await cleanMerchantNames(userId, names);
-        const merchantRules = results.reduce((rules, result) => learnMerchant({ ...data, merchantRules: rules }, result.name, { name: result.cleanName, pocketId: suggestMerchant({ ...data, merchantRules: rules }, result.name)?.pocketId || "" }, new Date().toISOString(), true), data.merchantRules);
-        if (merchantRules !== data.merchantRules) await commit({ ...data, merchantRules }, t("merchantNamesTidied"));
-      } catch { /* Raw names stay usable; cleaning is a convenience. */ }
-    })();
-  }, [items, userId, cleaned]);
   const rows = useMemo(() => inboxRows(items || [], data).map((row): NotificationRow => ({ ...row, ...edits[row.id] })), [items, data, edits]);
   const accountFor = (row: ImportRow) => importRowAccount(row, undefined, data);
   const twinFor = (row: NotificationRow) => rows.find((other) => other.id !== row.id && other.account === row.counterparty && other.direction !== row.direction && other.amount === row.amount && Math.abs(other.occurredAt - row.occurredAt) <= 30 * 60 * 1000);
@@ -107,6 +93,18 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
     setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !ids.includes(id))));
     await load();
   }
+  // Sends only names of rows now in the ledger; a captured row waiting here never leaves the phone (HC3).
+  async function tidySaved(owner: string, names: string[], addedIds: ReadonlySet<string>) {
+    try {
+      if (!(await loadCleaningOptIn())) return;
+      await ensureConsentReceipt(owner, "merchant_tidy");
+      const results = await cleanMerchantNames(owner, names);
+      const current = getCurrentData();
+      if (!current) return;
+      const next = applyTidiedNames(current, addedIds, results);
+      if (next !== current) await commit(next, t("merchantNamesTidied"));
+    } catch { /* Raw names stay usable; tidying is a convenience. */ }
+  }
   async function save() {
     if ((!ready.length && !skipped.length) || busy || saving) return;
     if (!ready.length) { setSaving(true); try { await remove(skippedIds); } catch { notify(t("notificationAddError")); } finally { setSaving(false); } return; }
@@ -125,6 +123,8 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
         done.add(row.id);
         if (twin) done.add(twin.id);
       }
+      // Unknown names are picked before the save (merchant memory learns them on save), but sent only after it.
+      const toTidy = namesToClean(ready.filter((row) => row.direction === "expense").map((row) => ({ name: importRowName(row), activity: row.activity })), data);
       if (!(await commit({ ...data, transactions: [...data.transactions, ...additions], merchantRules }, t("notificationRowsAdded", { count: ready.length })))) return;
       const removedItems = (items || []).filter((item) => done.has(item.id) || skippedIds.includes(item.id));
       const addedIds = new Set(additions.map((transaction) => transaction.id));
@@ -134,6 +134,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
       // A balance printed in a saved notification can be checked once its payment is in the ledger.
       const reported = ready.filter((row) => row.balance !== null && data.accounts.includes(accountFor(row))).map((row) => ({ id: row.id, account: accountFor(row), appName: row.appName, reported: row.balance!, occurredAt: row.occurredAt }));
       if (reported.length) await updateCheckins(mergeCheckins(checkins, reported));
+      if (toTidy.length && userId) void tidySaved(userId, toTidy, addedIds);
       await remove([...done, ...skippedIds.filter((id) => !done.has(id))]);
       notify({ message: t("notificationRowsAdded", { count: ready.length }), action: { label: t("undo"), run: () => { void (async () => {
         try {

@@ -5,9 +5,10 @@ import { BellRing, Pause, Play, Settings } from "lucide-react";
 import type { Data } from "./domain";
 import { notificationCapture, type CaptureStatus } from "./notificationCapture";
 import { loadCleaningOptIn, saveCleaningOptIn } from "./merchantCleaning";
+import { ensureConsentReceipt, withdrawConsentReceipt } from "./consent";
 import { ChoiceField, Modal } from "./components";
 
-export default function NotificationAccess({ data, notify }: { data: Data; notify: (message: string) => void }) {
+export default function NotificationAccess({ data, userId, notify }: { data: Data; userId?: string; notify: (message: string) => void }) {
   const [status, setStatus] = useState<CaptureStatus | null>(null), [disclosure, setDisclosure] = useState(false), [busy, setBusy] = useState(false), [cleaning, setCleaning] = useState(false);
   useEffect(() => { void loadCleaningOptIn().then(setCleaning).catch(() => {}); }, []);
   const refresh = () => notificationCapture.status().then(setStatus).catch(() => notify(t("notificationStatusUnavailable")));
@@ -36,7 +37,7 @@ export default function NotificationAccess({ data, notify }: { data: Data; notif
       <label className="checkbox-label"><input type="checkbox" checked={!!app.account} disabled={busy || !app.installed || !data.accounts.length} onChange={(event) => void run(() => notificationCapture.setApp({ packageName: app.packageName, account: event.target.checked ? accountFor(app.suggestedAccount) : "" }))} /> {app.name}{!app.installed && <small> · {t("notInstalled")}</small>}</label>
       {app.account && <ChoiceField className="notification-app-account" label={t("sakuAccountFor", { app: app.name })} hideLabel value={data.accounts.includes(app.account) ? app.account : ""} disabled={busy} placeholder={t("chooseAnAccount")} onValueChange={(account) => void run(() => notificationCapture.setApp({ packageName: app.packageName, account }))} options={data.accounts.map((name) => ({ value: name, label: name }))} />}
     </div>)}</div>
-    <label className="checkbox-label"><input type="checkbox" checked={cleaning} onChange={(event) => { const next = event.target.checked; setCleaning(next); void saveCleaningOptIn(next).catch(() => notify(t("changeNotSaved"))); }} /> {t("tidyMerchantNames")} <small>{t("tidyMerchantNamesBody")}</small></label>
+    <label className="checkbox-label"><input type="checkbox" checked={cleaning} onChange={(event) => { const next = event.target.checked; setCleaning(next); void saveCleaningOptIn(next).catch(() => notify(t("changeNotSaved"))); if (userId) void (next ? ensureConsentReceipt(userId, "merchant_tidy") : withdrawConsentReceipt(userId, "merchant_tidy")).catch(() => { /* Retried before the next tidy call. */ }); }} /> {t("tidyMerchantNames")} <small>{t("tidyMerchantNamesBody")}</small></label>
     <div className="settings-actions">{status.granted ? <button className="button secondary" disabled={busy} onClick={() => void notificationCapture.openSettings()}><Settings size={16} />{t("manageNotificationAccess")}</button> : <button className="button primary" disabled={busy || !enabled.length} onClick={() => setDisclosure(true)}><BellRing size={16} />{t("allowNotificationAccess")}</button>}</div>
     {!status.granted && !enabled.length && <small className="cloud-note">{t("chooseAppFirst")}</small>}
     {disclosure && <Modal title={t("beforeNotificationAccess")} subtitle={t("beforeNotificationAccessBody")} onClose={() => setDisclosure(false)}>

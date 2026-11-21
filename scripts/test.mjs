@@ -30,6 +30,7 @@ try {
     await import("../worker/live.test.mjs");
     await import("../worker/live-route.test.mjs");
     await import("../worker/agreement-route.test.mjs");
+    await import("../worker/consent-route.test.mjs");
     await import("../worker/merchant-clean.test.mjs");
     await import("../worker/legal.test.mjs");
     await import("../worker/security-headers.test.mjs");

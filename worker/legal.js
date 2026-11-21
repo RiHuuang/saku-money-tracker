@@ -27,12 +27,12 @@ const copy = {
 <h2>Pihak yang memproses data untuk kami</h2>
 <ul>
 <li><strong>Cloudflare</strong> menjalankan server Saku (Workers, D1, dan R2) yang menyimpan catatan dan foto profilmu, serta memproses alamat IP untuk mengirim dan melindungi layanan.</li>
-<li><strong>Cloudflare Workers AI</strong> memproses teks atau gambar rekening yang kamu pilih untuk diimpor, dan nama merchant yang belum dikenal jika kamu menyalakan perapian nama. Saku meminta agar data ini tidak disimpan oleh layanan AI.</li>
-<li><strong>Google</strong> memverifikasi saat kamu masuk. Jika kamu mengizinkan Google Drive, salinan yang bisa dibaca disimpan sebagai Google Sheet di Drive milikmu sendiri.</li>
+<li><strong>Cloudflare Workers AI</strong> memproses teks atau gambar rekening yang kamu pilih untuk diimpor, nama yang kamu catat saat mencocokkan baris, dan nama merchant yang belum dikenal dari transaksi yang sudah kamu tambahkan jika kamu menyalakan perapian nama. Saku meminta agar data ini tidak disimpan oleh layanan AI, dan mencatat tujuan, versi, dan waktu setiap persetujuanmu serta kapan kamu menariknya.</li>
+<li><strong>Google</strong> memverifikasi saat kamu masuk. Jika kamu mengizinkan Google Drive, salinan yang bisa dibaca disimpan sebagai Google Sheet di Drive milikmu sendiri. Di Android, Google ML Kit membaca teks struk dan halaman di ponselmu; gambar dan teksnya tidak dikirim, tetapi ML Kit mengirim data diagnostik dan penggunaan pustakanya ke Google.</li>
 </ul>
 <p>Penyedia ini dapat memproses data di luar Indonesia. Kami hanya memakai penyedia yang menerapkan perlindungan keamanan yang memadai.</p>
 <h2>Yang tetap di perangkatmu</h2>
-<p>File rekening dan tangkapan layar asli serta draf peninjauan impor tetap di perangkatmu dan tidak masuk cadangan atau Sheet. Di Android, kamu bisa mengizinkan Saku membaca notifikasi dari aplikasi bank dan dompet digital yang kamu pilih. Saku memeriksa aplikasinya sebelum membaca isi apa pun, hanya menyimpan jumlah, arah uang, saldo, dan nama merchant dengan nomor rekening dan referensi dihapus, mengenkripsinya di ponselmu, dan menghapusnya setelah tujuh hari, saat kamu keluar, atau saat akun dihapus. Isi notifikasi tidak pernah diunggah atau disinkronkan; hanya transaksi yang kamu tambahkan yang masuk ke catatanmu.</p>
+<p>File rekening dan tangkapan layar asli serta draf peninjauan impor tetap di perangkatmu, tidak masuk cadangan atau Sheet, dan dihapus setelah 30 hari. Di Android, kamu bisa mengizinkan Saku membaca notifikasi dari aplikasi bank dan dompet digital yang kamu pilih. Saku memeriksa aplikasinya sebelum membaca isi apa pun, hanya menyimpan jumlah, arah uang, saldo, dan nama merchant dengan nomor rekening dan referensi dihapus, mengenkripsinya di ponselmu, dan menghapusnya setelah tujuh hari, saat kamu keluar, atau saat akun dihapus. Isi notifikasi tidak pernah diunggah atau disinkronkan; hanya transaksi yang kamu tambahkan yang masuk ke catatanmu.</p>
 <h2>Berapa lama data disimpan</h2>
 <ul>
 <li>Catatan dan profil disimpan selama akunmu aktif.</li>
@@ -88,12 +88,12 @@ const copy = {
 <h2>Who processes data for us</h2>
 <ul>
 <li><strong>Cloudflare</strong> runs Saku's servers (Workers, D1 and R2), which store your records and profile photo, and processes IP addresses to deliver and protect the service.</li>
-<li><strong>Cloudflare Workers AI</strong> processes the statement text or images you choose to import, and unknown merchant names if you turn on name tidying. Saku asks the AI service not to store this data.</li>
-<li><strong>Google</strong> verifies you when you sign in. If you allow Google Drive, a readable copy is stored as a Google Sheet in your own Drive.</li>
+<li><strong>Cloudflare Workers AI</strong> processes the statement text or images you choose to import, names you recorded when matching rows, and unknown merchant names from transactions you have already added if you turn on name tidying. Saku asks the AI service not to store this data, and records the purpose, version and time of each consent you give and when you withdraw it.</li>
+<li><strong>Google</strong> verifies you when you sign in. If you allow Google Drive, a readable copy is stored as a Google Sheet in your own Drive. On Android, Google ML Kit reads receipt and page text on your phone; the images and text are not sent, but ML Kit sends diagnostic and usage data about the library to Google.</li>
 </ul>
 <p>These providers may process data outside Indonesia. We only use providers that apply appropriate security safeguards.</p>
 <h2>What stays on your device</h2>
-<p>Original statement files and screenshots, and import review drafts, stay on your device and are not added to backups or Sheets. On Android you can let Saku read notifications from the bank and e-wallet apps you choose. Saku checks the app before reading any content, keeps only the amount, money direction, balance and merchant name with account and reference numbers removed, encrypts them on your phone, and deletes them after seven days, when you sign out, or when the account is deleted. Notification text is never uploaded or synced; only transactions you add join your records.</p>
+<p>Original statement files and screenshots, and import review drafts, stay on your device, are not added to backups or Sheets, and are deleted after 30 days. On Android you can let Saku read notifications from the bank and e-wallet apps you choose. Saku checks the app before reading any content, keeps only the amount, money direction, balance and merchant name with account and reference numbers removed, encrypts them on your phone, and deletes them after seven days, when you sign out, or when the account is deleted. Notification text is never uploaded or synced; only transactions you add join your records.</p>
 <h2>How long we keep data</h2>
 <ul>
 <li>Records and profile are kept while your account is active.</li>

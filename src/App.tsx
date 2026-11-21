@@ -2411,7 +2411,7 @@ function SettingsView({
         </div>
       </section>
       <AppUpdateSettings />
-      {notificationCaptureSupported() && <NotificationAccess data={data} notify={notify} />}
+      {notificationCaptureSupported() && <NotificationAccess data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} notify={notify} />}
       {appLockSupported() && <AppLockSection settings={appLock} onChange={onAppLockChange} />}
       {remindersSupported() && <ReminderSection settings={reminder} onChange={onReminderChange} notify={notify} />}
       <section>

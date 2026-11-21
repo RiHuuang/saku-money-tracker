@@ -102,9 +102,14 @@ async function operation<T>(mode: IDBTransactionMode, run: (store: IDBObjectStor
 }
 export const putImportDraft = (draft: ImportDraft) => operation<void>("readwrite", (store, done) => { store.put(draft); done(); });
 export const deleteImportDraft = (id: string) => operation<void>("readwrite", (store, done) => { store.delete(id); done(); });
+// Original statement files are kept on the phone for 30 days (master plan 1B, privacy notice), then the draft
+// that holds them is deleted. Rows already added to the ledger are not affected.
+export const DRAFT_FILE_DAYS = 30;
+export const draftExpired = (draft: Pick<ImportDraft, "createdAt">, now = Date.now()) => now - draft.createdAt > DRAFT_FILE_DAYS * 86_400_000;
 export async function listImportDrafts(owner: string): Promise<ImportDraft[]> {
   const all = await operation<ImportDraft[]>("readonly", (store, done) => { const request = store.getAll(); request.onsuccess = () => done(request.result as ImportDraft[]); });
-  return all.filter((draft) => draft.owner === owner).sort((a, b) => b.createdAt - a.createdAt);
+  for (const draft of all.filter((item) => draftExpired(item))) await deleteImportDraft(draft.id).catch(() => { /* Retried on the next read. */ });
+  return all.filter((draft) => draft.owner === owner && !draftExpired(draft)).sort((a, b) => b.createdAt - a.createdAt);
 }
 export async function deleteOwnerImportDrafts(owner: string) {
   for (const draft of await listImportDrafts(owner)) await deleteImportDraft(draft.id);
