@@ -40,13 +40,10 @@ const controls = [...document.querySelectorAll('[data-select-step]')];
 const stageCounter = document.querySelector('.stage-counter');
 const stageProgress = document.querySelector('.stage-progress span');
 const stageVisual = document.querySelector('.stage-visual');
-const stageWord = document.querySelector('.stage-word');
-const stageWords = ['CATAT', 'ATUR', 'PAHAMI'];
 let activeStep = -1;
 
 function selectStep(index) {
   if (index === activeStep) return;
-  const previousStep = activeStep;
   activeStep = index;
   steps.forEach((step, i) => step.classList.toggle('is-active', i === index));
   screens.forEach((screen, i) => {
@@ -58,13 +55,6 @@ function selectStep(index) {
   stageCounter.textContent = String(index + 1).padStart(2, '0') + ' / 03';
   stageProgress.style.transform = 'scaleX(' + ((index + 1) / steps.length) + ')';
   stageVisual.dataset.phase = String(index);
-  stageWord.textContent = stageWords[index];
-  if (!reducedMotion.matches && previousStep >= 0) {
-    stageWord.animate([
-      { opacity: 0, transform: 'translateY(18px)' },
-      { opacity: 1, transform: 'translateY(0)' }
-    ], { duration: 550, easing: 'cubic-bezier(.16,1,.3,1)' });
-  }
 }
 
 controls.forEach((button, index) => button.addEventListener('click', () => {
@@ -144,3 +134,18 @@ function configureReveals() {
 }
 configureReveals();
 reducedMotion.addEventListener('change', configureReveals);
+
+// Hero: the sample amount counts up once, in tabular figures so nothing shifts. Still with reduced motion.
+const heroAmount = document.querySelector('[data-count-to]');
+if (heroAmount && !reducedMotion.matches) {
+  const target = Number(heroAmount.dataset.countTo), began = performance.now(), duration = 700;
+  const format = value => 'Rp' + value.toLocaleString('id-ID');
+  heroAmount.textContent = format(0);
+  const tick = now => {
+    const progress = Math.min(1, (now - began - 450) / duration);
+    if (progress > 0) heroAmount.textContent = format(Math.round(target * (1 - Math.pow(1 - progress, 3)) / 500) * 500);
+    if (progress < 1) requestAnimationFrame(tick);
+    else heroAmount.textContent = format(target);
+  };
+  requestAnimationFrame(tick);
+}

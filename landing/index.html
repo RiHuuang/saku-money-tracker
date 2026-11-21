@@ -63,7 +63,7 @@
     <section class="hero shell" aria-labelledby="hero-title">
       <div class="hero-copy">
         <p class="eyebrow hero-enter"><span class="eyebrow-line"></span> Uang sehari-hari, lebih jelas</p>
-        <h1 id="hero-title" class="hero-enter">Tahu ke mana <em>uangmu</em> pergi.</h1>
+        <h1 id="hero-title" class="hero-title"><span class="word">Tahu</span> <span class="word">ke</span> <span class="word">mana</span> <em class="word" id="hero-uangmu">uangmu</em> <span class="word">pergi.</span></h1>
         <p class="hero-lead hero-enter">Dari satu transaksi sampai pola sebulan: catat, bagi ke kantong, lalu lihat gambaran yang sebenarnya.</p>
         <div class="hero-actions hero-enter">
           <a class="button button-primary" href="https://app.sakumoney.my.id/download/saku.apk" download="saku.apk">Unduh untuk Android <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a>
@@ -72,18 +72,15 @@
         <p class="hero-note hero-enter">Mulai tanpa menghubungkan rekening bank.</p>
       </div>
       <div class="hero-art" aria-label="Pratinjau beranda Saku dengan data contoh">
-        <div class="art-grid" aria-hidden="true"></div>
-        <div class="art-index" aria-hidden="true">DATA CONTOH <span>01 / 03</span></div>
+        <svg class="coin-trail" viewBox="0 0 260 220" aria-hidden="true" focusable="false"><path class="trail" d="M-40 40 C 40 10, 90 120, 150 150 S 230 190, 250 210" /><g class="coin"><path d="M54,32A32,32 0 1 1 118,32A32,32 0 1 1 54,32Z" transform="translate(-40 24) scale(.32)" /></g></svg>
         <figure class="hero-device">
           <div class="device-frame">
             <picture><source type="image/avif" srcset="/assets/home-light.avif"><source type="image/webp" srcset="/assets/home-light.webp"><img class="theme-image light-image" src="/assets/home-light.png" width="390" height="844" alt="Beranda Saku dengan saldo tercatat, uang masuk, dan pengeluaran menggunakan data contoh" fetchpriority="high"></picture>
-            <picture><source type="image/avif" srcset="/assets/home-dark.avif"><source type="image/webp" srcset="/assets/home-dark.webp"><img class="theme-image dark-image" src="/assets/home-dark.png" width="390" height="844" alt="" aria-hidden="true" fetchpriority="high"></picture>
+            <picture><source type="image/avif" srcset="/assets/home-dark.avif"><source type="image/webp" srcset="/assets/home-dark.webp"><img class="theme-image dark-image" src="/assets/home-dark.png" width="390" height="844" alt="" aria-hidden="true" fetchpriority="low" loading="lazy"></picture>
           </div>
           <figcaption>Tampilan aplikasi · data contoh</figcaption>
         </figure>
-        <div class="hero-ticket ticket-one" aria-hidden="true"><span>01 / CATAT</span><strong>Kopi sore</strong><b>Rp32.000</b></div>
-        <div class="hero-ticket ticket-two" aria-hidden="true"><span>02 / PAHAMI</span><strong>Catatan jadi gambaran.</strong><svg class="icon"><use href="#i-arrow"/></svg></div>
-        <div class="art-baseline" aria-hidden="true"><span>CATAT</span><span>ATUR</span><span>PAHAMI</span></div>
+        <p class="hero-amount" aria-hidden="true"><span>Kopi sore</span><b data-count-to="32000">Rp32.000</b></p>
       </div>
       <a class="hero-next" href="#cara-kerja">Lihat cara kerjanya <span aria-hidden="true">↓</span></a>
     </section>
@@ -92,7 +89,6 @@
       <div class="shell statement-inner">
         <span class="statement-number">01 — 03</span>
         <p>Uangmu bergerak setiap hari.<br><strong>Sekarang ceritanya bisa kamu lihat.</strong></p>
-        <span class="statement-mark" aria-hidden="true">s.</span>
       </div>
     </section>
 
@@ -130,7 +126,6 @@
           <div class="stage-meta"><span>DI DALAM SAKU</span><span class="stage-counter">01 / 03</span></div>
           <div class="stage-visual" data-phase="0">
             <div class="stage-halo" aria-hidden="true"></div>
-            <span class="stage-word" aria-hidden="true">CATAT</span>
             <div class="stage-device device-frame">
               <div class="screen-pair is-active" data-screen="0"><picture><source type="image/avif" srcset="/assets/activity-light.avif"><source type="image/webp" srcset="/assets/activity-light.webp"><img class="theme-image light-image" src="/assets/activity-light.png" width="390" height="844" loading="lazy" alt="Aktivitas Saku dengan data contoh"></picture><picture><source type="image/avif" srcset="/assets/activity-dark.avif"><source type="image/webp" srcset="/assets/activity-dark.webp"><img class="theme-image dark-image" src="/assets/activity-dark.png" width="390" height="844" loading="lazy" alt="" aria-hidden="true"></picture></div>
               <div class="screen-pair" data-screen="1" aria-hidden="true"><picture><source type="image/avif" srcset="/assets/pockets-light.avif"><source type="image/webp" srcset="/assets/pockets-light.webp"><img class="theme-image light-image" src="/assets/pockets-light.png" width="390" height="844" loading="lazy" alt="Kantong Saku dengan data contoh"></picture><picture><source type="image/avif" srcset="/assets/pockets-dark.avif"><source type="image/webp" srcset="/assets/pockets-dark.webp"><img class="theme-image dark-image" src="/assets/pockets-dark.png" width="390" height="844" loading="lazy" alt="" aria-hidden="true"></picture></div>
@@ -154,8 +149,8 @@
     <section class="more shell" id="fitur-lain" aria-labelledby="more-title">
       <div class="more-heading"><p class="eyebrow">Saat hidup tak selalu rapi</p><h2 id="more-title">Ada ruang untuk <em>lebih dari hari ini.</em></h2></div>
       <div class="feature-list">
-        <article class="feature-row"><span class="feature-number">04 / CATCH UP</span><div><h3>Tertinggal mencatat? Mulai dari mutasi.</h3><p>Unggah screenshot atau PDF, periksa hasil dan kemungkinan duplikat, lalu pilih transaksi yang ingin disimpan.</p><small>Perlu login, internet, dan persetujuan sebelum pemrosesan AI. Kamu tetap memeriksa hasilnya.</small></div><span class="feature-glyph" aria-hidden="true">↗</span></article>
-        <article class="feature-row"><span class="feature-number">05 / PLANS</span><div><h3>Rencana tetap terlihat.</h3><p>Tinjau tagihan rutin, cicilan, dan saldo kartu kredit. Catat pembayaran setelah benar-benar dilakukan.</p></div><span class="feature-glyph" aria-hidden="true">↗</span></article>
+        <article class="feature-row"><span class="feature-number">04 / SUSUL CATATAN</span><div><h3>Tertinggal mencatat? Mulai dari mutasi.</h3><p>Unggah screenshot atau PDF, periksa hasil dan kemungkinan duplikat, lalu pilih transaksi yang ingin disimpan.</p><small>Perlu login, internet, dan persetujuan sebelum pemrosesan AI. Kamu tetap memeriksa hasilnya.</small></div><span class="feature-glyph" aria-hidden="true">↗</span></article>
+        <article class="feature-row"><span class="feature-number">05 / RENCANA</span><div><h3>Rencana tetap terlihat.</h3><p>Tinjau tagihan rutin, cicilan, dan saldo kartu kredit. Catat pembayaran setelah benar-benar dilakukan.</p></div><span class="feature-glyph" aria-hidden="true">↗</span></article>
         <article class="feature-row"><span class="feature-number">06 / WIDGET</span><div><h3>Catat lebih dekat dari layar utama.</h3><p>Di Android, buka pencatatan cepat atau transaksi favorit langsung dari widget.</p></div><span class="feature-glyph" aria-hidden="true">↗</span></article>
       </div>
     </section>
@@ -183,7 +178,7 @@
       </div>
     </section>
 
-    <section class="closing" id="mulai" aria-labelledby="closing-title"><div class="shell closing-inner"><p class="eyebrow">Mulai dari yang kamu catat hari ini</p><h2 id="closing-title">Beri uangmu <em>gambaran yang lebih jelas.</em></h2><div class="closing-actions"><a class="button button-inverse" href="https://app.sakumoney.my.id/download/saku.apk" download="saku.apk">Unduh untuk Android <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a><a class="text-link" href="https://app.sakumoney.my.id/">Buka aplikasi web <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><p>Masuk dengan Google untuk mulai memakai Saku. <a href="/install-android.html">Panduan pemasangan</a></p><span class="closing-orbit" aria-hidden="true">s.</span></div></section>
+    <section class="closing" id="mulai" aria-labelledby="closing-title"><div class="shell closing-inner"><p class="eyebrow">Mulai dari yang kamu catat hari ini</p><h2 id="closing-title">Beri uangmu <em>gambaran yang lebih jelas.</em></h2><div class="closing-actions"><a class="button button-inverse" href="https://app.sakumoney.my.id/download/saku.apk" download="saku.apk">Unduh untuk Android <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a><a class="text-link" href="https://app.sakumoney.my.id/">Buka aplikasi web <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><p>Masuk dengan Google untuk mulai memakai Saku. <a href="/install-android.html">Panduan pemasangan</a></p></div></section>
   </main>
   <footer class="footer shell"><div><a class="wordmark" href="/" aria-label="Saku, halaman utama"><img src="/assets/favicon.svg" alt="" width="32" height="32">saku<span>.</span></a><p>Ruang untuk uang sehari-hari.</p></div><div class="footer-links"><a href="https://app.sakumoney.my.id/privacy">Privasi</a><a href="https://app.sakumoney.my.id/terms">Ketentuan</a><a href="https://app.sakumoney.my.id/account-deletion">Hapus akun</a><a href="mailto:richardhuang.email@gmail.com">Kontak</a></div><span class="copyright">© <span id="year">2026</span> Saku</span></footer>
   <script src="/script.js?v=20261026a" defer></script>
