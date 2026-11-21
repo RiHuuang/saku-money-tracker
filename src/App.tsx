@@ -9,6 +9,7 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  BellRing,
   Camera,
   Check,
   CheckCheck,
@@ -84,6 +85,7 @@ import {
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { listImportDrafts } from "./importDraft";
 import { notificationCapture, notificationCaptureSupported } from "./notificationCapture";
+import { inboxReadiness, inboxRows } from "./notificationRows";
 import NotificationAccess from "./NotificationAccess";
 import { importRowsWaiting } from "./importTransactions";
 import { AccountEditor, AccountsOverview, accountColor } from "./AccountsOverview";
@@ -204,6 +206,8 @@ export default function App() {
     [catchUpDismissed, setCatchUpDismissed] = useState(() => { try { return localStorage.getItem(catchUpDismissedKey) || ""; } catch { return ""; } }),
     [importWaiting, setImportWaiting] = useState(0), [draftsWaiting, setDraftsWaiting] = useState(0),
     [waitingRecount, setWaitingRecount] = useState(0),
+    // Captured rows for the Home card (master plan 4.1): null until counted, so the card never pops in and out.
+    [inboxSummary, setInboxSummary] = useState<{ ready: number; look: number } | null>(null), [autoAdd, setAutoAdd] = useState(false),
     // Native builds start covered until the lock setting is read, so no amount can flash before authentication.
     [lockState, setLockState] = useState<"checking" | "covered" | "locked" | "open">(appLockSupported() ? "checking" : "open"),
     [appLock, setAppLock] = useState<AppLockSettings>(defaultAppLock);
@@ -455,7 +459,11 @@ export default function App() {
     let live = true;
     void Promise.all([
       cloud?.signedIn && cloud.user?.id ? listImportDrafts(cloud.user.id).then((drafts) => importRowsWaiting(drafts, data)).catch(() => 0) : 0,
-      notificationCaptureSupported() ? notificationCapture.inbox().then((inbox) => inbox.items.length).catch(() => 0) : 0,
+      notificationCaptureSupported() ? notificationCapture.inbox().then((inbox) => {
+        const rows = inboxRows(inbox.items, data), ready = inboxReadiness(rows, data).ready;
+        if (live) setInboxSummary({ ready: ready.length, look: rows.filter((row) => !ready.includes(row) && row.decision !== "skip").length });
+        return inbox.items.length;
+      }).catch(() => 0) : 0,
     ]).then(([drafts, inbox]) => { if (live) { setImportWaiting(drafts + inbox); setDraftsWaiting(drafts); } });
     return () => { live = false; };
   }, [data, view, cloud?.signedIn, cloud?.user?.id, waitingRecount]);
@@ -883,7 +891,8 @@ export default function App() {
           </section>}
           {view === "overview" && (
             <>
-              {showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { go("check"); setCheckTab("catchup"); }}>{t("importScreenshot")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
+              {inboxSummary && inboxSummary.ready + inboxSummary.look > 0 ? <section className="catch-up-card inbox-card" aria-label={t("notificationsTitle")}><BellRing size={20} /><div><strong>{t("homeInboxSummary", { ready: inboxSummary.ready, look: inboxSummary.look })}</strong><div className="catch-up-actions">{inboxSummary.ready > 0 && <button className="button primary" onClick={() => { setAutoAdd(true); go("check"); setCheckTab("notifications"); }}>{t("addCount", { count: inboxSummary.ready })}</button>}<button className="button secondary" onClick={() => { go("check"); setCheckTab("notifications"); }}>{t("reviewRows")}</button></div></div></section>
+              : showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { go("check"); setCheckTab("catchup"); }}>{t("importScreenshot")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
                 <div className="balance-panel balance-action" role="button" tabIndex={0} aria-label={t("openMoneyByAccount")} onClick={() => setAccountsOpen(true)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setAccountsOpen(true); } }}>
                   <div className="balance-top">
@@ -1222,7 +1231,7 @@ export default function App() {
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">{t("loadingMonthlyCheck")}</p>}>
               <div className="check-tabs" role="tablist" aria-label={t("importMode")}><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>
-              {checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">{t("loadingNotifications")}</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} onSettings={() => go("settings")} getCurrentData={() => latest.current.cloud?.user?.id === cloud?.user?.id ? latest.current.data : null} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null}
+              {checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">{t("loadingNotifications")}</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} autoAdd={autoAdd} onAutoAdded={() => setAutoAdd(false)} onSettings={() => go("settings")} getCurrentData={() => latest.current.cloud?.user?.id === cloud?.user?.id ? latest.current.data : null} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null}
               <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div>
             </Suspense>
           )}

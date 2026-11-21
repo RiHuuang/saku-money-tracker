@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, BellRing, Check, Info, X } from "lucide-react";
 import { money, timeOfDay, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
@@ -18,9 +18,11 @@ import { localeTag, t } from "./i18n";
 
 const friendlyDate = (date: string) => { const value = new Date(`${date}T12:00:00`); return `${value.toLocaleDateString(localeTag(), { weekday: "short" })}, ${value.toLocaleDateString(localeTag(), { day: "numeric", month: "short" })}`; };
 
-export default function NotificationReview({ data, userId, commit, getCurrentData, busy, notify, onCount, onSettings }: {
+export default function NotificationReview({ data, userId, commit, getCurrentData, busy, notify, onCount, onSettings, autoAdd = false, onAutoAdded }: {
   data: Data; userId?: string; busy: boolean; notify: (message: string | { message: string; action: { label: string; run: () => void } }) => void; onCount: (count: number) => void; onSettings: () => void; getCurrentData: () => Data | null;
   commit: (data: Data, message: string) => Promise<boolean>;
+  // Set by the Home card's "Add N": the ready rows are added once loaded, with the usual Undo.
+  autoAdd?: boolean; onAutoAdded?: () => void;
 }) {
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [edits, setEdits] = useState<Record<string, Partial<NotificationRow>>>({});
@@ -106,6 +108,13 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
       if (next !== current) await commit(next, t("merchantNamesTidied"));
     } catch { /* Raw names stay usable; tidying is a convenience. */ }
   }
+  const autoAdded = useRef(false);
+  useEffect(() => {
+    if (!autoAdd || autoAdded.current || items === null || busy || saving) return;
+    autoAdded.current = true;
+    onAutoAdded?.();
+    if (ready.length) void save();
+  });
   async function save() {
     if ((!ready.length && !skipped.length) || busy || saving) return;
     if (!ready.length) { setSaving(true); try { await remove(skippedIds); } catch { notify(t("notificationAddError")); } finally { setSaving(false); } return; }

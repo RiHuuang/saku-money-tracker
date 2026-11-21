@@ -327,4 +327,6 @@ export const id = {
   about: "Tentang",
   accountsCount: "{count} akun",
   yourDataSummary: "Cadangan · Pulihkan · Hapus",
+  homeInboxSummary: "{ready} siap · {look} perlu dicek",
+  reviewRows: "Tinjau",
 } satisfies Record<keyof typeof en, string>;

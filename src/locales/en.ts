@@ -325,4 +325,6 @@ export const en = {
   about: "About",
   accountsCount: "{count} accounts",
   yourDataSummary: "Backup · Restore · Delete",
+  homeInboxSummary: "{ready} ready · {look} need a look",
+  reviewRows: "Review",
 } as const;
