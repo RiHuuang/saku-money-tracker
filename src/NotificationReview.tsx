@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, BellRing, Check, Info, X } from "lucide-react";
-import { money, type Data, type Transaction } from "./domain";
+import { money, timeOfDay, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowFirstDueMonth, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
 import { learnNotificationPocket } from "./merchants";
@@ -118,7 +118,8 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
         const account = accountFor(row);
         const twin = row.pairedWith ? rows.find((other) => other.id === row.pairedWith) : row.activity === "transfer" ? twinFor(row) : undefined;
         const created = importedTransactions(row, account, "notification", data, twin?.id, twin?.date);
-        additions.push(...created.map((transaction) => ({ ...transaction, note: `${importRowName(row) !== row.name.trim() ? `${row.name.trim()} · ` : ""}${t("notificationSource", { app: row.appName })}` })));
+        // The time is the notification's first post time, not when the row is added.
+        additions.push(...created.map((transaction) => ({ ...transaction, time: timeOfDay(transaction.type === row.direction || !twin ? row.occurredAt : twin.occurredAt), note: `${importRowName(row) !== row.name.trim() ? `${row.name.trim()} · ` : ""}${t("notificationSource", { app: row.appName })}` })));
         if (row.direction === "expense" && row.activity === "purchase") merchantRules = learnNotificationPocket({ ...data, merchantRules }, row.name, row.pocketId);
         done.add(row.id);
         if (twin) done.add(twin.id);

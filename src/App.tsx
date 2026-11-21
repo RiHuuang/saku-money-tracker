@@ -79,6 +79,8 @@ import {
   pocketHasReferences,
   applyPocketPlan,
   rollbackPocketPlan,
+  newestFirst,
+  timeOfDay,
 } from "./domain";
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { listImportDrafts } from "./importDraft";
@@ -675,9 +677,7 @@ export default function App() {
       </div>
     );
   const stats = summary(data, month),
-    sorted = [...stats.transactions].sort(
-      (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
-    );
+    sorted = newestFirst(stats.transactions);
   const topPocket = [...stats.pockets].sort((a, b) => b.spent - a.spent)[0];
   const weekStart = new Date();
   weekStart.setHours(0, 0, 0, 0);
@@ -1071,7 +1071,7 @@ export default function App() {
             <div className="pocket-activity-summary"><button type="button" onClick={() => setEdit({ type: "pocket", value: selectedPocket, focusBudget: true })}><span>{t("budget")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0)}</strong></button><div><span>{t("spent2")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)}</strong></div><div><span>{(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) < (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0) ? t("overBudget") : t("left")}</span><strong>{money(Math.abs((stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) - (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)))}</strong></div></div>
             <div className="section-heading"><h2>{t("history")}</h2><button className="text-button" onClick={() => setPocketAllHistory((value) => !value)}>{pocketAllHistory ? t("selectedMonth") : t("allHistory")}</button></div>
             {data.pocketTransfers.filter((move) => (move.fromPocketId === selectedPocket.id || move.toPocketId === selectedPocket.id) && (pocketAllHistory || move.month === month)).map((move) => <div className="pocket-move" key={move.id}><span>{move.toPocketId === selectedPocket.id ? t("budgetMovedIn") : t("budgetMovedOut")} · {monthLabel(move.month, true)}</span><strong>{move.toPocketId === selectedPocket.id ? "+" : "−"}{money(move.amount)}</strong></div>)}
-            <TransactionList transactions={data.transactions.filter((t) => t.pocketId === selectedPocket.id && (pocketAllHistory || t.date.startsWith(month))).sort((a, b) => b.date.localeCompare(a.date))} pockets={data.pockets} onEdit={(value) => setEdit({ type: "transaction", value })} groupDates />
+            <TransactionList transactions={newestFirst(data.transactions.filter((t) => t.pocketId === selectedPocket.id && (pocketAllHistory || t.date.startsWith(month))))} pockets={data.pockets} onEdit={(value) => setEdit({ type: "transaction", value })} groupDates />
           </section>}
           {view === "pockets" && !selectedPocket && (
             <>
@@ -1482,7 +1482,7 @@ function AccountActivity({ data, account, month, onMonthChange, onBack, onRename
   const transactions = data.transactions.filter((transaction) => transaction.account === account && transaction.kind !== "card_purchase");
   const monthRows = transactions.filter((transaction) => transaction.date.startsWith(month));
   const amount = (type: Transaction["type"]) => monthRows.filter((transaction) => transaction.type === type).reduce((total, transaction) => total + transaction.amount, 0);
-  const shown = (allHistory ? transactions : monthRows).sort((a, b) => b.date.localeCompare(a.date));
+  const shown = newestFirst(allHistory ? transactions : monthRows);
   return <section className="account-activity">
     <div className="page-heading"><div><button className="back-to-more" onClick={onBack}><ChevronLeft size={17} />{t("back")}</button><p>{t("accountActivity")}</p><h1>{account}<button type="button" className="pocket-heading-edit" aria-label={t("editAccountNamed", { account })} onClick={onRename}><PencilLine size={17} /></button></h1></div>
       <div className="heading-actions"><div className="month-picker"><IconButton label={t("previousMonth")} onClick={() => onMonthChange(shiftMonth(month, -1))}><ChevronLeft size={16} /></IconButton><label><CalendarDays size={16} /><span>{monthLabel(month, true)}</span><input aria-label={t("selectedMonth")} type="month" value={month} onChange={(event) => { if (/^\d{4}-\d{2}$/.test(event.target.value)) onMonthChange(event.target.value); }} /></label><IconButton label={t("nextMonth")} onClick={() => onMonthChange(shiftMonth(month, 1))}><ChevronRight size={16} /></IconButton></div></div>
@@ -1521,7 +1521,7 @@ function Transactions({
     [type, setType] = useState("all"),
     [pocket, setPocket] = useState("all"),
     [account, setAccount] = useState("all");
-  const rows = data.transactions
+  const rows = newestFirst(data.transactions
     .filter(
       (t) =>
         t.date.startsWith(month) &&
@@ -1531,8 +1531,7 @@ function Transactions({
         `${t.name} ${t.note} ${t.account}`
           .toLowerCase()
           .includes(query.toLowerCase()),
-    )
-    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+    ));
   return (
     <>
       <div className="transaction-tools">
@@ -1825,6 +1824,8 @@ function TransactionEditor({
       amount: Number(amount),
       type,
       date,
+      // Keeps a recorded time while the date is unchanged; a new entry for today is stamped now.
+      ...(transaction?.time && transaction.date === date ? { time: transaction.time } : !transaction && date === today() ? { time: timeOfDay(Date.now()) } : {}),
       pocketId: type === "income" || transaction?.kind === "card_payment" ? "" : pocket,
       account: type === "expense" && card && !special ? card.name : account,
       note: note.trim(),

@@ -16,6 +16,8 @@ export type Transaction = {
   amount: number;
   type: "income" | "expense";
   date: string;
+  // Local time of day, "HH:MM". Captured rows keep the notification's first post time; widget entries stamp now.
+  time?: string;
   pocketId: string;
   account: string;
   note: string;
@@ -190,6 +192,15 @@ export function shiftMonth(month: string, delta: number) {
   const d = new Date(`${month}-01T12:00:00`);
   d.setMonth(d.getMonth() + delta);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+export const validTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+export const timeOfDay = (at: Date | number) => { const date = new Date(at); return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`; };
+// Newest first: by date, then time of day, then the order rows were added (later is newer). Rows without a time
+// sit below timed rows of the same day.
+export function newestFirst<T extends Pick<Transaction, "date" | "time">>(list: readonly T[]): T[] {
+  return list.map((item, index) => ({ item, index }))
+    .sort((a, b) => b.item.date.localeCompare(a.item.date) || (b.item.time || "").localeCompare(a.item.time || "") || b.index - a.index)
+    .map(({ item }) => item);
 }
 export const validDate = (s: string) =>
   /^\d{4}-\d{2}-\d{2}$/.test(s) &&
@@ -596,7 +607,8 @@ export function validateData(input: unknown): Data {
       (t.occurrenceMonth !== undefined && (!t.recurringRuleId || !validDate(`${t.occurrenceMonth}-01`))) ||
       typeof t.note !== "string" ||
       t.note.length > 500 ||
-      (t.verified !== undefined && typeof t.verified !== "boolean")
+      (t.verified !== undefined && typeof t.verified !== "boolean") ||
+      (t.time !== undefined && (typeof t.time !== "string" || !validTime(t.time)))
     )
       throw new Error("The backup contains an invalid transaction.");
     txIds.add(t.id);

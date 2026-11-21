@@ -422,7 +422,7 @@ export function TransactionList({
               </strong>
               <span>
                 {t.kind === "balance_adjustment" ? t.account : <>{t.kind === "account_transfer" ? translate("accountTransfer") : t.kind === "opening_balance" ? translate("openingBalance") : t.kind === "card_payment" ? translate("cardPayment") : t.kind === "reimbursement" ? translate("repaidByFriend") : t.type === "income" ? translate("income") : p?.name || translate("unassigned")}{" "}
-                <span className="dot">·</span> {t.account}</>}
+                <span className="dot">·</span> {t.account}</>}{t.time && <> <span className="dot">·</span> <time className="transaction-time">{t.time}</time></>}
               </span>
             </span>
             <span className="transaction-date">
