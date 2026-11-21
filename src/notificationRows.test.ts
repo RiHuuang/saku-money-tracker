@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyData } from "./domain";
 import { importedTransactions, importRowAccount, importRowName, importRowReady, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
-import { learnMerchant } from "./merchants";
+import { learnMerchant, learnNotificationPocket } from "./merchants";
 import type { InboxItem } from "./notificationCapture";
 import { inboxRows } from "./notificationRows";
 
@@ -17,7 +17,7 @@ const item = (patch: Partial<InboxItem> = {}): InboxItem => ({ id: "n1", package
 
 test("a captured BCA purchase arrives ready with its account, remembered name and date", () => {
   const data = ledger();
-  data.merchantRules = learnMerchant(data, "Alfamart", { name: "Alfamart", pocketId: "groceries" });
+  data.merchantRules = learnMerchant(data, "Alfamart", { name: "Alfamart", pocketId: "groceries" }, "2026-10-26T10:00:00Z", true);
   const [row] = inboxRows([item()], data);
   assert.equal(row.account, "BCA");
   assert.equal(importRowName(row), "Alfamart");
@@ -27,6 +27,26 @@ test("a captured BCA purchase arrives ready with its account, remembered name an
   assert.equal(importRowReady(row, importRowAccount(row, undefined, data), data), true);
   const saved = importedTransactions(row, "BCA", "notification", data);
   assert.deepEqual(saved.map((t) => [t.name, t.amount, t.account, t.date, t.pocketId]), [["Alfamart", 48500, "BCA", "2026-10-26", "groceries"]]);
+});
+
+test("renaming one notification does not rename the next, while its pocket is remembered", () => {
+  const data = ledger();
+  data.merchantRules = learnNotificationPocket(data, "kategori Transfer Rekening", "groceries");
+  const [row] = inboxRows([item({ rawMerchant: "kategori Transfer Rekening" })], data);
+  assert.equal(row.name, "kategori Transfer Rekening");
+  assert.equal(row.cleanName, undefined);
+  assert.equal(row.pocketId, "groceries");
+  data.merchantRules = learnMerchant(data, "kategori Transfer Rekening", { name: "Rent", pocketId: "groceries" });
+  assert.equal(inboxRows([item({ rawMerchant: "kategori Transfer Rekening" })], data)[0].cleanName, undefined);
+});
+
+test("automatically tidied notification names keep their marker and pocket", () => {
+  const data = ledger();
+  data.merchantRules = learnNotificationPocket(data, "QRIS ALFAMART 0123", "groceries");
+  data.merchantRules = learnMerchant(data, "QRIS ALFAMART 0123", { name: "Alfamart", pocketId: "groceries" }, "2026-10-26T10:00:00Z", true);
+  const [row] = inboxRows([item()], data);
+  assert.equal(row.cleanName, "Alfamart");
+  assert.equal(row.pocketId, "groceries");
 });
 
 test("a manual entry for the same payment is flagged as a possible duplicate", () => {

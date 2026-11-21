@@ -1,7 +1,7 @@
 import type { Data } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { suggestImportDecision } from "./importTransactions";
-import { suggestMerchant } from "./merchants";
+import { merchantKey, suggestMerchant } from "./merchants";
 import type { InboxItem } from "./notificationCapture";
 
 export const captureAppNames: Record<string, string> = {
@@ -24,7 +24,7 @@ export function inboxRows(items: readonly InboxItem[], data: Data): Notification
     const remembered = counterparty ? null : suggestMerchant(data, item.rawMerchant);
     const row = {
       id: item.id, sourceId: item.packageName, account, page: 0, date: localDate(item.occurredAt),
-      name: item.rawMerchant || `${appName} ${item.direction === "income" ? "money in" : "payment"}`, cleanName: remembered?.name,
+      name: item.rawMerchant || `${appName} ${item.direction === "income" ? "money in" : "payment"}`, cleanName: data.merchantRules.find((rule) => rule.key === merchantKey(item.rawMerchant))?.automaticName ? remembered?.name : undefined,
       amount: item.amount, direction: item.direction, activity: counterparty ? "topup" as const : item.direction === "income" ? "income" as const : "purchase" as const,
       pocketId: remembered?.pocketId || "", counterparty, occurredAt: item.occurredAt, appName, balance: item.balance,
     };

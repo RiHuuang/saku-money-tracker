@@ -46,4 +46,12 @@ class NotificationParsersTest {
         assertNull(NotificationParsers.parse("com.bca", "BCA", "Transfer Rp10.000 ke Ani dan Rp20.000 ke Budi", postedAt))
         assertNull(NotificationParsers.parse("com.bca", "BCA", "Transfer Rp25,000 ke Ani", postedAt))
     }
+
+    @Test
+    fun indonesianCategoryIsNotMistakenForTheMerchant() {
+        val named = NotificationParsers.parse("com.bca.mybca.omni.android", "myBCA", "Transfer Rp25.000 ke Budi di kategori Transfer Rekening", postedAt)
+        assertEquals("Budi", named?.rawMerchant)
+        val categoryOnly = NotificationParsers.parse("com.bca.mybca.omni.android", "myBCA", "Transfer Rp25.000 di kategori Transfer Rekening", postedAt)
+        assertEquals("Transfer Rekening", categoryOnly?.rawMerchant)
+    }
 }

@@ -1311,6 +1311,7 @@ main {
   opacity: .78;
   margin-left: 12px;
 }
+.toast.in-sheet { left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(420px, calc(100% - 32px)); }
 .toast-action { font-weight: 700; text-decoration: underline; opacity: 1; }
 .empty {
   text-align: center;
@@ -1612,7 +1613,16 @@ main {
   border-radius: 4px;
   padding: 10px;
 }
+.field-error { display: block; color: var(--danger); font-size: 12px; line-height: 1.4; }
 .balance-adjustment-form fieldset { display: grid; gap: 16px; }
+.balance-adjustment-form .field-error { color: var(--danger); font-size: 12px; line-height: 1.4; }
+.long-date-input { display: block; position: relative; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); }
+.long-date-input > span { display: flex; align-items: center; min-height: 44px; padding: 9px 14px; font-size: 14px; line-height: 1.4; }
+.long-date-input input, .field .long-date-input input, .catchup-field .long-date-input input { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 100%; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.long-date-input:focus-within { outline: 2px solid var(--teal); outline-offset: 2px; }
+.long-date-input:has(input:disabled) { opacity: .55; }
+.balance-adjustment-more summary { color: var(--teal); cursor: pointer; font-weight: 600; }
+.balance-adjustment-more .field { margin-top: 12px; }
 .balance-adjustment-overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

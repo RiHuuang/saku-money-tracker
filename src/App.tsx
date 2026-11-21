@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
@@ -65,6 +66,7 @@ import {
   daysAgo,
   uid,
   validAmount,
+  validDate,
   validateData,
   type Data,
   type Favorite,
@@ -94,6 +96,7 @@ import {
   FitMoney,
   IconButton,
   MoneyInput,
+  LongDateInput,
   ChoiceField,
   Modal,
   PocketCard,
@@ -112,11 +115,19 @@ const Plans = lazy(() => import("./Plans"));
 const CatchUpDays = lazy(() => import("./CatchUpDays"));
 const NotificationReview = lazy(() => import("./NotificationReview"));
 const learnsMerchant = (t: Transaction) => t.type === "expense" && (!t.kind || t.kind === "card_purchase");
+function SheetMessage({ children }: { children: ReactNode }) {
+  const [dialog, setDialog] = useState<HTMLDialogElement | null>(null);
+  useLayoutEffect(() => {
+    const open = document.querySelectorAll<HTMLDialogElement>("dialog[open]");
+    setDialog(open[open.length - 1] || null);
+  });
+  return dialog ? createPortal(children, dialog) : children;
+}
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
 import { loadLanguage, localeTag, saveLanguage, setActiveLanguage, t, t as translate, type LanguagePreference } from "./i18n";
-import { backDestination, moreViews, type View } from "./navigation";
+import { backDestination, moreViews, popSheet, pushSheet, type View } from "./navigation";
 import { AppUpdateSettings } from "./appUpdate";
 import { version as appVersion } from "../package.json";
 import {
@@ -178,7 +189,7 @@ export default function App() {
     [view, setView] = useState<View>("overview"),
     [month, setMonth] = useState(today().slice(0, 7)),
     [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
-    [edit, setEdit] = useState<Edit>(null),
+    [editStack, setEditStack] = useState<Exclude<Edit, null>[]>([]),
     [toast, setToast] = useState<string | { message: string; action: { label: string; run: () => void } }>(""),
     [busy, setBusy] = useState(false),
     [cloud, setCloud] = useState<CloudState | null>(null),
@@ -205,10 +216,13 @@ export default function App() {
   const [editingAccount, setEditingAccount] = useState("");
   const hold = useHold();
   setActiveLanguage(languagePreference);
-  const [previousView, setPreviousView] = useState<View>("overview");
+  const [viewHistory, setViewHistory] = useState<View[]>([]);
   const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
+  const [pocketReturnView, setPocketReturnView] = useState<View>("pockets");
   const [pocketAllHistory, setPocketAllHistory] = useState(false);
   const saving = useRef(false);
+  const edit = editStack.at(-1) ?? null;
+  const setEdit = (next: Edit) => setEditStack((stack) => next ? pushSheet(stack, next) : popSheet(stack));
   const widgetRevision = useRef(0);
   const pendingSync = useRef<Data | null>(null);
   const activeSync = useRef<Data | null>(null);
@@ -234,12 +248,14 @@ export default function App() {
     if (!reminderTap || !data) return;
     setReminderTap(null);
     setSelectedPocketId(null);
+    setViewHistory([]);
     if (reminderTap.kind === "card") { setView("plans"); return; }
     setView("overview");
     const days = catchUpGap(data, today());
     if (days.length) setCatchUpSheet({ days, index: 0 }); else setEdit({ type: "transaction" });
   }, [reminderTap, data]);
-  function openPocket(id: string) { go("pockets"); setSelectedPocketId(id); setPocketAllHistory(false); }
+  function openPocket(id: string) { setPocketReturnView(view); go("pockets"); setSelectedPocketId(id); setPocketAllHistory(false); }
+  function closePocket() { if (pocketReturnView === "pockets") setSelectedPocketId(null); else backView(); }
   function openTransaction(value: Transaction) {
     setEdit(value.kind === "account_transfer"
       ? { type: "account_transfer", value }
@@ -462,22 +478,21 @@ export default function App() {
       const stepper = document.querySelector("[data-back-step]");
       if (stepper) { stepper.dispatchEvent(new Event("saku-back")); return; }
       if (edit) setEdit(null);
-      else if (selectedPocketId) setSelectedPocketId(null);
+      else if (selectedPocketId) closePocket();
       else {
-        const destination = backDestination(view, previousView);
-        if (destination) setView(destination);
+        if (backDestination(view, viewHistory)) backView();
         else NativeApp.minimizeApp();
       }
     });
     return () => {
       void listener.then((h) => h.remove());
     };
-  }, [edit, view, previousView, selectedPocketId]);
+  }, [edit, view, viewHistory, selectedPocketId, pocketReturnView]);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const openQuickAdd = (url?: string) => {
-      if (url?.startsWith("saku://quick-add")) { setView("overview"); setEdit({ type: "transaction" }); }
-      if (url?.startsWith("saku://review")) { setView("check"); setCheckTab("notifications"); }
+      if (url?.startsWith("saku://quick-add")) { setViewHistory([]); setView("overview"); setEdit({ type: "transaction" }); }
+      if (url?.startsWith("saku://review")) { setViewHistory([]); setView("check"); setCheckTab("notifications"); }
     };
     void NativeApp.getLaunchUrl().then((result) => openQuickAdd(result?.url));
     const listener = NativeApp.addListener("appUrlOpen", (event) => openQuickAdd(event.url));
@@ -684,13 +699,21 @@ export default function App() {
     settings: [t("settingsIntro"), t("settings")],
   };
   const go = (v: View) => {
-    if (v === "more" && !moreViews.includes(view)) setPreviousView(view);
+    if (v !== view) setViewHistory((history) => [...history.slice(-11), view]);
     // Opening Catch up lands on what is actually waiting: captured notifications, unless a screenshot draft is open.
     if (v === "check" && view !== "check" && cloudImportEnabled && importWaiting > draftsWaiting && !draftsWaiting) setCheckTab("notifications");
     setSelectedPocketId(null);
     setView(v);
     window.scrollTo({ top: 0 });
   };
+  function backView() {
+    const destination = backDestination(view, viewHistory);
+    if (!destination) return;
+    setViewHistory((history) => popSheet(history));
+    setSelectedPocketId(null);
+    setView(destination);
+    window.scrollTo({ top: 0 });
+  }
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">{t("skipToContent")}</a>
@@ -790,8 +813,8 @@ export default function App() {
         <main id="main-content" tabIndex={-1}>
           <section className="page-heading">
             <div>
-              {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={() => go("more")}><ChevronLeft size={17} /> {t("more")}</button>}
-              {selectedPocket && view === "pockets" && <button className="back-to-more" onClick={() => setSelectedPocketId(null)}><ChevronLeft size={17} /> {t("allPockets")}</button>}
+              {moreViews.includes(view) && view !== "more" && <button className="back-to-more" onClick={backView}><ChevronLeft size={17} /> {t(viewHistory.at(-1) === "more" ? "more" : viewHistory.at(-1) === "overview" ? "home" : viewHistory.at(-1) === "pockets" ? "pockets" : "more")}</button>}
+              {selectedPocket && view === "pockets" && <button className="back-to-more" onClick={closePocket}><ChevronLeft size={17} /> {t(pocketReturnView === "pockets" ? "allPockets" : pocketReturnView === "insights" ? "insights" : "home")}</button>}
               <p>{selectedPocket && view === "pockets" ? t("pocketActivity") : titles[view][0]}</p>
               <h1>{selectedPocket && view === "pockets" ? selectedPocket.name : titles[view][1]}</h1>
             </div>
@@ -929,7 +952,7 @@ export default function App() {
                 </div>
               </section>
               <section className="account-balance-strip" aria-label={t("accountBalances")}>{stats.accounts.map((item) => <button type="button" className="account-balance-item" key={item.account} aria-label={t("accountCardLabel", { account: item.account, amount: money(item.balance) })} {...hold(() => setAccountsOpen(true), () => setEditingAccount(item.account))}><span className="account-balance-icon" style={{ color: accountColor(data, item.account) }}><Wallet size={16} /></span><span><small>{item.account}</small><strong>{money(item.balance)}</strong></span></button>)}</section>
-              {accountsOpen && <AccountsOverview data={data} monthTransactions={stats.transactions} onClose={() => setAccountsOpen(false)} onEdit={(account) => { setAccountsOpen(false); setEditingAccount(account); }} />}
+              {accountsOpen && <AccountsOverview data={data} monthTransactions={stats.transactions} onClose={() => setAccountsOpen(false)} onEdit={(account) => setEditingAccount(account)} />}
               {editingAccount && <AccountEditor data={data} account={editingAccount} busy={busy} onClose={() => setEditingAccount("")} onAdjust={(account) => setEdit({ type: "balance_adjustment", account })} onSave={async (next, message, renamed) => {
                 const ok = await commit(next, message);
                 // Notification capture remembers the Saku account by name, so a rename moves those links too.
@@ -938,7 +961,7 @@ export default function App() {
               }} />}
               <section className="daily-strip" aria-label={t("quickEntriesLabel")}>
                 <div className="daily-check"><span>{t("currentWeek")}</span><strong>{money(weekSpend)} {t("spent")}</strong><small>{weekTop?.amount ? t("largestPocket", { name: weekTop.name }) : t("noSpending")}</small><small>{money(currentAvailable)} {t("currentPlanAvailable")}</small></div>
-                <div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={`Remove ${f.name} shortcut`} aria-label={`Remove ${f.name} shortcut`} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, t("quickEntryRemoved"))}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
+<div className="quick-entries"><div className="section-heading"><h2>{t("quickAdd")}</h2><button className="text-button" onClick={() => setEdit({ type: "transaction" })}><Plus size={16} /> {t("new")}</button></div><div className="quick-entry-list">{data.favorites.map((f) => <div className="quick-entry" key={f.id}><button onClick={() => setEdit({ type: "transaction", favorite: f })}><Plus size={16} /><span>{f.name}</span><strong>{money(f.amount)}</strong></button><button className="quick-remove" title={t("removeShortcut", { name: f.name })} aria-label={t("removeShortcut", { name: f.name })} onClick={() => void commit({ ...data, favorites: data.favorites.filter((x) => x.id !== f.id) }, t("quickEntryRemoved"))}><X size={14} /></button></div>)}{!data.favorites.length && <span className="quick-empty">{t("quickEmpty")}</span>}</div></div>
               </section>
               <section className="pockets-section">
                 <div className="section-heading">
@@ -1078,9 +1101,7 @@ export default function App() {
               )}
               {overspent.length > 0 && (
                 <div className="inline-warning">
-                  {overspent.length}{" "}
-                  {overspent.length === 1 ? "pocket is" : "pockets are"} over
-                  budget. Review the highlighted balances below.
+                  {t(overspent.length === 1 ? "onePocketOverBudget" : "pocketsOverBudget", { count: overspent.length })}
                 </div>
               )}
               <div className="section-heading"><div><h2>{t("budgetAllocation")}</h2><p>{stats.unassigned ? t("unassignedWaiting", { amount: money(stats.unassigned) }) : t("moveWithoutCash")}</p></div><div className="section-actions"><button className="button secondary" onClick={() => setEdit({ type: "plan" })}><Sparkles size={16} />{t("planWithSaku")}</button><button className="button secondary" disabled={data.pockets.length < 2} onClick={() => setEdit({ type: "pocket_transfer" })}><ArrowRight size={16} />{t("moveBudget")}</button></div></div>
@@ -1450,14 +1471,14 @@ export default function App() {
         /></Suspense>
       )}
       {toast && (
-        <div className={`toast${view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket) ? " above-mobile-add" : ""}`} role="status">
+        <SheetMessage><div className={`toast${edit || accountsOpen || editingAccount ? " in-sheet" : view === "overview" || view === "transactions" || (view === "pockets" && selectedPocket) ? " above-mobile-add" : ""}`} role="status">
           <Check size={17} />
           {typeof toast === "string" ? toast : toast.message}
           {typeof toast !== "string" && <button type="button" className="toast-action" onClick={toast.action.run}>{toast.action.label}</button>}
           <button aria-label={t("dismissMessage")} onClick={() => setToast("")}>
             <X size={16} />
           </button>
-        </div>
+        </div></SheetMessage>
       )}
     </div>
   );
@@ -1586,20 +1607,39 @@ function BalanceAdjustmentEditor({
   const [target, setTarget] = useState(String(Math.max(0, currentBalance)));
   const [date, setDate] = useState(transaction?.date || today());
   const [reason, setReason] = useState(transaction?.note || "");
-  const [error, setError] = useState("");
+  const [balanceError, setBalanceError] = useState("");
+  const [dateError, setDateError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const balanceField = useRef<HTMLLabelElement>(null);
+  const dateDetails = useRef<HTMLDetailsElement>(null);
   const targetBalance = target === "" ? Number.NaN : Number(target);
   const validTarget = Number.isSafeInteger(targetBalance) && targetBalance >= 0 && targetBalance <= 1e12;
   const difference = validTarget ? targetBalance - baseBalance : 0;
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setError("");
-    try { await onSave(balanceAdjustment(data, account, targetBalance, date, reason, transaction)); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Could not adjust this balance."); }
+    setBalanceError("");
+    setDateError("");
+    if (!validTarget) {
+      setBalanceError(t("enterNewBalance"));
+      balanceField.current?.querySelector("input")?.focus();
+      return;
+    }
+    if (!validAmount(Math.abs(difference)) || (!transaction && targetBalance === currentBalance)) {
+      setBalanceError(t("balanceMustChange"));
+      balanceField.current?.querySelector("input")?.focus();
+      return;
+    }
+    if (!validDate(date) || date > today()) {
+      setDateError(t("choosePastOrToday"));
+      if (dateDetails.current) dateDetails.current.open = true;
+      dateDetails.current?.querySelector("input")?.focus();
+      return;
+    }
+    try { await onSave(balanceAdjustment(data, account, targetBalance, date, reason.trim() || t("balanceAdjustmentLabel"), transaction)); }
+    catch { setBalanceError(t("couldNotAdjustBalance")); }
   }
   return <Modal
     title={t("adjustAccountBalance", { account })}
-    subtitle={t("matchTheAmountShownBy")}
     onClose={onClose}
   >
     <form onSubmit={(event) => void submit(event)} className="balance-adjustment-form">
@@ -1607,21 +1647,19 @@ function BalanceAdjustmentEditor({
         <div className="balance-adjustment-overview" aria-label={t("balanceOverviewLabel", { recorded: money(currentBalance), target: validTarget ? money(targetBalance) : t("notEntered") })}>
           <div><span>{t("recordedNow")}</span><strong>{money(currentBalance)}</strong></div>
           <ArrowRight size={20} aria-hidden="true" />
-          <div><span>{t("afterAdjustment")}</span><strong>{validTarget ? money(targetBalance) : "Not set"}</strong></div>
+          <div><span>{t("afterAdjustment")}</span><strong>{validTarget ? money(targetBalance) : t("notEntered")}</strong></div>
         </div>
-        <label className="field">{t("newBalance")}<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="0" max="1000000000000" value={target} onValueChange={setTarget} placeholder="0" required aria-label={t("newBalanceFor", { account })} /></div></label>
+        <label className="field" ref={balanceField}>{t("newBalance")}<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="0" max="1000000000000" value={target} onValueChange={(value) => { setTarget(value); setBalanceError(""); }} placeholder="0" aria-invalid={!!balanceError} aria-describedby={balanceError ? "balance-adjustment-target-error" : undefined} aria-label={t("newBalanceFor", { account })} /></div>{balanceError && <span className="field-error" id="balance-adjustment-target-error" role="alert">{balanceError}</span>}</label>
         <div className={`balance-adjustment-effect ${difference < 0 ? "negative" : difference > 0 ? "positive" : ""}`}>
-          <span>{difference > 0 ? "Saku will add" : difference < 0 ? t("sakuWillSubtract") : t("noAdjustmentNeeded")}</span>
+          <span>{difference > 0 ? t("sakuWillAdd") : difference < 0 ? t("sakuWillSubtract") : t("noAdjustmentNeeded")}</span>
           {difference !== 0 && <strong>{difference > 0 ? "+" : "−"}{money(Math.abs(difference))}</strong>}
         </div>
-        <label className="field">{t("reason")}<textarea rows={2} value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder={t("eGMatchedTheBalance")} required /></label>
-        <label className="field">{t("adjustmentDate")}<input type="date" value={date} max={today()} onChange={(event) => setDate(event.target.value)} required /></label>
-        <p className="editor-help">{t("thisChangesTheRecordedAccount")}</p>
-        {error && <p className="form-error" role="alert">{error}</p>}
+        <label className="field">{t("reason")} <small>{t("optional")}</small><textarea rows={2} value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder={t("eGMatchedTheBalance")} /></label>
+        <details className="balance-adjustment-more" ref={dateDetails}><summary>{t("moreDetails")}</summary><label className="field">{t("adjustmentDate")}<LongDateInput value={date} onValueChange={(value) => { setDate(value); setDateError(""); }} aria-invalid={!!dateError} aria-describedby={dateError ? "balance-adjustment-date-error" : undefined} />{dateError && <span className="field-error" id="balance-adjustment-date-error" role="alert">{dateError}</span>}</label></details>
         {deleting && transaction ? <div className="delete-confirm"><p>{t("removeThisBalanceAdjustmentThe")}</p><button type="button" className="button danger" onClick={() => void onDelete(transaction.id)}>{t("removeAdjustment")}</button><button type="button" className="button secondary" onClick={() => setDeleting(false)}>{t("keepIt")}</button></div> : <div className="form-footer">
           {transaction && <IconButton label={t("removeBalanceAdjustment")} onClick={() => setDeleting(true)}><Trash2 size={18} /></IconButton>}
           <button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button>
-          <button className="button primary" disabled={!validTarget || !validAmount(Math.abs(difference)) || !reason.trim() || date > today()}>{busy ? "Saving..." : transaction ? t("saveAdjustment") : t("adjustBalance")}<Check size={16} /></button>
+          <button className="button primary" disabled={busy}>{busy ? t("saving") : transaction ? t("saveAdjustment") : t("adjustBalance")}<Check size={16} /></button>
         </div>}
       </fieldset>
     </form>
@@ -1697,13 +1735,10 @@ function TransactionEditor({
     [scanInfo, setScanInfo] = useState(""),
     [note, setNote] = useState(transaction?.note || ""),
     [error, setError] = useState(""),
+    [fieldError, setFieldError] = useState<{ field: "amount" | "name" | "date" | "transfer" | "pocket" | "share" | "card" | "installments"; message: string } | null>(null),
     [moreOpen, setMoreOpen] = useState(Boolean(transaction?.note || transaction?.split || transaction?.recurringRuleId)),
     [deleting, setDeleting] = useState(false);
   const type = mode === "income" ? "income" : "expense";
-  const transferBalance = accountBalance(
-    transaction?.transferId ? { ...data, transactions: data.transactions.filter((item) => item.transferId !== transaction.transferId) } : data,
-    transferFrom,
-  );
   async function scanReceipt(file?: File) {
     if (!file) return;
     if (!nativeAIAvailable) { setError(t("receiptAndroidOnly")); return; }
@@ -1728,18 +1763,25 @@ function TransactionEditor({
     finally { setScanning(false); }
   }
   const amountField = useRef<HTMLDivElement>(null);
+  const nameField = useRef<HTMLInputElement>(null);
   const keepOpen = useRef(false);
   async function submit(e: FormEvent) {
     e.preventDefault();
     const addAnother = keepOpen.current;
     keepOpen.current = false;
+    setFieldError(null);
     if (!validAmount(Number(amount))) {
-      setError(t("wholeRupiahError"));
+      setFieldError({ field: "amount", message: t("wholeRupiahError") });
+      amountField.current?.querySelector("input")?.focus();
+      return;
+    }
+    if (!validDate(date) || date > today()) {
+      setFieldError({ field: "date", message: t("choosePastOrToday") });
       return;
     }
     if (mode === "transfer") {
-      if (data.accounts.length < 2 || transferFrom === transferTo || Number(amount) > transferBalance) {
-        setError(t("transferAccountsError"));
+      if (data.accounts.length < 2 || transferFrom === transferTo) {
+        setFieldError({ field: "transfer", message: t(data.accounts.length < 2 ? "anotherAccountTransfer" : "sameAccountTransfer") });
         return;
       }
       const transferId = transaction?.transferId || uid();
@@ -1749,20 +1791,23 @@ function TransactionEditor({
       ], transaction?.transferId);
       return;
     }
+    if (!name.trim()) {
+      setFieldError({ field: "name", message: t("transactionNameNeeded") });
+      nameField.current?.focus();
+      return;
+    }
     const p = data.pockets.find((p) => p.id === pocket);
     if (type === "expense" && p && date.slice(0, 7) < p.createdMonth) {
-      setError(
-        t("pocketStartsLater", { month: monthLabel(p.createdMonth) }),
-      );
+      setFieldError({ field: "pocket", message: t("pocketStartsLater", { month: monthLabel(p.createdMonth) }) });
       return;
     }
     if (shared && (!Number.isInteger(Number(people)) || Number(people) < 2 || Number(people) > 30 || !validAmount(Number(ownAmount || Math.ceil(Number(amount) / Number(people)))) || Number(ownAmount || Math.ceil(Number(amount) / Number(people))) > Number(amount))) {
-      setError(t("shareError")); return;
+      setFieldError({ field: "share", message: t("shareError") }); setMoreOpen(true); return;
     }
     const card = data.creditCards.find((c) => c.id === cardId);
-    if (cardId && !card) { setError(t("cardError")); return; }
+    if (cardId && !card) { setFieldError({ field: "card", message: t("cardError") }); return; }
     if (cardId && (!Number.isInteger(Number(installments)) || Number(installments) < 1 || Number(installments) > 60 || !/^\d{4}-\d{2}$/.test(firstDueMonth) || firstDueMonth < date.slice(0, 7))) {
-      setError(t("installmentsError")); return;
+      setFieldError({ field: "installments", message: t("installmentsError") }); return;
     }
     const ruleId = recurring ? transaction?.recurringRuleId || uid() : undefined;
     const saved: Transaction = {
@@ -1790,7 +1835,7 @@ function TransactionEditor({
       account: saved.account, cardId: saved.kind === "card_purchase" ? saved.cardId : undefined,
     } satisfies Favorite : undefined;
     if (await onSave(saved, rule, quick, addAnother) && addAnother) {
-      setAmount(""); setName(""); setNote(""); setScanInfo(""); setError(""); setShared(false); setOwnAmount(""); setRecurring(false); setSaveFavorite(false);
+      setAmount(""); setName(""); setNote(""); setScanInfo(""); setError(""); setFieldError(null); setShared(false); setOwnAmount(""); setRecurring(false); setSaveFavorite(false);
       if (!initialPocketId && !favorite) { setPocket(""); setPocketChosen(false); }
       amountField.current?.querySelector("input")?.focus();
     }
@@ -1816,12 +1861,13 @@ function TransactionEditor({
   if (mode === "transfer") return <Modal title={transaction ? t("editTransfer") : t("addTransaction")} subtitle={t("transferSubtitle")} onClose={onClose}>
     <form onSubmit={(e) => void submit(e)}><fieldset disabled={busy}>{modeControl}
       {data.accounts.length < 2 && <p className="form-error" role="alert">{t("anotherAccountTransfer")}</p>}
-      <label className="field">{t("amount")}<div className="amount-input"><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={setAmount} required /></div></label>
-      <div className="form-columns"><label className="field">{t("from")}<ChoiceField hideLabel label={t("from")} value={transferFrom} onValueChange={setTransferFrom} options={accountChoices} /></label><label className="field">{t("to")}<ChoiceField hideLabel label={t("to")} value={transferTo} onValueChange={setTransferTo} options={accountChoices} /></label></div>
-      <label className="field">{t("date")}<input type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} required /></label>
+      <label className="field">{t("amount")}<div className="amount-input" ref={amountField}><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={(value) => { setAmount(value); setFieldError(null); }} aria-invalid={fieldError?.field === "amount"} /></div>{fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
+      <div className="form-columns"><label className="field">{t("from")}<ChoiceField hideLabel label={t("from")} value={transferFrom} onValueChange={(value) => { setTransferFrom(value); setFieldError(null); }} options={accountChoices} /></label><label className="field">{t("to")}<ChoiceField hideLabel label={t("to")} value={transferTo} onValueChange={(value) => { setTransferTo(value); setFieldError(null); }} options={accountChoices} /></label></div>
+      {fieldError?.field === "transfer" && <p className="field-error" role="alert">{fieldError.message}</p>}
+      <label className="field">{t("date")}<LongDateInput max={today()} value={date} onValueChange={(value) => { setDate(value); setFieldError(null); }} aria-invalid={fieldError?.field === "date"} />{fieldError?.field === "date" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
       <label className="field">{t("note")} <span className="optional">{t("optional")}</span><textarea rows={2} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="form-footer">{transaction?.transferId && <button type="button" className="button danger" onClick={() => void onDeleteTransfer(transaction.transferId!)}>{t("delete")}</button>}<button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button><button className="button primary" disabled={data.accounts.length < 2}>{busy ? t("saving") : t("saveTransfer")}<Check size={16} /></button></div>
+      <div className="form-footer">{transaction?.transferId && <button type="button" className="button danger" onClick={() => void onDeleteTransfer(transaction.transferId!)}>{t("delete")}</button>}<button type="button" className="button secondary" onClick={onClose}>{t("cancel")}</button><button className="button primary" disabled={busy}>{busy ? t("saving") : t("saveTransfer")}<Check size={16} /></button></div>
     </fieldset></form>
   </Modal>;
   return (
@@ -1847,20 +1893,23 @@ function TransactionEditor({
                 max="1000000000000"
                 step="1"
                 value={amount}
-                onValueChange={setAmount}
+                onValueChange={(value) => { setAmount(value); setFieldError(null); }}
                 placeholder="0"
-                required
+                aria-invalid={fieldError?.field === "amount"}
                 aria-label={t("amountInRupiah")}
               />
             </div>
+            {fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}
           </label>
           {!transaction && nativeAIAvailable && <label className="button secondary receipt-capture"><Camera size={16} /> {scanning ? t("readingReceipt") : t("scanReceipt")}<input type="file" accept="image/*" capture="environment" disabled={scanning || busy} hidden onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></label>}
           {scanInfo && <p className="editor-help" role="status">{scanInfo}</p>}
+          {error && <p className="field-error" role="alert">{error}</p>}
           <label className="field">
             {type === "income" ? t("incomeName") : t("purchaseName")}
             <input
+              ref={nameField}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); setFieldError(null); }}
               onBlur={learnPocket}
               placeholder={
                 type === "income"
@@ -1868,28 +1917,30 @@ function TransactionEditor({
                   : t("purchaseExample")
               }
               maxLength={100}
-              pattern=".*\S.*"
-              required
+              aria-invalid={fieldError?.field === "name"}
             />
+            {fieldError?.field === "name" && <span className="field-error" role="alert">{fieldError.message}</span>}
           </label>
           {type === "expense" && !special && <label className="field">{t("paidWith")}
             <ChoiceField hideLabel label={t("paidWith")} value={cardId ? `card:${cardId}` : `bank:${account}`} options={paymentChoices} onValueChange={(value) => {
               if (value.startsWith("card:")) setCardId(value.slice(5));
               else { setCardId(""); setAccount(value.slice(5)); }
-            }} />
+            }} />{fieldError?.field === "card" && <span className="field-error" role="alert">{fieldError.message}</span>}
           </label>}
           {type === "expense" && (
             transaction?.kind !== "card_payment" &&
             <label className="field">
               {t("pocket")}
-              <ChoiceField hideLabel label={t("pocket")} value={pocket} onValueChange={(value) => { setPocket(value); setPocketChosen(true); }} options={pocketChoices} />
+              <ChoiceField hideLabel label={t("pocket")} value={pocket} onValueChange={(value) => { setPocket(value); setPocketChosen(true); setFieldError(null); }} options={pocketChoices} />
               <small>{pocket ? t("countsPocket") : t("categorizeHelp")}</small>
+              {fieldError?.field === "pocket" && <span className="field-error" role="alert">{fieldError.message}</span>}
             </label>
           )}
           <div className="form-columns">
             <div className="field date-field">
-              <SegmentedChoice compact label={t("date")} value={dateChoice} onValueChange={(value) => { setPickingDate(value === "pick"); if (value !== "pick") setDate(daysAgo(Number(value))); }} options={[{ value: "0", label: t("today") }, { value: "1", label: t("yesterday") }, { value: "2", label: t("twoDaysAgo") }, { value: "pick", label: t("pick") }]} />
-              {dateChoice === "pick" && <input type="date" aria-label={t("date")} value={date} onChange={(e) => setDate(e.target.value)} max={today()} required />}
+              <SegmentedChoice compact label={t("date")} value={dateChoice} onValueChange={(value) => { setPickingDate(value === "pick"); setFieldError(null); if (value !== "pick") setDate(daysAgo(Number(value))); }} options={[{ value: "0", label: t("today") }, { value: "1", label: t("yesterday") }, { value: "2", label: t("twoDaysAgo") }, { value: "pick", label: t("pick") }]} />
+              {dateChoice === "pick" && <LongDateInput aria-label={t("date")} value={date} onValueChange={(value) => { setDate(value); setFieldError(null); }} max={today()} aria-invalid={fieldError?.field === "date"} />}
+              {fieldError?.field === "date" && <span className="field-error" role="alert">{fieldError.message}</span>}
             </div>
             {(special || type === "income") && <label className="field">
               {t("account")}
@@ -1901,11 +1952,11 @@ function TransactionEditor({
               <SegmentedChoice label={t("paymentPlan")} value={installments === "1" ? "one" : "installments"} onValueChange={(value) => setInstallments(value === "one" ? "1" : "3")} options={[{ value: "one", label: t("onePayment") }, { value: "installments", label: t("installments") }]} />
             </label>
             {installments !== "1" && <label className="field">{t("numberPayments")}<input type="number" min={2} max={60} value={installments} onChange={(e) => setInstallments(e.target.value)} /></label>}
-            <label className="field">{t("firstDueMonth")}<input type="month" value={firstDueMonth} onChange={(e) => setFirstDueMonth(e.target.value)} /></label>
+            <label className="field">{t("firstDueMonth")}<input type="month" value={firstDueMonth} onChange={(e) => { setFirstDueMonth(e.target.value); setFieldError(null); }} />{fieldError?.field === "installments" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
           </div>}
-          <details className="editor-more" open={moreOpen || Boolean(error)} onToggle={(event) => setMoreOpen(event.currentTarget.open)}><summary>{t("moreDetails")} <span>{t("moreDetailsSubtitle")}</span></summary>
+          <details className="editor-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}><summary>{t("moreDetails")} <span>{t("moreDetailsSubtitle")}</span></summary>
           {type === "expense" && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} /> {t("shared")}</label>}
-          {shared && type === "expense" && !special && <div className="form-columns"><label className="field">{t("peopleIncludingYou")}<input type="number" min={2} max={30} value={people} onChange={(e) => setPeople(e.target.value)} /></label><label className="field">{t("yourShareRupiah")}<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={setOwnAmount} /></label><p className="editor-help">{t("sharedPaymentHelp")}</p></div>}
+          {shared && type === "expense" && !special && <div className="form-columns"><label className="field">{t("peopleIncludingYou")}<input type="number" min={2} max={30} value={people} onChange={(e) => { setPeople(e.target.value); setFieldError(null); }} /></label><label className="field">{t("yourShareRupiah")}<MoneyInput min={1} max={Number(amount) || undefined} placeholder={amount ? String(Math.ceil(Number(amount) / Number(people))) : ""} value={ownAmount} onValueChange={(value) => { setOwnAmount(value); setFieldError(null); }} />{fieldError?.field === "share" && <span className="field-error" role="alert">{fieldError.message}</span>}</label><p className="editor-help">{t("sharedPaymentHelp")}</p></div>}
           {!special && <label className="checkbox-label editor-option"><input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} /> {t("repeatMonthly")}</label>}
           {!transaction && !special && <label className="checkbox-label editor-option"><input type="checkbox" checked={saveFavorite} onChange={(e) => setSaveFavorite(e.target.checked)} /> {t("saveQuick")}</label>}
           {transaction?.split && <div className="repayment-review"><strong>{t("sharedPayment")}</strong><p>{t("othersOweRepaid", { amount: money(transaction.amount - transaction.split.ownAmount), repaid: money(data.transactions.filter((item) => item.forTransactionId === transaction.id).reduce((n, item) => n + item.amount, 0)) })}</p><div className="plans-fields"><label className="field">{t("repaymentRupiah")}<MoneyInput min={1} value={repayAmount} onValueChange={setRepayAmount} /></label><label className="field">{t("receivedIn")}<ChoiceField hideLabel label={t("repaymentAccount")} value={repayAccount} onValueChange={setRepayAccount} options={accountChoices} /></label><label className="field">{t("receivedOn")}<input type="date" min={transaction.date} max={today()} value={repayDate} onChange={(e) => setRepayDate(e.target.value)} /></label></div><button type="button" className="button secondary" disabled={busy || !validAmount(Number(repayAmount))} onClick={() => void onRepay(transaction.id, Number(repayAmount), repayAccount, repayDate).then(() => setRepayAmount(""))}>{t("recordRepayment")}</button></div>}
@@ -1920,11 +1971,6 @@ function TransactionEditor({
             />
           </label>
           </details>
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
           {deleting ? (
             <div className="delete-confirm">
               <p>
@@ -2159,7 +2205,7 @@ function PocketEditor({
                 {t("cancel")}
               </button>
               <button className="button primary" type="submit">
-                {busy ? "Saving..." : pocket ? t("saveChanges") : t("createPocket2")}
+                {busy ? t("saving") : pocket ? t("saveChanges") : t("createPocket2")}
                 <Check size={16} />
               </button>
             </div>

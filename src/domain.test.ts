@@ -12,6 +12,7 @@ import {
   daysAgo,
   frequentExpenses,
   lastPocketFor,
+  longDate,
   compact,
   budgetFor,
   demoData,
@@ -30,6 +31,15 @@ import {
   validateData,
   type Statement,
 } from "./domain";
+import { setActiveLanguage } from "./i18n";
+
+test("long dates include weekday, comma, and year in both languages", () => {
+  setActiveLanguage("en");
+  assert.equal(longDate("2026-11-11"), "Wednesday, 11 November 2026");
+  setActiveLanguage("id");
+  assert.equal(longDate("2026-11-11"), "Rabu, 11 November 2026");
+  setActiveLanguage("en");
+});
 
 test("compact rupiah uses Indonesian separators and units", () => {
   assert.equal(compact(1500000), "1,5 jt");
