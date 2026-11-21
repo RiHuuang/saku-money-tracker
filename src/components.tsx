@@ -614,3 +614,12 @@ export function DirectionIcon({ income }: { income: boolean }) {
 export function SakuMark({ size = 24 }: { size?: number }) {
   return <svg className="saku-mark" width={size} height={size} viewBox="-12 -6 160 166" aria-hidden="true"><path d={markBack} fill="var(--mark-pocket, #24604D)" /><path d={markCoin} fill="var(--mark-dot, #A8E6C1)" /><path d={markFront} fill="currentColor" /></svg>;
 }
+
+// A Settings card (master plan 2.3): a native <details> whose summary row is at least 48 px tall, names the card
+// and says its state in a few words. No buttons live in the summary row.
+export function SettingsCard({ title, summary, defaultOpen = false, className = "", children }: { title: string; summary?: ReactNode; defaultOpen?: boolean; className?: string; children: ReactNode }) {
+  return <details className={`settings-card ${className}`.trim()} open={defaultOpen || undefined}>
+    <summary><span className="settings-card-title">{title}</span>{summary !== undefined && summary !== "" && <span className="settings-card-summary">{summary}</span>}<ChevronDown size={18} aria-hidden="true" /></summary>
+    <div className="settings-card-body">{children}</div>
+  </details>;
+}

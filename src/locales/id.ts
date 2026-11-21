@@ -320,4 +320,11 @@ export const id = {
   addAnyway: "Tetap tambah",
   needLookCount: "{count} perlu dicek",
   expireSoon: "{count} segera hilang",
+  stateOn: "Aktif",
+  stateOff: "Mati",
+  stateCheck: "Cek",
+  display: "Tampilan & bahasa",
+  about: "Tentang",
+  accountsCount: "{count} akun",
+  yourDataSummary: "Cadangan · Pulihkan · Hapus",
 } satisfies Record<keyof typeof en, string>;

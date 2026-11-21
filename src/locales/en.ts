@@ -318,4 +318,11 @@ export const en = {
   addAnyway: "Add anyway",
   needLookCount: "{count} need a look",
   expireSoon: "{count} expire soon",
+  stateOn: "On",
+  stateOff: "Off",
+  stateCheck: "Check",
+  display: "Display",
+  about: "About",
+  accountsCount: "{count} accounts",
+  yourDataSummary: "Backup · Restore · Delete",
 } as const;

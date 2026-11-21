@@ -6,7 +6,7 @@ import type { Data } from "./domain";
 import { notificationCapture, type CaptureStatus } from "./notificationCapture";
 import { loadCleaningOptIn, saveCleaningOptIn } from "./merchantCleaning";
 import { ensureConsentReceipt, withdrawConsentReceipt } from "./consent";
-import { ChoiceField } from "./components";
+import { ChoiceField, SettingsCard } from "./components";
 import { captureHealth, showKeepRunning } from "./captureHealth";
 
 const ago = (at: number, now = Date.now()) => {
@@ -54,7 +54,9 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
     if (result?.opened === "app_info") setAppInfoOpened(true);
   });
   const accountFor = (suggested: string) => data.accounts.find((name) => name.toLocaleLowerCase("id-ID") === suggested.toLocaleLowerCase("id-ID")) || data.accounts[0];
-  return <section className="notification-access-section">
+  const summary = health.state === "check" ? t("stateCheck") : health.state === "off" ? t("stateOff") : health.lastCapturedAt ? `${t("stateOn")} · ${ago(health.lastCapturedAt)}` : t("stateOn");
+  // Open by default when it is off or needs a check, so the one Fix tap is visible without searching.
+  return <SettingsCard title={t("readBankNotifications")} summary={summary} defaultOpen={health.state !== "on"}><section className="notification-access-section">
     <div className="cloud-heading"><span className="connection-icon"><BellRing size={23} /></span><div><h2>{t("readBankNotifications")}</h2><p>{t("readBankNotificationsBody")}</p></div></div>
     <p className={`notification-access-status health-${health.state}`} role="status">{!status.granted ? t("notificationAccessOff") : !enabled.length ? t("notificationNoApps") : status.paused ? t("notificationPausedFor", { apps: enabled.map((app) => app.name).join(", ") }) : health.state === "check" ? t("notificationHealthStopped") : health.lastCapturedAt ? t("notificationHealthOn", { ago: ago(health.lastCapturedAt) }) : t("notificationHealthOnNew")}
       {health.state === "check" && <button className="button primary" disabled={busy} onClick={() => void run(() => notificationCapture.fix())}>{t("fixReader")}</button>}
@@ -79,5 +81,5 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
       : <button className="button primary" disabled={busy || (!enabled.length && !detected.length)} onClick={turnOn}><BellRing size={16} />{t("turnOnReaderFor", { apps: names })}</button>}</div>
     {!status.granted && !enabled.length && !detected.length && <small className="cloud-note">{t("chooseAppFirst")}</small>}
     {restrictedHelp && <p className="cloud-note">{t("restrictedSettingsHelp")}</p>}
-  </section>;
+  </section></SettingsCard>;
 }
