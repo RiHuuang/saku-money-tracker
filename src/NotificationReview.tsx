@@ -6,7 +6,7 @@ import { importedTransactions, importRowAccount, importRowFirstDueMonth, importR
 import { learnNotificationPocket } from "./merchants";
 import { cleanMerchantNames } from "./cloud";
 import { applyTidiedNames, loadCleaningOptIn, namesToClean } from "./merchantCleaning";
-import { ensureConsentReceipt } from "./consent";
+import { withConsent } from "./consent";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
 import { inboxReadiness, inboxRows, notificationStatusTap, type NotificationRow } from "./notificationRows";
 import { ChoiceField, Modal } from "./components";
@@ -46,13 +46,13 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   useEffect(() => { void load(); }, []);
   const rows = useMemo(() => inboxRows(items || [], data).map((row): NotificationRow => ({ ...row, ...edits[row.id] })), [items, data, edits]);
   const accountFor = (row: ImportRow) => importRowAccount(row, undefined, data);
-  const { ready, duplicates, twinFor } = useMemo(() => inboxReadiness(rows, data), [rows, data]);
+  const { ready, duplicates, twinFor, look } = useMemo(() => inboxReadiness(rows, data), [rows, data]);
   // Rows the user chose to leave out stay visible as skipped (and can be changed back) until the list is saved.
   const skipped = rows.filter((row) => edits[row.id]?.decision === "skip");
   // Leaving out one half of a paired transfer leaves out its twin too, so nothing is stranded on the phone.
   const skippedIds = [...new Set(skipped.flatMap((row) => row.pairedWith ? [row.id, row.pairedWith] : [row.id]))];
   // Rows "Add N" leaves out: not ready and not skipped. Said on the button bar, never silent.
-  const leftOut = rows.length - ready.length - skipped.length;
+  const leftOut = look;
   // Captured rows are deleted after 7 days; warn about those within a day of it.
   const expiringSoon = rows.filter((row) => Date.now() - row.occurredAt > 6 * 86_400_000).length;
   const edit = (id: string, patch: Partial<NotificationRow>) => setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
@@ -100,8 +100,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   async function tidySaved(owner: string, names: string[], addedIds: ReadonlySet<string>) {
     try {
       if (!(await loadCleaningOptIn())) return;
-      await ensureConsentReceipt(owner, "merchant_tidy");
-      const results = await cleanMerchantNames(owner, names);
+      const results = await withConsent(owner, "merchant_tidy", () => cleanMerchantNames(owner, names));
       const current = getCurrentData();
       if (!current) return;
       const next = applyTidiedNames(current, addedIds, results);

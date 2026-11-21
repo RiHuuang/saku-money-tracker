@@ -1,3 +1,4 @@
+import { clearConsentReceipts } from "./consent";
 import { Preferences } from "@capacitor/preferences";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
@@ -54,6 +55,7 @@ export async function removeUserData(userId: string) {
   await deleteOwnerImportDrafts(userId);
   await clearNotificationInbox();
   localStorage.removeItem(importConsentKey(userId));
+  clearConsentReceipts(userId);
   if (Capacitor.isNativePlatform()) await removeNativeLedger(userId);
   await Preferences.remove({ key: userKey(userId) });
   await removeSyncBase(userId);

@@ -74,5 +74,7 @@ export function inboxReadiness(rows: readonly NotificationRow[], data: Data) {
   // Statement-style matching: same account, day, amount and direction counts as a possible duplicate whatever it was named.
   const duplicates = importRowsNeedingDuplicateConfirmation([...rows], data.transactions, accountFor, () => false, true);
   const ready = rows.filter((row) => importRowReady(row, accountFor(row), data) && (!duplicates.has(row.id) || row.confirmedSeparate) && !rows.some((other) => other.activity === "transfer" && other.id !== row.id && twinFor(other)?.id === row.id));
-  return { ready, duplicates, twinFor, accountFor };
+  // Not ready and not left out (auto-skipped transfer twins included): what "Add N" leaves for a look.
+  const look = rows.filter((row) => !ready.includes(row) && row.decision !== "skip").length;
+  return { ready, duplicates, twinFor, accountFor, look };
 }

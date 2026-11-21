@@ -28,11 +28,13 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 // cancels: a payment the bank later cancelled, after its spend already left the inbox (added or skipped).
-data class InboxItem(val id: String, val packageName: String, val account: String, val amount: Long, val direction: String, val rawMerchant: String, val balance: Long?, val occurredAt: Long, val cancels: Boolean = false)
+// content: a salted hash of the notification's key and words, used to merge an update posted within minutes.
+data class InboxItem(val id: String, val packageName: String, val account: String, val amount: Long, val direction: String, val rawMerchant: String, val balance: Long?, val occurredAt: Long, val cancels: Boolean = false, val content: String = "")
 
 // A row the user already handled (added, skipped or cancelled). Kept for 8 days inside the encrypted inbox so a
 // rescan or a repost never brings it back. Holds no merchant name.
-data class Tombstone(val id: String, val packageName: String, val account: String, val direction: String, val amount: Long, val occurredAt: Long, val at: Long)
+// direction is "expense"/"income" for rows the user added or skipped, "cancelled" for a spend a later notice cancelled.
+data class Tombstone(val id: String, val packageName: String, val account: String, val direction: String, val amount: Long, val occurredAt: Long, val at: Long, val content: String = "")
 
 interface InboxCipher {
     fun seal(plain: ByteArray): ByteArray
@@ -66,6 +68,9 @@ class InboxStore(
         const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
         const val TOMBSTONE_MS = 8L * 24 * 60 * 60 * 1000
         const val TOMBSTONE_LIMIT = 2000
+        // The same words under the same notification key within this window are an update of one alert, not a
+        // second payment. Beyond it, an identical alert is a new payment (same coffee, same shop, next day).
+        const val REPOST_MS = 10L * 60 * 1000
         // One lock for every read-modify-write in the process: the listener thread and the app's plugin calls
         // otherwise overwrite each other's changes.
         val LOCK = Any()
@@ -88,11 +93,13 @@ class InboxStore(
     fun add(item: InboxItem): Int = synchronized(LOCK) {
         val state = current()
         if (state.tombstones.any { it.id == item.id }) return state.items.size
-        val existing = state.items.find { it.id == item.id }
+        val near = { other: Long -> kotlin.math.abs(other - item.occurredAt) <= REPOST_MS }
+        val existing = state.items.find { it.id == item.id } ?: state.items.find { item.content.isNotEmpty() && it.content == item.content && near(it.occurredAt) }
         if (existing != null) {
-            if (item.occurredAt < existing.occurredAt) save(state.copy(items = state.items.map { if (it.id == item.id) it.copy(occurredAt = item.occurredAt) else it }))
+            if (item.occurredAt < existing.occurredAt) save(state.copy(items = state.items.map { if (it.id == existing.id) it.copy(occurredAt = item.occurredAt) else it }))
             return state.items.size
         }
+        if (item.content.isNotEmpty() && state.tombstones.any { it.content == item.content && near(it.occurredAt) }) return state.items.size
         val next = purge(state.copy(items = state.items + item))
         save(next)
         next.items.size
@@ -126,7 +133,8 @@ class InboxStore(
         if (spend != null) {
             // The cancellation itself is remembered too, so a repost of it can't cancel a second time.
             val handledCancel = Tombstone(cancelId, packageName, spend.account, "cancel", amount, cancelledAt, now())
-            val next = purge(State(state.items - spend, state.tombstones + spend.tombstone(now()) + handledCancel))
+            // Marked "cancelled", so a second notice about the same cancellation can't add a phantom refund row.
+            val next = purge(State(state.items - spend, state.tombstones + spend.tombstone(now()).copy(direction = "cancelled") + handledCancel))
             save(next)
             return next.items.size
         }
@@ -139,7 +147,7 @@ class InboxStore(
 
     fun clear() = synchronized(LOCK) { write(null) }
 
-    private fun InboxItem.tombstone(at: Long) = Tombstone(id, packageName, account, direction, amount, occurredAt, at)
+    private fun InboxItem.tombstone(at: Long) = Tombstone(id, packageName, account, direction, amount, occurredAt, at, content)
 
     private fun current(): State {
         val state = load()
@@ -186,12 +194,14 @@ class InboxStore(
                 put("id", item.id); put("packageName", item.packageName); put("account", item.account); put("amount", item.amount)
                 put("direction", item.direction); put("rawMerchant", item.rawMerchant); put("balance", item.balance ?: JSONObject.NULL); put("occurredAt", item.occurredAt)
                 if (item.cancels) put("cancels", true)
+                if (item.content.isNotEmpty()) put("content", item.content)
             })
         })
         put("tombstones", JSONArray().apply {
             for (stone in state.tombstones) put(JSONObject().apply {
                 put("id", stone.id); put("packageName", stone.packageName); put("account", stone.account); put("direction", stone.direction)
                 put("amount", stone.amount); put("occurredAt", stone.occurredAt); put("at", stone.at)
+                if (stone.content.isNotEmpty()) put("content", stone.content)
             })
         })
     }.toString()
@@ -205,11 +215,11 @@ class InboxStore(
             (0 until items.length()).map { index ->
                 val row = items.getJSONObject(index)
                 InboxItem(row.getString("id"), row.getString("packageName"), row.getString("account"), row.getLong("amount"), row.getString("direction"),
-                    row.getString("rawMerchant"), if (row.isNull("balance")) null else row.getLong("balance"), row.getLong("occurredAt"), row.optBoolean("cancels", false))
+                    row.getString("rawMerchant"), if (row.isNull("balance")) null else row.getLong("balance"), row.getLong("occurredAt"), row.optBoolean("cancels", false), row.optString("content"))
             },
             (0 until stones.length()).map { index ->
                 val row = stones.getJSONObject(index)
-                Tombstone(row.getString("id"), row.getString("packageName"), row.optString("account"), row.getString("direction"), row.getLong("amount"), row.getLong("occurredAt"), row.getLong("at"))
+                Tombstone(row.getString("id"), row.getString("packageName"), row.optString("account"), row.getString("direction"), row.getLong("amount"), row.getLong("occurredAt"), row.getLong("at"), row.optString("content"))
             },
         )
     }
@@ -260,11 +270,12 @@ object NotificationInbox {
         prefs.getString("salt", null) ?: Base64.getEncoder().encodeToString(ByteArray(16).also { SecureRandom().nextBytes(it) }).also { check(prefs.edit().putString("salt", it).commit()) }
     }
 
-    // The same notification (same key and same words) always gets the same ID, whenever it is posted again.
-    fun idFor(salt: String, key: String, title: String, text: String): String {
-        val sha = { value: String -> MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) } }
-        return sha("$salt|$key|${sha("$title\n$text")}").take(32)
-    }
+    private fun sha(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+
+    // One post of a notification: a rescan of the same post (same post time) finds the same ID, while a second real
+    // payment with identical words gets a new one. Updates within minutes are merged through contentKey instead.
+    fun idFor(salt: String, key: String, title: String, text: String, postedAt: Long): String = sha("$salt|$key|${sha("$title\n$text")}|$postedAt").take(32)
+    fun contentKey(salt: String, key: String, title: String, text: String): String = sha("$salt|$key|${sha("$title\n$text")}").take(32)
 
     fun receive(context: Context, captured: CapturedNotification) {
         if (NotificationCapture.isRedactedPlaceholder(captured.text)) {
@@ -272,7 +283,8 @@ object NotificationInbox {
             CaptureHealth.redacted(context)
             return
         }
-        val id = idFor(salt(context), captured.key, captured.title, captured.text)
+        val salt = salt(context)
+        val id = idFor(salt, captured.key, captured.title, captured.text, captured.postedAt)
         val store = store(context)
         NotificationParsers.cancelledSpend(captured.packageName, captured.title, captured.text)?.let { amount ->
             summarize(context, store.cancel(captured.packageName, amount, captured.postedAt, id))
@@ -281,7 +293,7 @@ object NotificationInbox {
         if (store.knows(id)) return
         val parsed = NotificationParsers.parse(captured.packageName, captured.title, captured.text, captured.postedAt) ?: return
         val count = store.add(InboxItem(id, captured.packageName, captured.account, parsed.amount, parsed.direction,
-            InboxRedaction.redact(parsed.rawMerchant, parsed.amount), parsed.balance, parsed.occurredAt))
+            InboxRedaction.redact(parsed.rawMerchant, parsed.amount), parsed.balance, parsed.occurredAt, content = contentKey(salt, captured.key, captured.title, captured.text)))
         CaptureHealth.admitted(context)
         summarize(context, count)
     }

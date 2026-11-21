@@ -28,6 +28,12 @@ object CaptureHealth {
     fun granted(context: Context) { if (!prefs(context).getBoolean("everGranted", false)) prefs(context).edit().putBoolean("everGranted", true).apply() }
     fun appInfoShown(context: Context) = stamp(context, "appInfoShownAt")
 
+    // The rescan on reconnect only takes alerts posted after this build first ran. Older ones may already be in the
+    // inbox or the ledger under the previous ID scheme, which kept no record of handled rows.
+    fun rescanSince(context: Context): Long = synchronized(this) {
+        prefs(context).getLong("rescanSince", 0).takeIf { it > 0 } ?: System.currentTimeMillis().also { prefs(context).edit().putLong("rescanSince", it).commit() }
+    }
+
     fun snapshot(context: Context) = prefs(context).let {
         Snapshot(it.getLong("connectedAt", 0), it.getLong("disconnectedAt", 0), it.getLong("lastAdmittedAt", 0),
             it.getInt("redactedCount", 0), it.getInt("expiredCount", 0), it.getLong("inboxResetAt", 0), it.getBoolean("everGranted", false), it.getLong("appInfoShownAt", 0))

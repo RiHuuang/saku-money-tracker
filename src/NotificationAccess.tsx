@@ -5,7 +5,7 @@ import { BellRing, Pause, Play, Settings } from "lucide-react";
 import type { Data } from "./domain";
 import { notificationCapture, type CaptureStatus } from "./notificationCapture";
 import { loadCleaningOptIn, saveCleaningOptIn } from "./merchantCleaning";
-import { ensureConsentReceipt, withdrawConsentReceipt } from "./consent";
+import { ensureConsentReceipt, hasConsentReceipt, withdrawConsentReceipt } from "./consent";
 import { ChoiceField, SettingsCard } from "./components";
 import { captureHealth, showKeepRunning } from "./captureHealth";
 
@@ -23,6 +23,9 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
     setStatus(next);
     // A cleared inbox is told once, never silently.
     if (next.inboxResetAt) { notify(t("inboxResetNotice")); void notificationCapture.acknowledgeReset().catch(() => {}); }
+    // Turning the reader off (access revoked in Android, or no app left) withdraws its consent receipt.
+    if (userId && hasConsentReceipt(userId, "notification_reader") && (!next.granted && next.everGranted || !next.apps.some((app) => app.account)))
+      void withdrawConsentReceipt(userId, "notification_reader").catch(() => { /* Retried on the next check. */ });
   }).catch(() => notify(t("notificationStatusUnavailable")));
   useEffect(() => {
     void refresh();

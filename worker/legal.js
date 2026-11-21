@@ -32,7 +32,7 @@ const copy = {
 </ul>
 <p>Penyedia ini dapat memproses data di luar Indonesia. Kami hanya memakai penyedia yang menerapkan perlindungan keamanan yang memadai.</p>
 <h2>Yang tetap di perangkatmu</h2>
-<p>File rekening dan tangkapan layar asli serta draf peninjauan impor tetap di perangkatmu, tidak masuk cadangan atau Sheet, dan dihapus setelah 30 hari. Di Android, kamu bisa mengizinkan Saku membaca notifikasi dari aplikasi bank dan dompet digital yang kamu pilih. Saku memeriksa aplikasinya sebelum membaca isi apa pun, hanya menyimpan jumlah, arah uang, saldo, dan nama merchant dengan nomor rekening dan referensi dihapus, mengenkripsinya di ponselmu, dan menghapusnya setelah tujuh hari, saat kamu keluar, atau saat akun dihapus. Isi notifikasi tidak pernah diunggah atau disinkronkan; hanya transaksi yang kamu tambahkan yang masuk ke catatanmu.</p>
+<p>File rekening dan tangkapan layar asli serta draf peninjauan impor tetap di perangkatmu, tidak masuk cadangan atau Sheet, dan dihapus setelah 30 hari. Di Android, kamu bisa mengizinkan Saku membaca notifikasi dari aplikasi bank dan dompet digital yang kamu pilih. Saku memeriksa aplikasinya sebelum membaca isi apa pun, hanya menyimpan jumlah, arah uang, saldo, dan nama merchant dengan nomor rekening dan referensi dihapus, mengenkripsinya di ponselmu, dan menghapusnya setelah tujuh hari, saat kamu keluar, atau saat akun dihapus. Isi notifikasi tidak pernah diunggah atau disinkronkan; hanya transaksi yang kamu tambahkan yang masuk ke catatanmu. Jika kamu masuk dengan akun, Saku mencatat kapan kamu menyalakan dan mematikan pembacaan notifikasi, tanpa isi notifikasi apa pun.</p>
 <h2>Berapa lama data disimpan</h2>
 <ul>
 <li>Catatan dan profil disimpan selama akunmu aktif.</li>
@@ -93,7 +93,7 @@ const copy = {
 </ul>
 <p>These providers may process data outside Indonesia. We only use providers that apply appropriate security safeguards.</p>
 <h2>What stays on your device</h2>
-<p>Original statement files and screenshots, and import review drafts, stay on your device, are not added to backups or Sheets, and are deleted after 30 days. On Android you can let Saku read notifications from the bank and e-wallet apps you choose. Saku checks the app before reading any content, keeps only the amount, money direction, balance and merchant name with account and reference numbers removed, encrypts them on your phone, and deletes them after seven days, when you sign out, or when the account is deleted. Notification text is never uploaded or synced; only transactions you add join your records.</p>
+<p>Original statement files and screenshots, and import review drafts, stay on your device, are not added to backups or Sheets, and are deleted after 30 days. On Android you can let Saku read notifications from the bank and e-wallet apps you choose. Saku checks the app before reading any content, keeps only the amount, money direction, balance and merchant name with account and reference numbers removed, encrypts them on your phone, and deletes them after seven days, when you sign out, or when the account is deleted. Notification text is never uploaded or synced; only transactions you add join your records. If you are signed in, Saku records when you turn notification reading on and off, without any notification content.</p>
 <h2>How long we keep data</h2>
 <ul>
 <li>Records and profile are kept while your account is active.</li>

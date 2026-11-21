@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { baselinePlan, spreadRest, type PlanRow } from "./allocation";
 import { suggestBudget } from "./cloud";
-import { ensureConsentReceipt } from "./consent";
+import { withConsent } from "./consent";
 import type { Data } from "./domain";
 import type { SuggestionState } from "./AllocationEditor";
 
@@ -27,8 +27,7 @@ export function usePlanSuggestion({ income, kind, pockets, data, month, userId }
     setState("thinking");
     try {
       // Asking for a suggestion is the consent; its receipt is recorded once.
-      await ensureConsentReceipt(userId, "ai_budget");
-      const answer = await suggestBudget(userId, { income, kind, pockets: rows.map((row) => ({ key: row.key, name: row.name, group: row.group, baseline: row.amount, spend: row.spend, fixed: row.fixed })) });
+      const answer = await withConsent(userId, "ai_budget", () => suggestBudget(userId, { income, kind, pockets: rows.map((row) => ({ key: row.key, name: row.name, group: row.group, baseline: row.amount, spend: row.spend, fixed: row.fixed })) }));
       if (id !== request.current) return;
       if (answer.source !== "ai") { setState("basic"); return; }
       setRows((current) => current.map((row) => {

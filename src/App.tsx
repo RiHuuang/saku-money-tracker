@@ -460,8 +460,8 @@ export default function App() {
     void Promise.all([
       cloud?.signedIn && cloud.user?.id ? listImportDrafts(cloud.user.id).then((drafts) => importRowsWaiting(drafts, data)).catch(() => 0) : 0,
       notificationCaptureSupported() ? notificationCapture.inbox().then((inbox) => {
-        const rows = inboxRows(inbox.items, data), ready = inboxReadiness(rows, data).ready;
-        if (live) setInboxSummary({ ready: ready.length, look: rows.filter((row) => !ready.includes(row) && row.decision !== "skip").length });
+        const rows = inboxRows(inbox.items, data), summary = inboxReadiness(rows, data), ready = summary.ready;
+        if (live) setInboxSummary({ ready: ready.length, look: summary.look });
         return inbox.items.length;
       }).catch(() => 0) : 0,
     ]).then(([drafts, inbox]) => { if (live) { setImportWaiting(drafts + inbox); setDraftsWaiting(drafts); } });
@@ -709,6 +709,7 @@ export default function App() {
     settings: [t("settingsIntro"), t("settings")],
   };
   const go = (v: View) => {
+    if (v !== "check") setAutoAdd(false);
     if (v !== view) setViewHistory((history) => [...history.slice(-11), view]);
     // Opening Catch up lands on what is actually waiting: captured notifications, unless a screenshot draft is open.
     if (v === "check" && view !== "check" && importWaiting > draftsWaiting && !draftsWaiting) setCheckTab("notifications");
@@ -891,7 +892,7 @@ export default function App() {
           </section>}
           {view === "overview" && (
             <>
-              {inboxSummary && inboxSummary.ready + inboxSummary.look > 0 ? <section className="catch-up-card inbox-card" aria-label={t("notificationsTitle")}><BellRing size={20} /><div><strong>{t("homeInboxSummary", { ready: inboxSummary.ready, look: inboxSummary.look })}</strong><div className="catch-up-actions">{inboxSummary.ready > 0 && <button className="button primary" onClick={() => { setAutoAdd(true); go("check"); setCheckTab("notifications"); }}>{t("addCount", { count: inboxSummary.ready })}</button>}<button className="button secondary" onClick={() => { go("check"); setCheckTab("notifications"); }}>{t("reviewRows")}</button></div></div></section>
+              {inboxSummary && inboxSummary.ready + inboxSummary.look > 0 ? <section className="catch-up-card inbox-card" aria-label={t("notificationsTitle")}><BellRing size={20} /><div><strong>{t("homeInboxSummary", { ready: inboxSummary.ready, look: inboxSummary.look })}</strong><div className="catch-up-actions">{inboxSummary.ready > 0 && <button className="button primary" onClick={() => { setAutoAdd(true); go("check"); setCheckTab("notifications"); }}>{t("addCount", { count: inboxSummary.ready })}</button>}<button className="button secondary" onClick={() => { setAutoAdd(false); go("check"); setCheckTab("notifications"); }}>{t("reviewRows")}</button></div></div></section>
               : showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { go("check"); setCheckTab("catchup"); }}>{t("importScreenshot")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
                 <div className="balance-panel balance-action" role="button" tabIndex={0} aria-label={t("openMoneyByAccount")} onClick={() => setAccountsOpen(true)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setAccountsOpen(true); } }}>
@@ -1882,7 +1883,7 @@ function TransactionEditor({
   if (mode === "transfer") return <Modal title={transaction ? t("editTransfer") : t("addTransaction")} onClose={onClose}>
     <form onSubmit={(e) => void submit(e)}><fieldset disabled={busy}>{modeControl}
       {data.accounts.length < 2 && <p className="form-error" role="alert">{t("anotherAccountTransfer")}</p>}
-      <label className="field">{t("amount")}<div className="amount-input" ref={amountField}><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={(value) => { setAmount(value); setFieldError(null); }} aria-invalid={fieldError?.field === "amount"} />{!transaction && nativeAIAvailable && <><button type="button" className="icon-button amount-scan" aria-label={scanning ? t("readingReceipt") : t("scanReceipt")} title={t("scanReceipt")} disabled={scanning || busy} onClick={(event) => { event.preventDefault(); receiptInput.current?.click(); }}><Camera size={18} /></button><input ref={receiptInput} type="file" accept="image/*" capture="environment" hidden tabIndex={-1} onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></>}</div>{fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
+      <label className="field">{t("amount")}<div className="amount-input" ref={amountField}><span>Rp</span><MoneyInput autoFocus min="1" max="1000000000000" value={amount} onValueChange={(value) => { setAmount(value); setFieldError(null); }} aria-invalid={fieldError?.field === "amount"} /></div>{fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
       <div className="form-columns"><label className="field">{t("from")}<ChoiceField hideLabel label={t("from")} value={transferFrom} onValueChange={(value) => { setTransferFrom(value); setFieldError(null); }} options={accountChoices} /></label><label className="field">{t("to")}<ChoiceField hideLabel label={t("to")} value={transferTo} onValueChange={(value) => { setTransferTo(value); setFieldError(null); }} options={accountChoices} /></label></div>
       {fieldError?.field === "transfer" && <p className="field-error" role="alert">{fieldError.message}</p>}
       <label className="field">{t("date")}<LongDateInput max={today()} value={date} onValueChange={(value) => { setDate(value); setFieldError(null); }} aria-invalid={fieldError?.field === "date"} />{fieldError?.field === "date" && <span className="field-error" role="alert">{fieldError.message}</span>}</label>
@@ -1914,6 +1915,7 @@ function TransactionEditor({
                 aria-invalid={fieldError?.field === "amount"}
                 aria-label={t("amountInRupiah")}
               />
+              {!transaction && nativeAIAvailable && <><button type="button" className="icon-button amount-scan" aria-label={scanning ? t("readingReceipt") : t("scanReceipt")} title={t("scanReceipt")} disabled={scanning || busy} onClick={(event) => { event.preventDefault(); receiptInput.current?.click(); }}><Camera size={18} /></button><input ref={receiptInput} type="file" accept="image/*" capture="environment" hidden tabIndex={-1} onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></>}
             </div>
             {fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}
           </label>

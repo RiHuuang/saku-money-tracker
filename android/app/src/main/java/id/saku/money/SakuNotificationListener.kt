@@ -30,7 +30,8 @@ class SakuNotificationListener : NotificationListenerService() {
         CaptureHealth.markRunning(this)
         // Alerts that arrived while Saku was stopped may still be in the shade: read them through the same gate.
         // IDs and tombstones keep anything already waiting or handled from coming back.
-        val active = runCatching { activeNotifications?.toList() }.getOrNull().orEmpty()
+        val since = CaptureHealth.rescanSince(this)
+        val active = runCatching { activeNotifications?.toList() }.getOrNull().orEmpty().filter { it.postTime >= since }
         val captured = active.mapNotNull { capture(this, it) }
         if (captured.isNotEmpty()) NotificationInbox.post { captured.forEach { NotificationInbox.receive(applicationContext, it) } }
     }

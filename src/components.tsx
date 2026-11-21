@@ -618,7 +618,9 @@ export function SakuMark({ size = 24 }: { size?: number }) {
 // A Settings card (master plan 2.3): a native <details> whose summary row is at least 48 px tall, names the card
 // and says its state in a few words. No buttons live in the summary row.
 export function SettingsCard({ title, summary, defaultOpen = false, className = "", children }: { title: string; summary?: ReactNode; defaultOpen?: boolean; className?: string; children: ReactNode }) {
-  return <details className={`settings-card ${className}`.trim()} open={defaultOpen || undefined}>
+  // Only the first value counts: a later change (for example sync finishing) never closes a card the user opened.
+  const [openAtFirst] = useState(defaultOpen);
+  return <details className={`settings-card ${className}`.trim()} open={openAtFirst || undefined}>
     <summary><span className="settings-card-title">{title}</span>{summary !== undefined && summary !== "" && <span className="settings-card-summary">{summary}</span>}<ChevronDown size={18} aria-hidden="true" /></summary>
     <div className="settings-card-body">{children}</div>
   </details>;

@@ -9,8 +9,9 @@ export function cspDirectives(text) {
   let parsed;
   try { parsed = JSON.parse(text); } catch { return []; }
   const bodies = Array.isArray(parsed) ? parsed.filter((item) => item?.type === "csp-violation").map((item) => item.body) : [parsed?.["csp-report"]];
-  return bodies.slice(0, 20).flatMap((body) => {
+  // Each directive counts once per report, so one request writes at most one row per known directive.
+  return [...new Set(bodies.slice(0, 20).flatMap((body) => {
     const name = String(body?.effectiveDirective || body?.["effective-directive"] || body?.["violated-directive"] || "").trim().split(/\s+/)[0];
     return KNOWN.has(name) ? [name] : [];
-  });
+  }))];
 }

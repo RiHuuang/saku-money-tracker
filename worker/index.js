@@ -506,7 +506,10 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/health") return reply({ ok: true });
   // Counts CSP violations by day and directive only; no URLs, samples or identifiers are kept (master plan 1D).
   if (request.method === "POST" && path === "/v1/csp-report") {
-    const directives = Number(request.headers.get("content-length") || 0) > 16_000 ? [] : cspDirectives(await request.text().catch(() => ""));
+    // Unauthenticated by nature (browsers send it), so it shares the per-IP limiter and needs a declared, small body.
+    const length = Number(request.headers.get("content-length") || 0);
+    const limited = env.AUTH_RATE_LIMITER && !(await env.AUTH_RATE_LIMITER.limit({ key: `csp:${request.headers.get("cf-connecting-ip") || "unknown"}` })).success;
+    const directives = limited || !length || length > 16_000 ? [] : cspDirectives(await request.text().catch(() => ""));
     if (directives.length) {
       await env.DB.prepare(CSP_REPORT_TABLE).run();
       const day = new Date().toISOString().slice(0, 10);

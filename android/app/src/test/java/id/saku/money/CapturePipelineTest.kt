@@ -78,18 +78,22 @@ class CapturePipelineTest {
     }
 
     @Test
-    fun aRepostIsTheSameRowAndKeepsTheEarliestTime() {
-        val salt = "salt"
-        val first = NotificationInbox.idFor(salt, "0|com.bca|7|saku1|10001", "BCA mobile", "Transaksi QRIS Rp25.000 di KOPI")
-        val repost = NotificationInbox.idFor(salt, "0|com.bca|7|saku1|10001", "BCA mobile", "Transaksi QRIS Rp25.000 di KOPI")
-        val different = NotificationInbox.idFor(salt, "0|com.bca|7|saku1|10001", "BCA mobile", "Transaksi QRIS Rp30.000 di KOPI")
-        assertEquals(first, repost)
-        assertNotEquals(first, different)
-        assertNotEquals("the salt keeps IDs from linking across phones", first, NotificationInbox.idFor("other", "0|com.bca|7|saku1|10001", "BCA mobile", "Transaksi QRIS Rp25.000 di KOPI"))
-        store().add(item(first, at = now - 600_000))
-        assertEquals(1, store().add(item(first, at = now)))
-        assertEquals(1, store().add(item(first, at = now - 900_000)))
+    fun aRepostIsTheSameRowButASecondIdenticalPaymentIsNot() {
+        val key = "0|id.dana|7|null|10001"
+        val words = "Kamu bayar Rp25.000 ke KOPI KENANGAN"
+        val content = NotificationInbox.contentKey("salt", key, "DANA", words)
+        assertEquals("a rescan of the same post finds the same ID", NotificationInbox.idFor("salt", key, "DANA", words, now), NotificationInbox.idFor("salt", key, "DANA", words, now))
+        assertNotEquals(NotificationInbox.idFor("salt", key, "DANA", words, now), NotificationInbox.idFor("salt", key, "DANA", words, now + 1))
+        assertNotEquals("the salt keeps IDs from linking across phones", content, NotificationInbox.contentKey("other", key, "DANA", words))
+        val first = item("first", at = now - 600_000).copy(content = content)
+        store().add(first)
+        assertEquals("an update 5 minutes later is the same alert", 1, store().add(item("update", at = now - 300_000).copy(content = content)))
+        assertEquals("and keeps the earliest time", 1, store().add(item("earlier", at = now - 900_000).copy(content = content)))
         assertEquals(listOf(now - 900_000), store().items().map { it.occurredAt })
+        assertEquals("the same coffee two hours later is a second payment", 2, store().add(item("second", at = now + 2 * 3_600_000).copy(content = content)))
+        store().remove(setOf("first", "second"))
+        assertEquals("a handled alert's update is not captured again", 0, store().add(item("late-update", at = now - 600_000 + 60_000).copy(content = content)))
+        assertEquals("but the next day's identical payment is", 1, store().add(item("next-day", at = now + 86_400_000).copy(content = content)))
     }
 
     @Test
@@ -125,6 +129,14 @@ class CapturePipelineTest {
         assertEquals("BCA", cancelled.account)
         assertEquals("a repost of the cancellation adds nothing", 1, store().cancel("com.bca", 48_500, now, "cancel-1"))
         assertEquals("no handled spend, nothing to cancel", 1, store().cancel("com.bca", 1_000, now, "cancel-2"))
+    }
+
+    @Test
+    fun aSecondNoticeAboutTheSameCancellationAddsNoRefundRow() {
+        store().add(item("spend", at = now - 60_000))
+        assertEquals(0, store().cancel("com.bca", 48_500, now, "cancel-1"))
+        assertEquals("a differently worded follow-up finds only a cancelled spend", 0, store().cancel("com.bca", 48_500, now + 30_000, "cancel-2"))
+        assertTrue(store().items().isEmpty())
     }
 
     @Test
@@ -172,6 +184,12 @@ class CapturePipelineTest {
         assertNull("older than 36 hours", NotificationParsers.printedTime("Transaksi 20/10/2026 14:22", posted, zone))
         assertNull("in the future", NotificationParsers.printedTime("Jatuh tempo 30/10/2026 10:00", posted, zone))
         assertNull("an impossible date", NotificationParsers.printedTime("31/02/2026 10:00", posted, zone))
+        assertNull("a 12-hour time is not guessed", NotificationParsers.printedTime("Payment on 28 Oct 2026 05:30 PM", posted, zone))
+        val wita = ZoneId.of("Asia/Makassar")
+        val postedWita = LocalDateTime.of(2026, 10, 29, 0, 31).atZone(wita).toInstant().toEpochMilli()
+        assertEquals("a WIB time on a WITA phone is read as WIB", LocalDateTime.of(2026, 10, 28, 23, 30).atZone(zone).toInstant().toEpochMilli(),
+            NotificationParsers.printedTime("Transaksi 28/10/2026 23:30 WIB", postedWita))
+        assertEquals(LocalDateTime.of(2026, 10, 29, 0, 20).atZone(wita).toInstant().toEpochMilli(), NotificationParsers.printedTime("Transaksi 29/10/2026 00:20 WITA", postedWita))
     }
 
     @Test

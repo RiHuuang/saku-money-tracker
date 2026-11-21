@@ -4,7 +4,7 @@ import { compareStatementSummary } from "./statementEvidence";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowLeftRight, ArrowRight, Check, FileImage, FileText, Link2, LockKeyhole, RotateCcw, Sparkles, Unlink, Upload, X } from "lucide-react";
 import { compareImportNames, extractImportPage } from "./cloud";
-import { ensureConsentReceipt } from "./consent";
+import { withConsent } from "./consent";
 import { accountForBank, bankById, bankOfAccount, detectBank, mentionsAccount } from "../worker/banks.js";
 import { analyzeStatement, applyVerdict, balanceMismatch, type Verdict } from "./statementMatch";
 import { parseStatementPage, statementTotals, statementCurrency } from "./statementLines";
@@ -255,8 +255,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
           if (local) read = { rows: local.rows, bank };
           else {
             if (!consentGiven) { setConsentAsk(true); throw new Error(t("cloudPageConsentNeeded")); }
-            await ensureConsentReceipt(userId, "ai_import");
-            read = await extractImportPage(userId, { readingMode: "transactions", month: reviewMonth, source: bank || bankOfAccount(account || known.account) || "auto", ...page.content });
+            read = await withConsent(userId, "ai_import", () => extractImportPage(userId, { readingMode: "transactions", month: reviewMonth, source: bank || bankOfAccount(account || known.account) || "auto", ...page.content }));
           }
           // A pause requested during inference still keeps the completed page.
           if (draftRef.current?.id !== draftId || draftRef.current.owner !== owner) break;
@@ -507,8 +506,7 @@ export default function CatchUp({ data, month, userId, commit, busy, notify, sta
     setComparing(true);
     try {
       // The user tapped to ask AI, which is the consent; its receipt is recorded once.
-      await ensureConsentReceipt(userId, "ai_import");
-      const picks = await compareImportNames(userId, items);
+      const picks = await withConsent(userId, "ai_import", () => compareImportNames(userId, items));
       const hints = Object.fromEntries(picks.filter((pick) => pick.candidateId !== "none").map((pick) => [pick.id, { aiPick: pick.candidateId }]));
       await patchRows(hints);
       setInfo(Object.keys(hints).length ? t("compareDone", { count: Object.keys(hints).length }) : t("compareNothing"));
