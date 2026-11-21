@@ -3,6 +3,7 @@ import type { ImportRow } from "./importDraft";
 import { suggestImportDecision } from "./importTransactions";
 import { merchantKey, suggestMerchant } from "./merchants";
 import type { InboxItem } from "./notificationCapture";
+import { t } from "./i18n";
 
 export const captureAppNames: Record<string, string> = {
   "com.bca": "BCA mobile", "com.bca.mybca.omni.android": "myBCA", "com.jago.digitalBanking": "Jago",
@@ -29,8 +30,9 @@ export function inboxRows(items: readonly InboxItem[], data: Data): Notification
     const remembered = counterparty ? null : suggestMerchant(data, item.rawMerchant);
     const row = {
       id: item.id, sourceId: item.packageName, account, page: 0, date: localDate(item.occurredAt),
-      name: item.rawMerchant || `${appName} ${item.direction === "income" ? "money in" : "payment"}`, cleanName: data.merchantRules.find((rule) => rule.key === merchantKey(item.rawMerchant))?.automaticName ? remembered?.name : undefined,
-      amount: item.amount, direction: item.direction, activity: counterparty ? "topup" as const : item.direction === "income" ? "income" as const : "purchase" as const,
+      // A payment the bank cancelled after its spend was added: adding this row records the money back.
+      name: item.cancels ? t("cancelledPayment", { app: appName }) : item.rawMerchant || `${appName} ${item.direction === "income" ? "money in" : "payment"}`, cleanName: data.merchantRules.find((rule) => rule.key === merchantKey(item.rawMerchant))?.automaticName ? remembered?.name : undefined,
+      amount: item.amount, direction: item.direction, activity: item.cancels ? "refund" as const : counterparty ? "topup" as const : item.direction === "income" ? "income" as const : "purchase" as const,
       pocketId: remembered?.pocketId || "", counterparty, occurredAt: item.occurredAt, appName, balance: item.balance,
     };
     return { ...row, decision: suggestImportDecision(row, row.date.slice(0, 7)) };
