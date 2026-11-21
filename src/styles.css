@@ -1,14 +1,10 @@
 :root {
   font-family: "Plus Jakarta Sans", sans-serif;
-  color: #253338;
-  background: #f6f8f9;
   font-synthesis: none;
   font-weight: 400;
-  --teal: #14776c;
-  --muted: #7c888d;
-  --line: #e7ecee;
-  --surface: #fff;
   letter-spacing: 0;
+  /* Plus Jakarta Sans has tnum: every amount lines up and doesn't jiggle while counting. */
+  font-variant-numeric: tabular-nums;
 }
 .check-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: min(100%, 640px); gap: 4px; padding: 4px; margin-bottom: 22px; border-radius: 14px; background: var(--surface-muted); }
 .check-tabs button { min-height: 44px; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; }
@@ -115,7 +111,7 @@
 .catchup-review-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 22px 0 17px; border: 1px solid var(--line); border-radius: 16px; background: var(--line); }
 .catchup-review-overview > div { display: grid; gap: 4px; padding: 15px 18px; background: var(--surface-muted); }
 .catchup-review-overview strong { color: var(--ink); font-size: 25px; font-weight: 700; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.catchup-review-overview span { color: var(--muted); font-size: 11px; }
+.catchup-review-overview span { color: var(--muted); font-size: 12px; }
 .catchup-missing-dates { margin: 0 0 18px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--line)); border-radius: 15px; background: color-mix(in srgb, var(--warning) 10%, var(--surface)); }
 .catchup-missing-dates > strong { color: var(--ink); font-size: 14px; }
 .catchup-missing-dates > p { margin: 5px 0 13px; color: var(--muted); font-size: 12px; line-height: 1.5; }
@@ -135,7 +131,7 @@
 .catchup-date-check label span { overflow-wrap: anywhere; }
 .catchup-date-check input { flex: none; accent-color: var(--teal); }
 .catchup-date-check .text-button { flex: none; }
-.catchup-review-guide { margin: -4px 0 15px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.catchup-review-guide { margin: -4px 0 15px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .catchup-review-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 7px; scrollbar-width: none; }
 .catchup-review-tabs::-webkit-scrollbar { display: none; }
 .catchup-review-tabs button { flex: 0 0 auto; min-height: 44px; padding: 8px 12px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; cursor: pointer; }
@@ -182,7 +178,7 @@
 .catchup-match-review { margin-top: 18px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-muted); }
 .catchup-match-review summary { padding: 15px 18px; color: var(--teal); font-size: 13px; font-weight: 700; cursor: pointer; }
 .catchup-match-review summary:focus-visible { outline: 2px solid var(--teal); outline-offset: -3px; border-radius: 13px; }
-.catchup-match-review > p { margin: 0 18px 13px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.catchup-match-review > p { margin: 0 18px 13px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .catchup-match-list { max-height: 320px; overflow-y: auto; margin: 0 18px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .catchup-match { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 59px; padding: 10px 13px; cursor: pointer; }
 .catchup-match + .catchup-match { border-top: 1px solid var(--line); }
@@ -324,9 +320,28 @@ input[type="number"] {
 input::-webkit-inner-spin-button {
   appearance: none;
 }
+/* 24 px boxes with a 3:1 outline in both themes (master plan 2.2). */
 input[type="checkbox"] {
-  accent-color: var(--teal);
+  appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: 2px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
 }
+input[type="checkbox"]:checked { border-color: var(--teal); background: var(--teal); }
+input[type="checkbox"]:checked::after { content: ""; width: 6px; height: 11px; margin-top: -3px; border: solid var(--action-ink); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
+input[type="checkbox"]:disabled { opacity: .45; cursor: not-allowed; }
+/* A switch is a checkbox with role="switch": on/off settings such as "Tidy merchant names with AI". */
+input[type="checkbox"][role="switch"] { width: 46px; height: 28px; border-radius: 999px; place-content: center start; padding: 0 3px; }
+input[type="checkbox"][role="switch"]::after { content: ""; width: 18px; height: 18px; margin: 0; border: 0; border-radius: 50%; background: var(--control-border); transform: none; transition: transform .15s ease; }
+input[type="checkbox"][role="switch"]:checked::after { width: 18px; height: 18px; margin: 0; border: 0; background: var(--action-ink); transform: translateX(18px); }
+@media (prefers-reduced-motion: reduce) { input[type="checkbox"][role="switch"]::after { transition: none; } }
 .positive {
   color: var(--teal) !important;
 }
@@ -1643,7 +1658,7 @@ main {
 .balance-adjustment-overview > div { display: grid; gap: 6px; min-width: 0; }
 .balance-adjustment-overview > div:last-child { text-align: right; }
 .balance-adjustment-overview span { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.balance-adjustment-overview strong { color: var(--ink); font: 700 clamp(18px, 3vw, 25px)/1.15 "DM Sans", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.balance-adjustment-overview strong { color: var(--ink); font: 700 clamp(18px, 3vw, 25px)/1.15 "Plus Jakarta Sans", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.025em; overflow-wrap: anywhere; }
 .balance-adjustment-overview > svg { color: var(--teal); }
 .balance-adjustment-effect {
   display: flex;
@@ -2199,7 +2214,7 @@ main {
 .cloud-user small { display: block; overflow-wrap: anywhere; }
 .cloud-user strong { color: #173e40; font-size: 13px; }
 .cloud-user small,
-.cloud-note { color: #6d7b7e; font-size: 11px; }
+.cloud-note { color: var(--muted); font-size: 12px; }
 .cloud-account .settings-actions { margin-bottom: 12px; flex-wrap: wrap; }
 .sync-state {
   flex: none;
@@ -2550,12 +2565,14 @@ main {
   color: #758c7b;
 }
 .checkbox-label {
-  font-size: 11px;
+  font-size: 13px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   min-width: 140px;
+  min-height: 48px;
 }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 48px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .unmatched-ledger {
   font-size: 11px;
   margin-top: 24px;
@@ -3735,12 +3752,16 @@ main {
   --surface: #fff;
   --surface-muted: #f0f3ed;
   --ink: #203b33;
-  --muted: #60746a;
+  --muted: #5a6e64;
+  /* --line is for dividers only; controls use --control-border (WCAG 1.4.11, at least 3:1). */
   --line: #dbe6dc;
+  --control-border: #6f8378;
+  --focus-ring: #176b55;
+  --shadow-soft: #123f290f;
   --teal: #176b55;
   --accent-soft: #e4efe8;
   --action-ink: #fff;
-  --warning: #a86c32;
+  --warning: #8f5a24;
   --danger: #ad4051;
   color: var(--ink);
   background: var(--canvas);
@@ -3752,6 +3773,9 @@ main {
   --ink: #edf3ed;
   --muted: #aec3b5;
   --line: #365144;
+  --control-border: #7c9a8a;
+  --focus-ring: #92d3b1;
+  --shadow-soft: transparent;
   --teal: #92d3b1;
   --accent-soft: #284638;
   --action-ink: #10231a;
@@ -3766,7 +3790,7 @@ body, .app-shell, .main-shell { background: var(--canvas); color: var(--ink); }
 button, input, select, textarea { color: inherit; }
 button, a, input, select, textarea, summary { transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease; }
 button:active, a:active { transform: scale(.985); }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 .sidebar, .topbar, .bottom-nav { background: var(--surface); border-color: var(--line); }
 .main-shell { min-height: 100dvh; }
 .main-shell > main { max-width: 1320px; margin-inline: auto; }
@@ -3781,9 +3805,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .page-heading > div > p { color: var(--muted); font-size: 12px; }
 .page-heading h1 { font-size: clamp(30px, 3.1vw, 42px); line-height: 1.08; font-weight: 700; }
 .button { border-radius: 12px; min-height: 44px; font-size: 13px; }
-.primary { background: var(--teal); color: var(--action-ink); box-shadow: 0 6px 20px #123f2920; }
+.primary { background: var(--teal); color: var(--action-ink); box-shadow: 0 6px 20px var(--shadow-soft); }
 .primary:hover { background: var(--teal); filter: brightness(.93); }
-.secondary, .month-picker, input, select, textarea { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.secondary, .month-picker { background: var(--surface); border-color: var(--line); color: var(--ink); }
+input, select, textarea { background: var(--surface); border-color: var(--control-border); color: var(--ink); }
 .secondary:hover, .icon-button:hover { background: var(--surface-muted); color: var(--ink); }
 .text-button, .positive { color: var(--teal) !important; }
 .negative { color: var(--danger) !important; }
@@ -4017,7 +4042,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .transaction-row { border-color: var(--line); min-height: 69px; }
 .transaction-description strong { font-size: 13px; color: var(--ink); }
 .transaction-amount { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink); }
-.transaction-date, .transaction-description > span { font-size: 11px; }
+.transaction-date, .transaction-description > span { font-size: 12px; }
 .search-field { background: var(--surface); border-color: var(--line); color: var(--muted); border-radius: 12px; min-height: 48px; }
 .search-field input { color: var(--ink); }
 .segmented { background: var(--surface-muted); border-color: var(--line); }
@@ -4505,3 +4530,5 @@ details.statement-evidence-form[open] { display: grid; gap: 14px; }
 .monthly-source-list { margin-top: 12px; }
 .monthly-more { margin-top: 14px; width: 100%; }
 .monthly-look .catchup-row-summary { min-height: 76px; }
+.switch-row > span { display: grid; gap: 2px; }
+.switch-help { color: var(--muted); font-size: 12px; font-weight: 400; }

@@ -41,6 +41,7 @@ try {
     await import("./statement-bench.test.mjs");
     await import("./android-permissions.test.mjs");
     await import("./no-leak.test.mjs");
+    await import("./ui-ratchet.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });
