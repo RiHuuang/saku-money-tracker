@@ -3529,6 +3529,9 @@ main {
     line-height: 1.7;
   }
 }
+.modal.modal-compact { width: min(480px, calc(100% - 28px)); max-width: calc(100% - 28px); height: fit-content; max-height: min(280px, calc(100dvh - 40px)); margin: auto; border: 1px solid var(--line); border-radius: 20px; }
+.modal.modal-compact .modal-content { min-height: 0; padding: 24px; }
+.modal.modal-compact .form-footer { position: static; border-top: 0; padding: 0; background: transparent; }
 @media (max-width: 370px) {
   main {
     padding-inline: 14px;
@@ -3782,12 +3785,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .balance-cta { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; color: #e5fff3; font-weight: 700; }
 .pocket-activity { display: grid; gap: 18px; }
 .pocket-activity-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.pocket-activity-summary > div, .pocket-move { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.pocket-activity-summary > div, .pocket-activity-summary > button, .pocket-move { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.pocket-activity-summary > button { color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.pocket-activity-summary > button:hover { border-color: var(--teal); }
+.pocket-heading-edit { display: inline-grid; place-items: center; width: 38px; height: 38px; margin-left: 8px; vertical-align: middle; border-radius: 9px; color: var(--teal); }
+.pocket-heading-edit:hover { background: var(--accent-soft); }
 .pocket-activity-summary span { display: block; color: var(--muted); font-size: 12px; }
 .pocket-activity-summary strong { display: block; margin-top: 6px; overflow-wrap: anywhere; }
 .pocket-funding-note { color: var(--muted); font-size: 13px; }
 .pocket-move { display: flex; justify-content: space-between; gap: 12px; }
 @media (max-width: 600px) { .pocket-activity-summary { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .pocket-desktop-add { display: none; } }
+.pocket-card-shell.is-over-budget .pocket-card { border-color: color-mix(in srgb, var(--danger) 55%, var(--line)); background: color-mix(in srgb, var(--danger) 9%, var(--surface)); }
+.pocket-card-shell.is-over-budget .pocket-value strong { color: var(--danger); font-weight: 750; }
+.pocket-card-shell.is-over-budget .pocket-card-bottom { color: var(--ink); font-size: 11px; }
+.pocket-card-shell.is-over-budget .pocket-over-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 15%, var(--surface)); color: var(--danger); font-size: 11px; font-weight: 700; }
+.pocket-cover-action { margin-top: 6px; color: var(--danger); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.budget-overview > button { display: grid; gap: 4px; align-content: start; color: var(--ink); text-align: left; border-radius: 10px; cursor: pointer; }
+.budget-overview > button:hover { background: var(--surface-muted); }
+.budget-overview > button.shortfall-tile strong, .budget-overview > button.shortfall-tile span { color: var(--danger); }
 .balance-panel::after { content: ""; position: absolute; width: 190px; height: 190px; border: 1px solid #ffffff22; border-radius: 50%; right: -70px; bottom: -115px; pointer-events: none; }
 .balance-panel .balance-number { font-variant-numeric: tabular-nums; letter-spacing: -.045em; }
 .balance-panel .balance-footer { position: relative; z-index: 1; }
@@ -4133,7 +4149,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .import-zone { padding: 30px 20px; }
   .import-zone p, .import-note { font-size: 12px; }
   .budget-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 20px; }
-  .budget-overview > div:last-child { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 15px; }
+  .budget-overview > :last-child { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 15px; }
   .budget-overview span { font-size: 11px; min-height: 0; max-width: none; }
   .budget-overview strong { font-size: 21px; }
   .appearance-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -4433,20 +4449,14 @@ main.onboarding { max-width: none; margin: 0; padding: 0; }
 .planner-history-row small { color: var(--muted); font-size: 11px; }
 .planner-footer { position: sticky; bottom: 0; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin: 0; padding: 12px 0 4px; background: var(--surface); border-top: 1px solid var(--line); }
 .section-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-.plan-hint { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px 14px; align-items: start; margin: 0 0 18px; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 2px 13px #173f2510; animation: onboarding-pop .42s cubic-bezier(.2,.8,.2,1) both; }
-.plan-hint-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--teal); }
-.plan-hint strong { font-size: 14px; }
-.plan-hint p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.plan-hint-actions { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .section-heading:has(> .section-actions) { flex-wrap: wrap; row-gap: 12px; }
 @media (max-width: 520px) {
   .section-actions { width: 100%; justify-content: flex-start; }
   .section-actions .button { flex: 1; }
   .allocation-row-inputs { grid-template-columns: minmax(0, 1fr) 84px; }
-  .plan-hint { grid-template-columns: 1fr; } .plan-hint-actions { grid-column: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .onboarding-hero, .onboarding-step, .onboarding-pop, .allocation-row, .onboarding-summary-list li, .plan-hint, .allocation-bar.is-summary i, .onboarding-chips button.is-selected { animation: none; }
+  .onboarding-hero, .onboarding-step, .onboarding-pop, .allocation-row, .onboarding-summary-list li, .allocation-bar.is-summary i, .onboarding-chips button.is-selected { animation: none; }
   .allocation-pulse { animation: none; opacity: 1; }
 }
 

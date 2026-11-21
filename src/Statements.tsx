@@ -281,19 +281,6 @@ export default function Statements({
       notify("Future-dated rows cannot be added yet.");
       return;
     }
-    if (
-      selected.some(
-        (r) =>
-          r.type === "expense" && selection[r.id] &&
-          !data.pockets.some(
-            (p) =>
-              p.id === selection[r.id] && p.createdMonth <= r.date.slice(0, 7),
-          ),
-      )
-    ) {
-      notify("Choose a pocket that exists for the transaction month.");
-      return;
-    }
     const added: Transaction[] = selected.map((r) => ({
       id: uid(),
       name: r.name,
@@ -613,7 +600,7 @@ export default function Statements({
                 <p>{row?.date || transaction?.date} · {row?.account || transaction?.account}</p>
                 {source && <div className="review-source"><span>Statement page {source.page}</span><p>{source.sourceLine}</p></div>}
                 {original && <div className="review-source comparison"><span>Currently in Saku</span><p>{original.date} · {original.name} · {money(original.amount)}</p></div>}
-                {row?.status === "missing" && row.type === "expense" && !data.creditCards.some((card) => card.name === row.account) && <ChoiceField label={t("pocket")} value={selection[row.id] || ""} onValueChange={(value) => setSelection((current) => ({ ...current, [row.id]: value }))} options={[{ value: "", label: t("unassigned") }, ...data.pockets.filter((pocket) => pocket.createdMonth <= row.date.slice(0, 7)).map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
+                {row?.status === "missing" && row.type === "expense" && !data.creditCards.some((card) => card.name === row.account) && <ChoiceField label={t("pocket")} value={selection[row.id] || ""} onValueChange={(value) => setSelection((current) => ({ ...current, [row.id]: value }))} options={[{ value: "", label: t("unassigned") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
               </div><div className="review-deck-actions"><button className="button secondary" onClick={() => decideCurrent(false)}><X size={17} />{declineLabel}</button><button className="button primary" onClick={() => decideCurrent(true)}><Check size={17} />{acceptLabel}</button></div></div>;
             })() : <div className="review-deck-done"><CheckCheck size={34} /><h3>All cards sorted</h3><p>Review the staged summary below before anything changes.</p><button className="button primary" onClick={() => setDeckOpen(false)}>Done</button></div>}
           </Modal>}

@@ -20,6 +20,7 @@ import {
   Search,
   MoreHorizontal,
   ShoppingBag,
+  TriangleAlert,
   Utensils,
   Wallet,
   X,
@@ -168,7 +169,7 @@ export function SegmentedChoice({ value, options, onValueChange, label, disabled
     </div>
   </div>;
 }
-export function FitMoney({ amount }: { amount: number }) {
+export function FitMoney({ amount, prefix = "" }: { amount: number; prefix?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     const element = ref.current!;
@@ -186,8 +187,8 @@ export function FitMoney({ amount }: { amount: number }) {
     fit();
     void document.fonts.ready.then(() => { lastWidth = 0; fit(); });
     return () => observer.disconnect();
-  }, [amount]);
-  return <span ref={ref} className="fit-money">{money(amount)}</span>;
+  }, [amount, prefix]);
+  return <span ref={ref} className="fit-money">{prefix}{money(amount)}</span>;
 }
 export function PocketIcon({
   name,
@@ -262,11 +263,13 @@ export function Modal({
   subtitle,
   children,
   onClose,
+  className,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   onClose: () => void;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useLayoutEffect(() => {
@@ -277,7 +280,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className="modal"
+      className={`modal${className ? ` ${className}` : ""}`}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
@@ -306,11 +309,13 @@ export function PocketCard({
   onClick,
   onEdit,
   onDelete,
+  onCover,
 }: {
   p: Pocket & { limit: number; spent: number };
   onClick: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onCover?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -333,7 +338,7 @@ export function PocketCard({
         ? 100
         : 0;
   return (
-    <div ref={shell} className={`pocket-card-shell ${menuOpen ? "menu-open" : ""}`} style={{ "--pocket-color": p.color } as CSSProperties}>
+    <div ref={shell} className={`pocket-card-shell ${menuOpen ? "menu-open" : ""} ${remaining < 0 ? "is-over-budget" : ""}`} style={{ "--pocket-color": p.color } as CSSProperties}>
     <button className="pocket-card" onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } onClick(); }}
       onPointerDown={(event) => { if (event.pointerType === "mouse" && event.button !== 0) return; cancelHold(); suppressClick.current = false; hold.current = setTimeout(() => { suppressClick.current = true; setMenuOpen(true); }, 500); }}
       onPointerUp={cancelHold} onPointerCancel={cancelHold} onPointerLeave={cancelHold}
@@ -345,8 +350,8 @@ export function PocketCard({
       </div>
       <h3>{p.name}</h3>
       <div className={`pocket-value ${remaining < 0 ? "negative" : ""}`}>
-        <strong className="pocket-money"><FitMoney amount={Math.abs(remaining)} /></strong>
-        <span>{remaining < 0 ? translate("overBudget") : translate("left")}</span>
+        <strong className="pocket-money"><FitMoney amount={Math.abs(remaining)} prefix={remaining < 0 ? "−" : ""} /></strong>
+        {remaining < 0 ? <span className="pocket-over-chip"><TriangleAlert size={13} />{translate("over")}</span> : <span>{translate("left")}</span>}
       </div>
       <div className="progress">
         <i
@@ -357,10 +362,11 @@ export function PocketCard({
         />
       </div>
       <div className="pocket-card-bottom">
-        <span>{money(p.spent)} {translate("spent")}</span>
-        <span>{percent}%</span>
+        <span>{remaining < 0 ? translate("spentOf", { spent: money(p.spent), budget: money(p.limit) }) : <>{money(p.spent)} {translate("spent")}</>}</span>
+        {remaining >= 0 && <span>{percent}%</span>}
       </div>
     </button>
+    {remaining < 0 && onCover && <button type="button" className="pocket-cover-action" onClick={onCover}>{translate("coverIt")}</button>}
     {onEdit && <div className="pocket-card-actions"><button type="button" className="pocket-menu-trigger" aria-label={translate("optionsFor", { name: p.name })} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={20} /></button>
       {menuOpen && <div className="pocket-menu"><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }}>{translate("editPocket")}</button><button type="button" onClick={() => { setMenuOpen(false); (onDelete || onEdit)(); }}>{translate("deletePocketMenu")}</button></div>}
     </div>}

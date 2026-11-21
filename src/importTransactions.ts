@@ -154,7 +154,7 @@ export function importRowReady(row: ImportRow, account: string, data: Data, curr
     return row.direction === "expense" && ["purchase", "pay_later"].includes(row.activity) && !!due && validDate(`${due}-01`) && due >= row.date.slice(0, 7);
   }
   if (!data.accounts.includes(account)) return false;
-  return row.direction === "income" || !row.pocketId || data.pockets.some((pocket) => pocket.id === row.pocketId && pocket.createdMonth <= row.date.slice(0, 7));
+  return row.direction === "income" || !row.pocketId || data.pockets.some((pocket) => pocket.id === row.pocketId);
 }
 
 export function importedTransactions(row: ImportRow, account: string, sourceName: string, data: Data, pairedRowId?: string, partnerDate?: string): Transaction[] {
