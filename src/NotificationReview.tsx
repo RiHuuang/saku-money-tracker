@@ -8,7 +8,7 @@ import { cleanMerchantNames } from "./cloud";
 import { applyTidiedNames, loadCleaningOptIn, namesToClean } from "./merchantCleaning";
 import { ensureConsentReceipt } from "./consent";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
-import { inboxRows, notificationStatusTap, type NotificationRow } from "./notificationRows";
+import { inboxReadiness, inboxRows, notificationStatusTap, type NotificationRow } from "./notificationRows";
 import { ChoiceField, Modal } from "./components";
 import { useRowGestures } from "./rowGestures";
 import { useHiddenWhileScrollingUp } from "./scrollReveal";
@@ -44,10 +44,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   useEffect(() => { void load(); }, []);
   const rows = useMemo(() => inboxRows(items || [], data).map((row): NotificationRow => ({ ...row, ...edits[row.id] })), [items, data, edits]);
   const accountFor = (row: ImportRow) => importRowAccount(row, undefined, data);
-  const twinFor = (row: NotificationRow) => rows.find((other) => other.id !== row.id && other.account === row.counterparty && other.direction !== row.direction && other.amount === row.amount && Math.abs(other.occurredAt - row.occurredAt) <= 30 * 60 * 1000);
-  // Statement-style matching: same account, day, amount and direction counts as a possible duplicate whatever it was named.
-  const duplicates = useMemo(() => importRowsNeedingDuplicateConfirmation(rows, data.transactions, accountFor, () => false, true), [rows, data]);
-  const ready = rows.filter((row) => importRowReady(row, accountFor(row), data) && (!duplicates.has(row.id) || row.confirmedSeparate) && !rows.some((other) => other.activity === "transfer" && other.id !== row.id && twinFor(other)?.id === row.id));
+  const { ready, duplicates, twinFor } = useMemo(() => inboxReadiness(rows, data), [rows, data]);
   // Rows the user chose to leave out stay visible as skipped (and can be changed back) until the list is saved.
   const skipped = rows.filter((row) => edits[row.id]?.decision === "skip");
   // Leaving out one half of a paired transfer leaves out its twin too, so nothing is stranded on the phone.
@@ -124,7 +121,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
         const created = importedTransactions(row, account, "notification", data, twin?.id, twin?.date);
         // The time is the notification's first post time, not when the row is added.
         additions.push(...created.map((transaction) => ({ ...transaction, time: timeOfDay(transaction.type === row.direction || !twin ? row.occurredAt : twin.occurredAt), note: `${importRowName(row) !== row.name.trim() ? `${row.name.trim()} · ` : ""}${t("notificationSource", { app: row.appName })}` })));
-        if (row.direction === "expense" && row.activity === "purchase") merchantRules = learnNotificationPocket({ ...data, merchantRules }, row.name, row.pocketId);
+        if (row.direction === "expense" && row.activity === "purchase" && row.pocketId) merchantRules = learnNotificationPocket({ ...data, merchantRules }, row.name, row.pocketId);
         done.add(row.id);
         if (twin) done.add(twin.id);
       }
