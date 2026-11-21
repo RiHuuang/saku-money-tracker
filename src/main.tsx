@@ -10,9 +10,13 @@ import ErrorBoundary from "./ErrorBoundary";
 import { AppUpdateProvider } from "./appUpdate";
 import { loadSystemTheme, loadTheme, paintTheme, watchSystemTheme } from "./appearance";
 import "./styles.css";
+import { loadLanguage, prepareLanguage } from "./i18n";
 void loadTheme().catch(() => "system" as const).then(async (preference) => {
   await loadSystemTheme();
   paintTheme(preference);
+  // The saved language and the device language (used until the saved one is read) are ready before the first render.
+  const language = await loadLanguage().catch(() => "system" as const);
+  await Promise.all([prepareLanguage(language), prepareLanguage("system")]);
   watchSystemTheme();
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode><ErrorBoundary><AppUpdateProvider><App /></AppUpdateProvider></ErrorBoundary></React.StrictMode>,

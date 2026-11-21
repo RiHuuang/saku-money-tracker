@@ -50,7 +50,6 @@ import {
   dayLabel,
   dueRules,
   emptyData,
-  exportCSV,
   extendPocketsToTransactions,
   groupDigits,
   isIncome,
@@ -130,7 +129,7 @@ function SheetMessage({ children }: { children: ReactNode }) {
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
-import { loadLanguage, localeTag, saveLanguage, setActiveLanguage, t, t as translate, type LanguagePreference } from "./i18n";
+import { loadLanguage, localeTag, prepareLanguage, saveLanguage, setActiveLanguage, t, t as translate, type LanguagePreference } from "./i18n";
 import { backDestination, moreViews, popSheet, pushSheet, type View } from "./navigation";
 import { AppUpdateSettings, useAppUpdate } from "./appUpdate";
 import { version as appVersion } from "../package.json";
@@ -411,7 +410,7 @@ export default function App() {
   }, [cloud?.user?.id, data]);
   useEffect(() => {
     void loadTheme().then(setThemePreference).catch(() => {});
-    void loadLanguage().then(setLanguagePreference).catch(() => {});
+    void loadLanguage().then(async (preference) => { await prepareLanguage(preference); setLanguagePreference(preference); }).catch(() => {});
   }, []);
   async function unlock() {
     if (authenticating.current) return;
@@ -1243,7 +1242,7 @@ export default function App() {
               themePreference={themePreference}
               onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast(t("appearanceCouldNotBeSaved"))); }}
               languagePreference={languagePreference}
-              onLanguageChange={(preference) => { setLanguagePreference(preference); void saveLanguage(preference).catch(() => setToast(t("languageSaveError"))); }}
+              onLanguageChange={(preference) => { void prepareLanguage(preference).then(() => { setLanguagePreference(preference); return saveLanguage(preference); }).catch(() => setToast(t("languageSaveError"))); }}
               onOpenAccount={(account) => setSelectedAccount(account)}
               onRemoveAccount={(account) => { const index = data.accounts.indexOf(account); void commit({ ...data, accounts: data.accounts.filter((item) => item !== account) }, "").then((ok) => { if (ok) setToast({ message: t("accountRemoved"), action: { label: t("undo"), run: () => { const current = latest.current.data; if (current && !current.accounts.includes(account)) void commit({ ...current, accounts: [...current.accounts.slice(0, index), account, ...current.accounts.slice(index)] }, t("accountRestored")); } } }); }); }}
               appLock={appLock}
@@ -1557,8 +1556,8 @@ function Transactions({
           ))}
         </div>
         <details ref={exportMenu} className="export-menu" onKeyDown={(event) => { if (event.key === "Escape") { exportMenu.current?.removeAttribute("open"); event.stopPropagation(); } }}><summary className="button secondary"><Download size={16} /> {t("exportCsv")}</summary><div>
-          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download(`saku-${month}.csv`, exportCSV(rows, data.pockets), "text/csv").catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("currentResults", { count: rows.length })}</button>
-          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download("saku-all-transactions.csv", exportCSV(data.transactions, data.pockets), "text/csv").catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("allHistory")}</button>
+          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void import("./csv").then(({ exportCSV }) => download(`saku-${month}.csv`, exportCSV(rows, data.pockets), "text/csv")).catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("currentResults", { count: rows.length })}</button>
+          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void import("./csv").then(({ exportCSV }) => download("saku-all-transactions.csv", exportCSV(data.transactions, data.pockets), "text/csv")).catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("allHistory")}</button>
         </div></details>
       </div>
       <div className="transaction-filters">

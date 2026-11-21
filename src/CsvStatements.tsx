@@ -1,7 +1,8 @@
 import { t } from "./i18n";
 import { useMemo, useState } from "react";
 import { ArrowRight, Check, Download, FileSpreadsheet, Upload, X } from "lucide-react";
-import { bankRows, money, monthLabel, readCSV, reconcile, today, uid, type Data, type Mapping, type Statement, type Transaction } from "./domain";
+import { bankRows, money, monthLabel, reconcile, today, uid, type Data, type Mapping, type Statement, type Transaction } from "./domain";
+import { readCSV } from "./csv";
 import { download } from "./storage";
 import { ChoiceField, Modal, SegmentedChoice } from "./components";
 import { useRowGestures } from "./rowGestures";

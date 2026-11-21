@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { exportCSV, readCSV } from "./csv";
 import {
   COLORS,
   ICONS,
@@ -21,12 +22,10 @@ import {
   dueRules,
   recurringStartMonth,
   emptyData,
-  exportCSV,
   extendPocketsToTransactions,
   installmentAmounts,
   receiptSuggestion,
   parseMoney,
-  readCSV,
   reassignAndDeletePocket,
   reconcile,
   renameAccount,
