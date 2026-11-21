@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const BANKS = ["bca", "jago", "seabank", "blu", "gopay", "dana"];
+export const BANKS = ["bca", "jago", "seabank", "blu", "gopay", "dana", "mandiri", "bni", "bsi", "cimb", "permata", "ocbc", "maybank", "danamon", "btn", "superbank", "linkaja"];
 const norm = (value) => String(value || "").toLocaleLowerCase("id-ID").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 export function loadFixture(bank) {

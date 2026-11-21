@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic OCBC savings statement: DEBET and KREDIT with 0.00 in the unused column, Berita lines, sen (made-up names).",
+ "month": "2026-10",
+ "bank": "ocbc",
+ "text": "PT Bank OCBC NISP Tbk\nLaporan Rekening Tabungan\nMATA UANG : IDR\nTGL TRANS TGL VALUTA URAIAN DEBET KREDIT SALDO\nSALDO AWAL 10,000,000.00\n01/10/2026 01/10/2026 TRANSFER KE BAMBANG SUSILO 1,000,000.00 0.00 9,000,000.00\nBerita : bayar kos\n15/10/2026 15/10/2026 BUNGA 0.00 4,109.59 9,004,109.59\n15/10/2026 15/10/2026 PAJAK BUNGA 821.92 0.00 9,003,287.67\nSALDO AKHIR 9,003,287.67",
+ "rows": [
+  [
+   "2026-10-01",
+   1000000,
+   "expense"
+  ],
+  [
+   "2026-10-15",
+   4110,
+   "income"
+  ],
+  [
+   "2026-10-15",
+   822,
+   "expense"
+  ]
+ ],
+ "names": [
+  "BAMBANG SUSILO",
+  "BUNGA",
+  "PAJAK"
+ ]
+}

@@ -1,5 +1,6 @@
-export type BankId = "bca" | "bri" | "jago" | "gopay" | "seabank" | "dana" | "blu";
-export type Bank = { id: BankId; name: string; beta: boolean; signature: RegExp; account: RegExp; keyword: RegExp; hint: string };
+export type BankId = "bca" | "bri" | "jago" | "gopay" | "seabank" | "dana" | "blu"
+  | "bsi" | "mandiri" | "bni" | "cimb" | "permata" | "ocbc" | "maybank" | "danamon" | "btn" | "superbank" | "jenius" | "linkaja" | "ovo" | "shopeepay";
+export type Bank = { id: BankId; name: string; beta: boolean; signature: RegExp; account: RegExp; keyword: RegExp };
 export const BANKS: Bank[];
 export const BANK_IDS: BankId[];
 export function bankById(id: string): Bank | undefined;

@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic CIMB Niaga OCTO account statement: one unsigned amount column, direction from the balance (made-up names).",
+ "month": "2026-10",
+ "bank": "cimb",
+ "text": "PT Bank CIMB Niaga Tbk\nOCTO Mobile - Rekening Tabungan\nPeriode 01/10/2026 - 31/10/2026\nDate Transaction Description Transaction Amount Balance\nOpening Balance 1,000,000.00\n03/10/2026 TRANSFER TO RUDI HARTONO 200,000.00 800,000.00\n09/10/2026 SALARY PT CAHAYA ABADI 6,000,000.00 6,800,000.00\n21/10/2026 PAYMENT TOKOPEDIA 125,000.00 6,675,000.00\nClosing Balance 6,675,000.00",
+ "rows": [
+  [
+   "2026-10-03",
+   200000,
+   "expense"
+  ],
+  [
+   "2026-10-09",
+   6000000,
+   "income"
+  ],
+  [
+   "2026-10-21",
+   125000,
+   "expense"
+  ]
+ ],
+ "names": [
+  "RUDI HARTONO",
+  "PT CAHAYA ABADI",
+  "TOKOPEDIA"
+ ]
+}
