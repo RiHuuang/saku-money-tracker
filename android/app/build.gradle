@@ -109,7 +109,6 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.17.1'
     implementation 'com.google.mlkit:text-recognition:16.0.1'
     implementation 'com.google.android.gms:play-services-auth:21.5.1'
 }

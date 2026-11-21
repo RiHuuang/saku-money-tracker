@@ -108,7 +108,6 @@ import {
   SegmentedChoice,
   TransactionList,
 } from "./components";
-const Statements = lazy(() => import("./Statements"));
 const Onboarding = lazy(() => import("./Onboarding"));
 const PocketPlanner = lazy(() => import("./PocketPlanner"));
 const CsvStatements = lazy(() => import("./CsvStatements"));
@@ -170,7 +169,6 @@ type Edit =
   | { type: "start" }
   | { type: "plan" }
   | null;
-const cloudImportEnabled = true;
 const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
@@ -178,7 +176,7 @@ const navigation = [
   { id: "pockets", label: "Pockets", icon: Wallet },
   { id: "plans", label: "Plans", icon: CreditCard },
   { id: "insights", label: "Insights", icon: BarChart3 },
-  { id: "check", label: cloudImportEnabled ? "Catch up" : "Check", icon: FileCheck2 },
+  { id: "check", label: "Catch up", icon: FileCheck2 },
 ] as const;
 const navigationKeys = { overview: "home", transactions: "activity", pockets: "pockets", plans: "plans", insights: "insights", check: "catchUp", more: "more" } as const;
 const mobileNavigation = [
@@ -190,7 +188,7 @@ export default function App() {
     [loadError, setLoadError] = useState(""),
     [view, setView] = useState<View>("overview"),
     [month, setMonth] = useState(today().slice(0, 7)),
-    [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
+    [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">("catchup"),
     [editStack, setEditStack] = useState<Exclude<Edit, null>[]>([]),
     [toast, setToast] = useState<string | { message: string; action: { label: string; run: () => void }; secondaryAction?: { label: string; run: () => void } }>(""),
     [busy, setBusy] = useState(false),
@@ -705,7 +703,7 @@ export default function App() {
   const go = (v: View) => {
     if (v !== view) setViewHistory((history) => [...history.slice(-11), view]);
     // Opening Catch up lands on what is actually waiting: captured notifications, unless a screenshot draft is open.
-    if (v === "check" && view !== "check" && cloudImportEnabled && importWaiting > draftsWaiting && !draftsWaiting) setCheckTab("notifications");
+    if (v === "check" && view !== "check" && importWaiting > draftsWaiting && !draftsWaiting) setCheckTab("notifications");
     setSelectedPocketId(null);
     setSelectedAccount("");
     setAccountsOpen(false);
@@ -885,7 +883,7 @@ export default function App() {
           </section>}
           {view === "overview" && (
             <>
-              {showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { go("check"); setCheckTab(cloudImportEnabled ? "catchup" : "csv"); }}>{cloudImportEnabled ? t("importScreenshot") : t("catchUpMonthly")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
+              {showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { go("check"); setCheckTab("catchup"); }}>{t("importScreenshot")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
                 <div className="balance-panel balance-action" role="button" tabIndex={0} aria-label={t("openMoneyByAccount")} onClick={() => setAccountsOpen(true)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setAccountsOpen(true); } }}>
                   <div className="balance-top">
@@ -1223,9 +1221,9 @@ export default function App() {
           )}
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">{t("loadingMonthlyCheck")}</p>}>
-              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label={t("importMode")}><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>}
-              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">{t("loadingNotifications")}</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} onSettings={() => go("settings")} getCurrentData={() => latest.current.cloud?.user?.id === cloud?.user?.id ? latest.current.data : null} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
-              {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
+              <div className="check-tabs" role="tablist" aria-label={t("importMode")}><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>
+              {checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">{t("loadingNotifications")}</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} onSettings={() => go("settings")} getCurrentData={() => latest.current.cloud?.user?.id === cloud?.user?.id ? latest.current.data : null} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null}
+              <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div>
             </Suspense>
           )}
           {view === "plans" && <Suspense fallback={<p className="loading-view">{t("loadingPlans")}</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} initialTab={plansTab} /></Suspense>}
@@ -2586,10 +2584,6 @@ function SettingsView({
         </div>
         <p className="legal-links"><a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a><span>·</span><a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a><span>·</span><a href={legalUrl("account-deletion")} target="_blank" rel="noreferrer">{t("accountDeletion")}</a></p>
         {cloud?.signedIn && <div className="danger-zone"><div><strong>{t("deleteSakuAccount")}</strong><p>{t("permanentlyRemoveSakuCloudData")}</p></div><button className="button danger-button" disabled={cloudBusy} onClick={() => setDeleteConfirm(true)}><Trash2 size={16} />{t("deleteAccount")}</button></div>}
-      </section>
-      <section className="connection-section">
-        <span className="connection-icon"><CheckCheck size={25} /></span>
-        <div><h2>{t("offlineFirst")}</h2><p>{cloudImportEnabled ? t("yourLedgerWorksWithoutInternet") : nativeAIAvailable ? t("yourLedgerWorksWithoutInternet2") : t("yourLedgerWorksWithoutInternet3")}</p></div>
       </section>
       <footer className="settings-footer">
         Saku {appVersion} <span>·</span> {t("madeForMindfulMonth")}
