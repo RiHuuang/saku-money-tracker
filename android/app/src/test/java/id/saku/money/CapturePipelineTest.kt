@@ -153,10 +153,21 @@ class CapturePipelineTest {
     }
 
     @Test
-    fun aRowFromBeforeTheUpgradeIsRecognisedByItsOldId() {
-        val legacy = NotificationInbox.legacyId("com.bca", now, 48_500, "expense")
-        store().add(item(legacy, at = now))
-        assertTrue(store().knows(legacy))
+    fun theOldIdMatchesWhat260Stored() {
+        // 2.6.0 stored sha256("package|postTime|amount|direction"), first 32 hex characters.
+        val expected = java.security.MessageDigest.getInstance("SHA-256").digest("com.bca|$now|48500|expense".toByteArray()).joinToString("") { "%02x".format(it) }.take(32)
+        assertEquals(expected, NotificationInbox.legacyId("com.bca", now, 48_500, "expense"))
+    }
+
+    @Test
+    fun aRepostedCancellationDoesNotCancelASecondIdenticalSpend() {
+        store().add(item("spend-1", at = now - 120_000))
+        store().add(item("spend-2", at = now - 60_000))
+        store().remove(setOf("spend-1", "spend-2"))
+        assertEquals(1, store().cancel("com.bca", 48_500, now, "cancel-1", "content-c"))
+        assertEquals("the same notice reposted under a new post time", 1, store().cancel("com.bca", 48_500, now + 60_000, "cancel-1b", "content-c"))
+        assertEquals(listOf("cancel-1"), store().items().map { it.id })
+        assertEquals("a genuinely different notice can still cancel the other spend", 2, store().cancel("com.bca", 48_500, now + 120_000, "cancel-2", "content-d"))
     }
 
     @Test

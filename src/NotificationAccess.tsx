@@ -18,18 +18,23 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
   const [status, setStatus] = useState<CaptureStatus | null>(null), [busy, setBusy] = useState(false), [cleaning, setCleaning] = useState(false);
   // Set once the user has been sent to Android's settings, so the restricted-settings line shows only after a failed try.
   const [askedAccess, setAskedAccess] = useState(false), [appInfoOpened, setAppInfoOpened] = useState(false);
-  const wasReading = useRef<boolean | null>(null);
+  // Refs, because refresh also runs from the resume listener registered on mount: it must see the current user,
+  // and know a "Turn on" is waiting for Android's toggle so it doesn't withdraw the receipt that tap just sent.
+  const userRef = useRef(userId), awaitingAccess = useRef(false);
+  userRef.current = userId;
   useEffect(() => { void loadCleaningOptIn().then(setCleaning).catch(() => {}); }, []);
   const refresh = () => notificationCapture.status().then((next) => {
     setStatus(next);
     // A cleared inbox is told once, never silently.
     if (next.inboxResetAt) { notify(t("inboxResetNotice")); void notificationCapture.acknowledgeReset().catch(() => {}); }
-    // The receipt follows the reader: recorded while it reads, withdrawn only when it goes from reading to not
-    // reading (access revoked in Android, or the last app unticked). Failed withdrawals retry on the next start.
-    const readingNow = next.granted && next.apps.some((app) => app.account);
-    if (userId && readingNow && !hasConsentReceipt(userId, "notification_reader")) void ensureConsentReceipt(userId, "notification_reader").catch(() => { /* Next check. */ });
-    if (userId && wasReading.current === true && !readingNow) void withdrawConsentReceipt(userId, "notification_reader").catch(() => { /* retryPendingWithdrawals */ });
-    wasReading.current = readingNow;
+    // The receipt follows the reader, whenever Settings next looks: recorded while it reads, withdrawn once it
+    // stops (access revoked in Android, even while Saku was closed, or the last app unticked), but not while a
+    // first "Turn on" still waits for Android's toggle. Failed withdrawals retry on the next start.
+    const owner = userRef.current, readingNow = next.granted && next.apps.some((app) => app.account);
+    if (readingNow) awaitingAccess.current = false;
+    const stopped = !readingNow && !awaitingAccess.current && (next.everGranted || !next.apps.some((app) => app.account));
+    if (owner && readingNow && !hasConsentReceipt(owner, "notification_reader")) void ensureConsentReceipt(owner, "notification_reader").catch(() => { /* Next check. */ });
+    if (owner && stopped && hasConsentReceipt(owner, "notification_reader")) void withdrawConsentReceipt(owner, "notification_reader").catch(() => { /* retryPendingWithdrawals */ });
   }).catch(() => notify(t("notificationStatusUnavailable")));
   useEffect(() => {
     void refresh();
@@ -56,6 +61,7 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
     for (const app of detected) await notificationCapture.setApp({ packageName: app.packageName, account: accountFor(app.suggestedAccount) });
     // The tap that names the apps, with the four facts on screen, is the consent (UU PDP); its receipt is kept.
     if (userId) void ensureConsentReceipt(userId, "notification_reader").catch(() => { /* Retried on the next tap. */ });
+    awaitingAccess.current = true;
     const result = await notificationCapture.openSettings();
     setAskedAccess(true);
     if (result?.opened === "app_info") setAppInfoOpened(true);

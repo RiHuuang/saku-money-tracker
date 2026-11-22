@@ -5,11 +5,14 @@ export const CONSENT_VERSIONS = { ai_import: 1, merchant_tidy: 1, ai_budget: 1, 
 export type ConsentPurpose = keyof typeof CONSENT_VERSIONS;
 
 const receiptKey = (userId: string, purpose: ConsentPurpose) => `saku-consent-receipt-v1-${userId}-${purpose}-${CONSENT_VERSIONS[purpose]}`;
+const pendingKey = (userId: string, purpose: ConsentPurpose) => `saku-consent-withdraw-v1-${userId}-${purpose}`;
 const stored = (key: string) => { try { return localStorage.getItem(key) === "sent"; } catch { return false; } };
 
 // Records the receipt on the server once per account, purpose and version; later calls are free.
 export async function ensureConsentReceipt(userId: string, purpose: ConsentPurpose) {
   const key = receiptKey(userId, purpose);
+  // The user's latest choice is "on": an older withdrawal still waiting to be sent is dropped.
+  try { localStorage.removeItem(pendingKey(userId, purpose)); } catch { /* Nothing pending. */ }
   if (stored(key)) return;
   await recordConsentReceipt(userId, purpose, CONSENT_VERSIONS[purpose], true);
   try { localStorage.setItem(key, "sent"); } catch { /* Without storage the receipt is simply re-sent next time. */ }
@@ -17,7 +20,6 @@ export async function ensureConsentReceipt(userId: string, purpose: ConsentPurpo
 
 // A withdrawal is marked pending first and cleared only once the server has it, so an offline phone retries it
 // (retryPendingWithdrawals runs on every app start) instead of silently forgetting.
-const pendingKey = (userId: string, purpose: ConsentPurpose) => `saku-consent-withdraw-v1-${userId}-${purpose}`;
 export async function withdrawConsentReceipt(userId: string, purpose: ConsentPurpose) {
   try { localStorage.removeItem(receiptKey(userId, purpose)); localStorage.setItem(pendingKey(userId, purpose), "pending"); } catch { /* Sent below either way. */ }
   await recordConsentReceipt(userId, purpose, CONSENT_VERSIONS[purpose], false);
