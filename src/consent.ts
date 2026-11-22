@@ -1,58 +1,87 @@
 import { recordConsentReceipt } from "./cloud";
 
-// Cloud AI purposes and the version of the wording the user agreed to. Must match worker/consent.js.
+// Consent purposes and the version of the wording the user agreed to. Must match worker/consent.js.
 export const CONSENT_VERSIONS = { ai_import: 1, merchant_tidy: 1, ai_budget: 1, notification_reader: 1 } as const;
 export type ConsentPurpose = keyof typeof CONSENT_VERSIONS;
 
-const receiptKey = (userId: string, purpose: ConsentPurpose) => `saku-consent-receipt-v1-${userId}-${purpose}-${CONSENT_VERSIONS[purpose]}`;
-const pendingKey = (userId: string, purpose: ConsentPurpose) => `saku-consent-withdraw-v1-${userId}-${purpose}`;
-const stored = (key: string) => { try { return localStorage.getItem(key) === "sent"; } catch { return false; } };
+// Per account and purpose the phone keeps the user's latest choice and whether the server has it. Changes for one
+// purpose are sent one at a time, and each send carries the choice as it is when the send starts, so the server
+// always ends on the latest choice: offline toggles, quick on-off-on taps and failed requests all settle.
+type Choice = { want: "on" | "off"; synced: boolean };
+type Storage = Pick<globalThis.Storage, "getItem" | "setItem" | "removeItem">;
+type Send = (userId: string, purpose: ConsentPurpose, version: number, granted: boolean) => Promise<unknown>;
 
-// Records the receipt on the server once per account, purpose and version; later calls are free.
-export async function ensureConsentReceipt(userId: string, purpose: ConsentPurpose) {
-  const key = receiptKey(userId, purpose);
-  // The user's latest choice is "on": an older withdrawal still waiting to be sent is dropped.
-  try { localStorage.removeItem(pendingKey(userId, purpose)); } catch { /* Nothing pending. */ }
-  if (stored(key)) return;
-  await recordConsentReceipt(userId, purpose, CONSENT_VERSIONS[purpose], true);
-  try { localStorage.setItem(key, "sent"); } catch { /* Without storage the receipt is simply re-sent next time. */ }
-}
+export function createConsentStore(storage: () => Storage | undefined, send: Send) {
+  const key = (userId: string, purpose: ConsentPurpose) => `saku-consent-receipt-v1-${userId}-${purpose}-${CONSENT_VERSIONS[purpose]}`;
+  const read = (userId: string, purpose: ConsentPurpose): Choice | null => {
+    try {
+      const value = storage()?.getItem(key(userId, purpose));
+      if (!value) return null;
+      // Earlier builds of this change stored "sent" for a receipt the server had.
+      if (value === "sent") return { want: "on", synced: true };
+      const parsed = JSON.parse(value) as Choice;
+      return parsed.want === "on" || parsed.want === "off" ? { want: parsed.want, synced: parsed.synced === true } : null;
+    } catch { return null; }
+  };
+  const write = (userId: string, purpose: ConsentPurpose, choice: Choice) => { try { storage()?.setItem(key(userId, purpose), JSON.stringify(choice)); } catch { /* Without storage, each call sends again. */ } };
+  const queues = new Map<string, Promise<void>>();
 
-// A withdrawal is marked pending first and cleared only once the server has it, so an offline phone retries it
-// (retryPendingWithdrawals runs on every app start) instead of silently forgetting.
-export async function withdrawConsentReceipt(userId: string, purpose: ConsentPurpose) {
-  try { localStorage.removeItem(receiptKey(userId, purpose)); localStorage.setItem(pendingKey(userId, purpose), "pending"); } catch { /* Sent below either way. */ }
-  await recordConsentReceipt(userId, purpose, CONSENT_VERSIONS[purpose], false);
-  try { localStorage.removeItem(pendingKey(userId, purpose)); } catch { /* Re-sending a withdrawal is harmless. */ }
-}
-export async function retryPendingWithdrawals(userId: string) {
-  for (const purpose of Object.keys(CONSENT_VERSIONS) as ConsentPurpose[]) {
-    let pending = false;
-    try { pending = localStorage.getItem(pendingKey(userId, purpose)) === "pending"; } catch { /* No storage, nothing pending. */ }
-    // A newer receipt (the user turned it back on) supersedes the old withdrawal.
-    if (pending && stored(receiptKey(userId, purpose))) { try { localStorage.removeItem(pendingKey(userId, purpose)); } catch { /* ignore */ } continue; }
-    if (pending) await withdrawConsentReceipt(userId, purpose).catch(() => { /* Next start. */ });
+  // Sends the current choice if the server doesn't have it yet. Queued per account and purpose.
+  function sync(userId: string, purpose: ConsentPurpose): Promise<void> {
+    const id = `${userId}|${purpose}`;
+    const run = async () => {
+      const choice = read(userId, purpose);
+      if (!choice || choice.synced) return;
+      await send(userId, purpose, CONSENT_VERSIONS[purpose], choice.want === "on");
+      // Marked synced only if the choice didn't change while the request was out; otherwise the next send follows.
+      const now = read(userId, purpose);
+      if (now && now.want === choice.want) write(userId, purpose, { want: choice.want, synced: true });
+    };
+    const next = (queues.get(id) ?? Promise.resolve()).catch(() => undefined).then(run);
+    queues.set(id, next);
+    return next;
   }
-}
 
-export const hasConsentReceipt = (userId: string, purpose: ConsentPurpose) => stored(receiptKey(userId, purpose));
-
-// Account deletion removes the server's receipts, so the phone's "already sent" marks go too.
-export function clearConsentReceipts(userId: string) {
-  for (const purpose of Object.keys(CONSENT_VERSIONS) as ConsentPurpose[]) {
-    try { localStorage.removeItem(receiptKey(userId, purpose)); localStorage.removeItem(pendingKey(userId, purpose)); } catch { /* Nothing cached. */ }
+  function choose(userId: string, purpose: ConsentPurpose, want: "on" | "off") {
+    const current = read(userId, purpose);
+    if (current?.want !== want || !current.synced) write(userId, purpose, { want, synced: current?.want === want && current.synced });
+    return sync(userId, purpose);
   }
+
+  return {
+    // The user consented (a tap that names the purpose); resolves once the server has the receipt.
+    ensure: (userId: string, purpose: ConsentPurpose) => choose(userId, purpose, "on"),
+    withdraw: (userId: string, purpose: ConsentPurpose) => choose(userId, purpose, "off"),
+    // The user's latest choice on this phone, whether or not it has reached the server yet.
+    isOn: (userId: string, purpose: ConsentPurpose) => read(userId, purpose)?.want === "on",
+    // Choices that failed to send (offline) go out again; runs on each app start.
+    retry: async (userId: string) => {
+      for (const purpose of Object.keys(CONSENT_VERSIONS) as ConsentPurpose[]) await sync(userId, purpose).catch(() => undefined);
+    },
+    // Account deletion removes the server's receipts, so the phone's record goes too.
+    clear: (userId: string) => {
+      for (const purpose of Object.keys(CONSENT_VERSIONS) as ConsentPurpose[]) { try { storage()?.removeItem(key(userId, purpose)); } catch { /* Nothing stored. */ } }
+    },
+    // The server lost the receipt (403 consent_required): send it again.
+    resend: (userId: string, purpose: ConsentPurpose) => { write(userId, purpose, { want: "on", synced: false }); return sync(userId, purpose); },
+  };
 }
 
-// Runs a cloud AI call with its receipt. If the server has no receipt (403 consent_required), the receipt is sent
-// again and the call retried once, so a stale mark on this phone can't block the feature.
+const store = createConsentStore(() => (typeof localStorage === "undefined" ? undefined : localStorage), recordConsentReceipt);
+export const ensureConsentReceipt = store.ensure;
+export const withdrawConsentReceipt = store.withdraw;
+export const hasConsentReceipt = store.isOn;
+export const retryPendingWithdrawals = store.retry;
+export const clearConsentReceipts = store.clear;
+
+// Runs a cloud AI call with its receipt. If the server has none (403 consent_required), the receipt is sent again
+// and the call retried once, so a stale record on this phone can't block the feature.
 export async function withConsent<T>(userId: string, purpose: ConsentPurpose, call: () => Promise<T>): Promise<T> {
-  await ensureConsentReceipt(userId, purpose);
+  await store.ensure(userId, purpose);
   try { return await call(); }
   catch (error) {
     if ((error as { status?: number })?.status !== 403 || !/consent_required/.test(String((error as Error)?.message))) throw error;
-    try { localStorage.removeItem(receiptKey(userId, purpose)); } catch { /* Re-sent below either way. */ }
-    await ensureConsentReceipt(userId, purpose);
+    await store.resend(userId, purpose);
     return call();
   }
 }
