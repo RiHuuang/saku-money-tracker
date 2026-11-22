@@ -3837,6 +3837,8 @@ input, select, textarea { background: var(--surface); border-color: var(--contro
 @media (max-width: 600px) { .pocket-desktop-add { display: none; } }
 .pocket-card-shell.is-over-budget .pocket-card { border-color: color-mix(in srgb, var(--danger) 55%, var(--line)); background: color-mix(in srgb, var(--danger) 9%, var(--surface)); }
 .pocket-card-shell.is-over-budget .pocket-value strong { color: var(--danger); font-weight: 750; }
+/* The amount keeps its own line, so the "Over budget" chip never squeezes it. */
+.pocket-card-shell.is-over-budget .pocket-money { flex-basis: 100%; }
 .pocket-card-shell.is-over-budget .pocket-card-bottom { color: var(--ink); font-size: 11px; }
 .pocket-card-shell.is-over-budget .pocket-over-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 15%, var(--surface)); color: var(--danger); font-size: 11px; font-weight: 700; }
 .budget-overview > button { display: grid; gap: 4px; align-content: start; color: var(--ink); text-align: left; border-radius: 10px; cursor: pointer; }
