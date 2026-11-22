@@ -132,6 +132,34 @@ class CapturePipelineTest {
     }
 
     @Test
+    fun aRepostedOrSecondCancellationOfAnAddedSpendAddsOneRefundRow() {
+        store().add(item("spend", at = now - 60_000))
+        store().remove(setOf("spend"))
+        assertEquals(1, store().cancel("com.bca", 48_500, now, "cancel-1", "content-c"))
+        assertEquals("an update of the same notice", 1, store().cancel("com.bca", 48_500, now + 60_000, "cancel-1b", "content-c"))
+        assertEquals("a differently worded second notice", 1, store().cancel("com.bca", 48_500, now + 120_000, "cancel-2", "content-d"))
+        store().remove(setOf("cancel-1"))
+        assertEquals("a repost after the refund was handled", 0, store().cancel("com.bca", 48_500, now + 180_000, "cancel-1c", "content-c"))
+    }
+
+    @Test
+    fun undoKeepsTheContentKeySoAnUpdateStillMerges() {
+        val row = item("alert", at = now - 300_000).copy(content = "content-a")
+        store().add(row)
+        store().remove(setOf("alert"))
+        store().restore(listOf(row.copy(content = "")))
+        assertEquals(1, store().add(item("update", at = now - 120_000).copy(content = "content-a")))
+        assertEquals(listOf("alert"), store().items().map { it.id })
+    }
+
+    @Test
+    fun aRowFromBeforeTheUpgradeIsRecognisedByItsOldId() {
+        val legacy = NotificationInbox.legacyId("com.bca", now, 48_500, "expense")
+        store().add(item(legacy, at = now))
+        assertTrue(store().knows(legacy))
+    }
+
+    @Test
     fun aSecondNoticeAboutTheSameCancellationAddsNoRefundRow() {
         store().add(item("spend", at = now - 60_000))
         assertEquals(0, store().cancel("com.bca", 48_500, now, "cancel-1"))
@@ -187,8 +215,10 @@ class CapturePipelineTest {
         assertNull("a 12-hour time is not guessed", NotificationParsers.printedTime("Payment on 28 Oct 2026 05:30 PM", posted, zone))
         val wita = ZoneId.of("Asia/Makassar")
         val postedWita = LocalDateTime.of(2026, 10, 29, 0, 31).atZone(wita).toInstant().toEpochMilli()
-        assertEquals("a WIB time on a WITA phone is read as WIB", LocalDateTime.of(2026, 10, 28, 23, 30).atZone(zone).toInstant().toEpochMilli(),
-            NotificationParsers.printedTime("Transaksi 28/10/2026 23:30 WIB", postedWita))
+        assertEquals("a WIB time is read as WIB even where the default zone is WITA", LocalDateTime.of(2026, 10, 28, 23, 30).atZone(zone).toInstant().toEpochMilli(),
+            NotificationParsers.printedTime("Transaksi 28/10/2026 23:30 WIB", postedWita, wita))
+        assertNull("seconds can't hide a 12-hour time", NotificationParsers.printedTime("Transaksi 28/10/2026 05:30:15 PM", posted, zone))
+        assertNull(NotificationParsers.printedTime("Transaksi 28/10/2026 05:30:15PM", posted, zone))
         assertEquals(LocalDateTime.of(2026, 10, 29, 0, 20).atZone(wita).toInstant().toEpochMilli(), NotificationParsers.printedTime("Transaksi 29/10/2026 00:20 WITA", postedWita))
     }
 

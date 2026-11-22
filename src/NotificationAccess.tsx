@@ -1,5 +1,5 @@
 import { t } from "./i18n";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App as NativeApp } from "@capacitor/app";
 import { BellRing, Pause, Play, Settings } from "lucide-react";
 import type { Data } from "./domain";
@@ -18,14 +18,18 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
   const [status, setStatus] = useState<CaptureStatus | null>(null), [busy, setBusy] = useState(false), [cleaning, setCleaning] = useState(false);
   // Set once the user has been sent to Android's settings, so the restricted-settings line shows only after a failed try.
   const [askedAccess, setAskedAccess] = useState(false), [appInfoOpened, setAppInfoOpened] = useState(false);
+  const wasReading = useRef<boolean | null>(null);
   useEffect(() => { void loadCleaningOptIn().then(setCleaning).catch(() => {}); }, []);
   const refresh = () => notificationCapture.status().then((next) => {
     setStatus(next);
     // A cleared inbox is told once, never silently.
     if (next.inboxResetAt) { notify(t("inboxResetNotice")); void notificationCapture.acknowledgeReset().catch(() => {}); }
-    // Turning the reader off (access revoked in Android, or no app left) withdraws its consent receipt.
-    if (userId && hasConsentReceipt(userId, "notification_reader") && (!next.granted && next.everGranted || !next.apps.some((app) => app.account)))
-      void withdrawConsentReceipt(userId, "notification_reader").catch(() => { /* Retried on the next check. */ });
+    // The receipt follows the reader: recorded while it reads, withdrawn only when it goes from reading to not
+    // reading (access revoked in Android, or the last app unticked). Failed withdrawals retry on the next start.
+    const readingNow = next.granted && next.apps.some((app) => app.account);
+    if (userId && readingNow && !hasConsentReceipt(userId, "notification_reader")) void ensureConsentReceipt(userId, "notification_reader").catch(() => { /* Next check. */ });
+    if (userId && wasReading.current === true && !readingNow) void withdrawConsentReceipt(userId, "notification_reader").catch(() => { /* retryPendingWithdrawals */ });
+    wasReading.current = readingNow;
   }).catch(() => notify(t("notificationStatusUnavailable")));
   useEffect(() => {
     void refresh();

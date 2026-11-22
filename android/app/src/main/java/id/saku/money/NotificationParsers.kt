@@ -96,9 +96,9 @@ object NotificationParsers {
 
     private val months = mapOf("jan" to 1, "feb" to 2, "peb" to 2, "mar" to 3, "apr" to 4, "mei" to 5, "may" to 5, "jun" to 6, "jul" to 7, "agu" to 8, "agt" to 8, "aug" to 8,
         "sep" to 9, "okt" to 10, "oct" to 10, "nov" to 11, "nop" to 11, "des" to 12, "dec" to 12)
-    private val numericStamp = Regex("""\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\D{1,12}?(\d{1,2})[:.](\d{2})(?::\d{2})?\b(?!\s*[AaPp]\.?[Mm]\b)""")
-    private val isoStamp = Regex("""\b(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::\d{2})?\b(?!\s*[AaPp]\.?[Mm]\b)""")
-    private val wordStamp = Regex("""(?i)\b(\d{1,2})\s+(\p{L}{3})\p{L}*\s+(\d{4})\D{1,12}?(\d{1,2})[:.](\d{2})(?::\d{2})?\b(?!\s*[AaPp]\.?[Mm]\b)""")
+    private val numericStamp = Regex("""\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\D{1,12}?(\d{1,2})[:.](\d{2})(?::\d{2})?+(?![\d:])(?!\s*[AaPp]\.?[Mm]\b)""")
+    private val isoStamp = Regex("""\b(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::\d{2})?+(?![\d:])(?!\s*[AaPp]\.?[Mm]\b)""")
+    private val wordStamp = Regex("""(?i)\b(\d{1,2})\s+(\p{L}{3})\p{L}*\s+(\d{4})\D{1,12}?(\d{1,2})[:.](\d{2})(?::\d{2})?+(?![\d:])(?!\s*[AaPp]\.?[Mm]\b)""")
 
     // A time the bank printed, used only with a full date that falls between 36 hours before and 5 minutes after
     // the post time. Anything else (a due date, a time with no date) is ignored and the post time is kept.

@@ -119,20 +119,25 @@ class InboxStore(
     fun restore(items: List<InboxItem>) = synchronized(LOCK) {
         val state = current()
         val ids = items.map { it.id }.toSet()
-        val merged = state.items.filterNot { it.id in ids } + items.map { restored -> state.items.find { it.id == restored.id }?.let { if (it.occurredAt < restored.occurredAt) it else restored } ?: restored }
+        // The app layer doesn't carry the content key, so it comes back from the tombstone this undo removes.
+        val withContent = items.map { restored -> if (restored.content.isNotEmpty()) restored else restored.copy(content = state.tombstones.find { it.id == restored.id }?.content.orEmpty()) }
+        val merged = state.items.filterNot { it.id in ids } + withContent.map { restored -> state.items.find { it.id == restored.id }?.let { if (it.occurredAt < restored.occurredAt) it else restored } ?: restored }
         save(purge(State(merged, state.tombstones.filterNot { it.id in ids })))
     }
 
     // A cancelled payment: drops the latest matching spend still waiting from the same app in the day before.
     // If that spend already left the inbox, a "cancelled" row is added so the user can fix the ledger.
-    fun cancel(packageName: String, amount: Long, cancelledAt: Long, cancelId: String): Int = synchronized(LOCK) {
+    fun cancel(packageName: String, amount: Long, cancelledAt: Long, cancelId: String, content: String = ""): Int = synchronized(LOCK) {
         val state = current()
         val window = (cancelledAt - 86_400_000L)..cancelledAt
         val spend = state.items.lastOrNull { it.packageName == packageName && it.direction == "expense" && !it.cancels && it.amount == amount && it.occurredAt in window }
         if (state.items.any { it.id == cancelId } || state.tombstones.any { it.id == cancelId }) return state.items.size
+        // An update or repost of the same cancellation notice (same words, new post time) is the same cancellation.
+        val near = { other: Long -> kotlin.math.abs(other - cancelledAt) <= REPOST_MS }
+        if (content.isNotEmpty() && (state.items.any { it.content == content && near(it.occurredAt) } || state.tombstones.any { it.content == content && near(it.occurredAt) })) return state.items.size
         if (spend != null) {
             // The cancellation itself is remembered too, so a repost of it can't cancel a second time.
-            val handledCancel = Tombstone(cancelId, packageName, spend.account, "cancel", amount, cancelledAt, now())
+            val handledCancel = Tombstone(cancelId, packageName, spend.account, "cancel", amount, cancelledAt, now(), content)
             // Marked "cancelled", so a second notice about the same cancellation can't add a phantom refund row.
             val next = purge(State(state.items - spend, state.tombstones + spend.tombstone(now()).copy(direction = "cancelled") + handledCancel))
             save(next)
@@ -140,7 +145,9 @@ class InboxStore(
         }
         val handled = state.tombstones.lastOrNull { it.packageName == packageName && it.direction == "expense" && it.amount == amount && it.occurredAt in window }
         if (handled == null) return state.items.size
-        val next = purge(state.copy(items = state.items + InboxItem(cancelId, packageName, handled.account, amount, "income", "", null, cancelledAt, cancels = true)))
+        // The handled spend is marked cancelled, so a second, differently worded notice can't add another refund.
+        val stones = state.tombstones.map { if (it === handled) it.copy(direction = "cancelled") else it }
+        val next = purge(State(state.items + InboxItem(cancelId, packageName, handled.account, amount, "income", "", null, cancelledAt, cancels = true, content = content), stones))
         save(next)
         next.items.size
     }
@@ -276,6 +283,7 @@ object NotificationInbox {
     // payment with identical words gets a new one. Updates within minutes are merged through contentKey instead.
     fun idFor(salt: String, key: String, title: String, text: String, postedAt: Long): String = sha("$salt|$key|${sha("$title\n$text")}|$postedAt").take(32)
     fun contentKey(salt: String, key: String, title: String, text: String): String = sha("$salt|$key|${sha("$title\n$text")}").take(32)
+    fun legacyId(packageName: String, postedAt: Long, amount: Long, direction: String): String = sha("$packageName|$postedAt|$amount|$direction").take(32)
 
     fun receive(context: Context, captured: CapturedNotification) {
         if (NotificationCapture.isRedactedPlaceholder(captured.text)) {
@@ -286,14 +294,17 @@ object NotificationInbox {
         val salt = salt(context)
         val id = idFor(salt, captured.key, captured.title, captured.text, captured.postedAt)
         val store = store(context)
+        val content = contentKey(salt, captured.key, captured.title, captured.text)
         NotificationParsers.cancelledSpend(captured.packageName, captured.title, captured.text)?.let { amount ->
-            summarize(context, store.cancel(captured.packageName, amount, captured.postedAt, id))
+            summarize(context, store.cancel(captured.packageName, amount, captured.postedAt, id, content))
             return
         }
         if (store.knows(id)) return
         val parsed = NotificationParsers.parse(captured.packageName, captured.title, captured.text, captured.postedAt) ?: return
+        // Rows from 2.6.0 and earlier carry the old ID, sha(package|post time|amount|direction), and no content key.
+        if (store.knows(legacyId(captured.packageName, captured.postedAt, parsed.amount, parsed.direction))) return
         val count = store.add(InboxItem(id, captured.packageName, captured.account, parsed.amount, parsed.direction,
-            InboxRedaction.redact(parsed.rawMerchant, parsed.amount), parsed.balance, parsed.occurredAt, content = contentKey(salt, captured.key, captured.title, captured.text)))
+            InboxRedaction.redact(parsed.rawMerchant, parsed.amount), parsed.balance, parsed.occurredAt, content = content))
         CaptureHealth.admitted(context)
         summarize(context, count)
     }

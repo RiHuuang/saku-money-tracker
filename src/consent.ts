@@ -15,9 +15,22 @@ export async function ensureConsentReceipt(userId: string, purpose: ConsentPurpo
   try { localStorage.setItem(key, "sent"); } catch { /* Without storage the receipt is simply re-sent next time. */ }
 }
 
+// A withdrawal is marked pending first and cleared only once the server has it, so an offline phone retries it
+// (retryPendingWithdrawals runs on every app start) instead of silently forgetting.
+const pendingKey = (userId: string, purpose: ConsentPurpose) => `saku-consent-withdraw-v1-${userId}-${purpose}`;
 export async function withdrawConsentReceipt(userId: string, purpose: ConsentPurpose) {
-  try { localStorage.removeItem(receiptKey(userId, purpose)); } catch { /* Nothing cached to clear. */ }
+  try { localStorage.removeItem(receiptKey(userId, purpose)); localStorage.setItem(pendingKey(userId, purpose), "pending"); } catch { /* Sent below either way. */ }
   await recordConsentReceipt(userId, purpose, CONSENT_VERSIONS[purpose], false);
+  try { localStorage.removeItem(pendingKey(userId, purpose)); } catch { /* Re-sending a withdrawal is harmless. */ }
+}
+export async function retryPendingWithdrawals(userId: string) {
+  for (const purpose of Object.keys(CONSENT_VERSIONS) as ConsentPurpose[]) {
+    let pending = false;
+    try { pending = localStorage.getItem(pendingKey(userId, purpose)) === "pending"; } catch { /* No storage, nothing pending. */ }
+    // A newer receipt (the user turned it back on) supersedes the old withdrawal.
+    if (pending && stored(receiptKey(userId, purpose))) { try { localStorage.removeItem(pendingKey(userId, purpose)); } catch { /* ignore */ } continue; }
+    if (pending) await withdrawConsentReceipt(userId, purpose).catch(() => { /* Next start. */ });
+  }
 }
 
 export const hasConsentReceipt = (userId: string, purpose: ConsentPurpose) => stored(receiptKey(userId, purpose));
@@ -25,7 +38,7 @@ export const hasConsentReceipt = (userId: string, purpose: ConsentPurpose) => st
 // Account deletion removes the server's receipts, so the phone's "already sent" marks go too.
 export function clearConsentReceipts(userId: string) {
   for (const purpose of Object.keys(CONSENT_VERSIONS) as ConsentPurpose[]) {
-    try { localStorage.removeItem(receiptKey(userId, purpose)); } catch { /* Nothing cached. */ }
+    try { localStorage.removeItem(receiptKey(userId, purpose)); localStorage.removeItem(pendingKey(userId, purpose)); } catch { /* Nothing cached. */ }
   }
 }
 

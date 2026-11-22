@@ -29,7 +29,9 @@ for (let i = 0; i < 2; i++) assert.equal((await report(JSON.stringify({ "csp-rep
 assert.equal((await report("garbage")).status, 204);
 let limitedCalls = 0;
 const limitedEnv = { ...env, AUTH_RATE_LIMITER: { limit: async () => { limitedCalls++; return { success: false }; } } };
-assert.equal((await worker.fetch(new Request("https://app.sakumoney.my.id/v1/csp-report", { method: "POST", body: JSON.stringify({ "csp-report": { "violated-directive": "font-src" } }) }), limitedEnv)).status, 204);
+const limitedBody = JSON.stringify({ "csp-report": { "violated-directive": "font-src" } });
+assert.equal((await worker.fetch(new Request("https://app.sakumoney.my.id/v1/csp-report", { method: "POST", headers: { "content-type": "application/csp-report", "content-length": String(Buffer.byteLength(limitedBody)) }, body: limitedBody }), limitedEnv)).status, 204);
+assert.equal(sqlite.prepare("SELECT count(*) AS n FROM csp_reports WHERE directive='font-src'").get().n, 0, "a rate-limited report with a valid body is not stored");
 assert.equal(limitedCalls, 1, "reports share the per-IP rate limiter");
 const rows = sqlite.prepare("SELECT * FROM csp_reports").all();
 assert.equal(rows.length, 1);

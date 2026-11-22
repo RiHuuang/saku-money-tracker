@@ -1,3 +1,4 @@
+import { retryPendingWithdrawals } from "./consent";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { App as NativeApp } from "@capacitor/app";
@@ -467,6 +468,10 @@ export default function App() {
     ]).then(([drafts, inbox]) => { if (live) { setImportWaiting(drafts + inbox); setDraftsWaiting(drafts); } });
     return () => { live = false; };
   }, [data, view, cloud?.signedIn, cloud?.user?.id, waitingRecount]);
+  // A Home "Add N" that didn't run (Catch up was left or another tab opened first) never fires later.
+  useEffect(() => { if (checkTab !== "notifications") setAutoAdd(false); }, [checkTab]);
+  // Consent withdrawals that failed offline are sent again on each start.
+  useEffect(() => { if (cloud?.signedIn && cloud.user?.id) void retryPendingWithdrawals(cloud.user.id); }, [cloud?.signedIn, cloud?.user?.id]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);
