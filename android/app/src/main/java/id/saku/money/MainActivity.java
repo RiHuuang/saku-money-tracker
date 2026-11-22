@@ -21,7 +21,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(LocalStatementAIPlugin.class);
         registerPlugin(GoogleAuthPlugin.class);
         registerPlugin(HomeWidgetPlugin.class);
-        if ("direct".equals(BuildConfig.FLAVOR)) registerPlugin(AppUpdatePlugin.class);
+        FlavorPlugins.register(this);
         registerPlugin(NotificationCapturePlugin.class);
         registerPlugin(AppLockPlugin.class);
         super.onCreate(savedInstanceState);

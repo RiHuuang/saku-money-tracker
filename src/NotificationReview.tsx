@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, BellRing, Check, Info, X } from "lucide-react";
-import { money, type Data, type Transaction } from "./domain";
+import { money, timeOfDay, type Data, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { importedTransactions, importRowAccount, importRowFirstDueMonth, importRowName, importRowReady, importRowReviewIssue, importRowsNeedingDuplicateConfirmation } from "./importTransactions";
-import { learnMerchant, learnNotificationPocket, suggestMerchant } from "./merchants";
+import { learnNotificationPocket } from "./merchants";
 import { cleanMerchantNames } from "./cloud";
-import { loadCleaningOptIn, namesToClean } from "./merchantCleaning";
+import { applyTidiedNames, loadCleaningOptIn, namesToClean } from "./merchantCleaning";
+import { withConsent } from "./consent";
 import { notificationCapture, type InboxItem } from "./notificationCapture";
-import { inboxRows, notificationStatusTap, type NotificationRow } from "./notificationRows";
+import { inboxReadiness, inboxRows, notificationStatusTap, type NotificationRow } from "./notificationRows";
 import { ChoiceField, Modal } from "./components";
 import { useRowGestures } from "./rowGestures";
 import { useHiddenWhileScrollingUp } from "./scrollReveal";
@@ -17,9 +18,11 @@ import { localeTag, t } from "./i18n";
 
 const friendlyDate = (date: string) => { const value = new Date(`${date}T12:00:00`); return `${value.toLocaleDateString(localeTag(), { weekday: "short" })}, ${value.toLocaleDateString(localeTag(), { day: "numeric", month: "short" })}`; };
 
-export default function NotificationReview({ data, userId, commit, getCurrentData, busy, notify, onCount, onSettings }: {
+export default function NotificationReview({ data, userId, commit, getCurrentData, busy, notify, onCount, onSettings, autoAdd = false, onAutoAdded }: {
   data: Data; userId?: string; busy: boolean; notify: (message: string | { message: string; action: { label: string; run: () => void } }) => void; onCount: (count: number) => void; onSettings: () => void; getCurrentData: () => Data | null;
   commit: (data: Data, message: string) => Promise<boolean>;
+  // Set by the Home card's "Add N": the ready rows are added once loaded, with the usual Undo.
+  autoAdd?: boolean; onAutoAdded?: () => void;
 }) {
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [edits, setEdits] = useState<Record<string, Partial<NotificationRow>>>({});
@@ -41,31 +44,17 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
     catch { setItems([]); notify(t("notificationReadError")); }
   };
   useEffect(() => { void load(); }, []);
-  const [cleaned, setCleaned] = useState(false);
-  useEffect(() => {
-    if (cleaned || !items?.length || !userId) return;
-    setCleaned(true);
-    void (async () => {
-      const names = namesToClean(inboxRows(items, data), data);
-      if (!names.length || !(await loadCleaningOptIn())) return;
-      try {
-        // Each answer becomes a merchant rule, so a name is sent at most once.
-        const results = await cleanMerchantNames(userId, names);
-        const merchantRules = results.reduce((rules, result) => learnMerchant({ ...data, merchantRules: rules }, result.name, { name: result.cleanName, pocketId: suggestMerchant({ ...data, merchantRules: rules }, result.name)?.pocketId || "" }, new Date().toISOString(), true), data.merchantRules);
-        if (merchantRules !== data.merchantRules) await commit({ ...data, merchantRules }, t("merchantNamesTidied"));
-      } catch { /* Raw names stay usable; cleaning is a convenience. */ }
-    })();
-  }, [items, userId, cleaned]);
   const rows = useMemo(() => inboxRows(items || [], data).map((row): NotificationRow => ({ ...row, ...edits[row.id] })), [items, data, edits]);
   const accountFor = (row: ImportRow) => importRowAccount(row, undefined, data);
-  const twinFor = (row: NotificationRow) => rows.find((other) => other.id !== row.id && other.account === row.counterparty && other.direction !== row.direction && other.amount === row.amount && Math.abs(other.occurredAt - row.occurredAt) <= 30 * 60 * 1000);
-  // Statement-style matching: same account, day, amount and direction counts as a possible duplicate whatever it was named.
-  const duplicates = useMemo(() => importRowsNeedingDuplicateConfirmation(rows, data.transactions, accountFor, () => false, true), [rows, data]);
-  const ready = rows.filter((row) => importRowReady(row, accountFor(row), data) && (!duplicates.has(row.id) || row.confirmedSeparate) && !rows.some((other) => other.activity === "transfer" && other.id !== row.id && twinFor(other)?.id === row.id));
+  const { ready, duplicates, twinFor, look } = useMemo(() => inboxReadiness(rows, data), [rows, data]);
   // Rows the user chose to leave out stay visible as skipped (and can be changed back) until the list is saved.
   const skipped = rows.filter((row) => edits[row.id]?.decision === "skip");
   // Leaving out one half of a paired transfer leaves out its twin too, so nothing is stranded on the phone.
   const skippedIds = [...new Set(skipped.flatMap((row) => row.pairedWith ? [row.id, row.pairedWith] : [row.id]))];
+  // Rows "Add N" leaves out: not ready and not skipped. Said on the button bar, never silent.
+  const leftOut = look;
+  // Captured rows are deleted after 7 days; warn about those within a day of it.
+  const expiringSoon = rows.filter((row) => Date.now() - row.occurredAt > 6 * 86_400_000).length;
   const edit = (id: string, patch: Partial<NotificationRow>) => setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
   const chooseOtherAccount = (row: NotificationRow, value: string) => {
     const twin = value ? twinFor({ ...row, counterparty: value }) : undefined;
@@ -107,6 +96,24 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
     setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !ids.includes(id))));
     await load();
   }
+  // Sends only names of rows now in the ledger; a captured row waiting here never leaves the phone (HC3).
+  async function tidySaved(owner: string, names: string[], addedIds: ReadonlySet<string>) {
+    try {
+      if (!(await loadCleaningOptIn())) return;
+      const results = await withConsent(owner, "merchant_tidy", () => cleanMerchantNames(owner, names));
+      const current = getCurrentData();
+      if (!current) return;
+      const next = applyTidiedNames(current, addedIds, results);
+      if (next !== current) await commit(next, t("merchantNamesTidied"));
+    } catch { /* Raw names stay usable; tidying is a convenience. */ }
+  }
+  const autoAdded = useRef(false);
+  useEffect(() => {
+    if (!autoAdd || autoAdded.current || items === null || busy || saving) return;
+    autoAdded.current = true;
+    onAutoAdded?.();
+    if (ready.length) void save();
+  });
   async function save() {
     if ((!ready.length && !skipped.length) || busy || saving) return;
     if (!ready.length) { setSaving(true); try { await remove(skippedIds); } catch { notify(t("notificationAddError")); } finally { setSaving(false); } return; }
@@ -120,11 +127,14 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
         const account = accountFor(row);
         const twin = row.pairedWith ? rows.find((other) => other.id === row.pairedWith) : row.activity === "transfer" ? twinFor(row) : undefined;
         const created = importedTransactions(row, account, "notification", data, twin?.id, twin?.date);
-        additions.push(...created.map((transaction) => ({ ...transaction, note: `${importRowName(row) !== row.name.trim() ? `${row.name.trim()} · ` : ""}${t("notificationSource", { app: row.appName })}` })));
-        if (row.direction === "expense" && row.activity === "purchase") merchantRules = learnNotificationPocket({ ...data, merchantRules }, row.name, row.pocketId);
+        // The time is the notification's first post time, not when the row is added.
+        additions.push(...created.map((transaction) => ({ ...transaction, time: timeOfDay(transaction.type === row.direction || !twin ? row.occurredAt : twin.occurredAt), note: `${importRowName(row) !== row.name.trim() ? `${row.name.trim()} · ` : ""}${t("notificationSource", { app: row.appName })}` })));
+        if (row.direction === "expense" && row.activity === "purchase" && row.pocketId) merchantRules = learnNotificationPocket({ ...data, merchantRules }, row.name, row.pocketId);
         done.add(row.id);
         if (twin) done.add(twin.id);
       }
+      // Unknown names are picked before the save (merchant memory learns them on save), but sent only after it.
+      const toTidy = namesToClean(ready.filter((row) => row.direction === "expense").map((row) => ({ name: importRowName(row), activity: row.activity })), data);
       if (!(await commit({ ...data, transactions: [...data.transactions, ...additions], merchantRules }, t("notificationRowsAdded", { count: ready.length })))) return;
       const removedItems = (items || []).filter((item) => done.has(item.id) || skippedIds.includes(item.id));
       const addedIds = new Set(additions.map((transaction) => transaction.id));
@@ -134,6 +144,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
       // A balance printed in a saved notification can be checked once its payment is in the ledger.
       const reported = ready.filter((row) => row.balance !== null && data.accounts.includes(accountFor(row))).map((row) => ({ id: row.id, account: accountFor(row), appName: row.appName, reported: row.balance!, occurredAt: row.occurredAt }));
       if (reported.length) await updateCheckins(mergeCheckins(checkins, reported));
+      if (toTidy.length && userId) void tidySaved(userId, toTidy, addedIds);
       await remove([...done, ...skippedIds.filter((id) => !done.has(id))]);
       notify({ message: t("notificationRowsAdded", { count: ready.length }), action: { label: t("undo"), run: () => { void (async () => {
         try {
@@ -168,7 +179,7 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
   });
   if (!rows.length) return <>{checkinCards}<section className="catchup-panel"><p className="catchup-review-empty"><BellRing size={18} /> {captureOff ? <>{t("notificationCaptureOff")} <button className="text-button" onClick={onSettings}>{t("openNotificationSettings")}</button></> : t("notificationsEmpty")}</p></section></>;
   return <>{checkinCards}<section className="catchup-panel catchup-review notification-review">
-    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")} <button type="button" className="icon-button" aria-label={t("aboutNotifications")} aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><Info size={16} /></button></h3>{showHelp && <p>{t("notificationsHelp")}</p>}</div></div><div className="catchup-bulk"><p className="catchup-swipe-hint">{t("swipeHint")}</p><div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
+    <div className="catchup-panel-head"><div><h3>{t("notificationsTitle")} <button type="button" className="icon-button" aria-label={t("aboutNotifications")} aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><Info size={16} /></button></h3>{showHelp && <p>{t("notificationsHelp")}</p>}</div></div><div className="catchup-bulk">{expiringSoon > 0 && <p className="catchup-expiry" role="status">{t("expireSoon", { count: expiringSoon })}</p>}<div><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "ready")} onClick={() => decideAll("ready")}><Check size={14} /> {t("addAll")}</button><button type="button" className="text-button" disabled={busy || saving || rows.every((row) => row.decision === "skip")} onClick={() => decideAll("skip")}><X size={14} /> {t("skipAll")}</button></div></div><p className="sr-only" aria-live="polite">{gestures.announcement}</p>
     {rows.map((row) => {
       const account = accountFor(row), rowReady = ready.includes(row), duplicate = duplicates.has(row.id), offset = gestures.offset(row.id);
       const state: RowState = row.decision === "skip" ? "skip" : rowReady ? "ready" : row.decision === "later" ? "later" : "review";
@@ -179,6 +190,11 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
           <span className="catchup-row-identity"><span className="catchup-row-kicker"><time dateTime={row.date}>{friendlyDate(row.date)}</time><small className="catchup-row-account">{account || t("chooseAccount")} · {row.appName}</small></span><strong>{importRowName(row)}</strong>{importRowName(row) !== row.name.trim() && <small className="catchup-row-raw">{row.name}</small>}{row.pairedWith && row.decision === "skip" ? <small className="catchup-row-hint">{t("recordedWithTransfer")}</small> : hint && <small className="catchup-row-hint">{hint}</small>}</span>
           <span className="catchup-row-figure"><strong>{row.direction === "expense" ? "−" : "+"}{money(row.amount)}</strong></span>
         </button>
+        {duplicate && !row.confirmedSeparate && row.decision !== "skip" && <div className="duplicate-choice" role="group" aria-label={t("looksLikeDuplicate")}>
+          <span>{t("looksLikeDuplicate")}</span>
+          <button type="button" className="text-button" onClick={() => decide(row.id, "skip")}>{t("skipRow")}</button>
+          <button type="button" className="text-button" onClick={() => edit(row.id, { confirmedSeparate: true, decision: "ready" })}>{t("addAnyway")}</button>
+        </div>}
         <div className="notification-row-controls">
           {row.direction === "expense" && row.activity === "purchase" && <button type="button" className="notification-pocket-chip" onClick={() => setEditingRow(row.id)}>{data.pockets.find((pocket) => pocket.id === row.pocketId)?.name || t("noPocket")}</button>}
           {row.pairedWith && row.decision === "skip" && rows.some((other) => other.id === row.pairedWith && ["transfer", "topup"].includes(other.activity)) ? <RowStatus state={state} label={t("recordedWithTransfer")} /> : <button type="button" className="notification-status-toggle" aria-label={t(statusTap === "review" ? "checkThisRow" : statusTap === "ready" ? "markRowToAdd" : "markRowToSkip")} onClick={() => statusTap === "review" ? setEditingRow(row.id) : decide(row.id, statusTap)}><RowStatus state={state} label={row.decision === "skip" ? t("notImporting") : rowReady ? t("willAdd") : row.decision === "later" ? t("reviewLater") : t("openReview")} /></button>}
@@ -191,7 +207,6 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
             {(row.activity === "transfer" || row.activity === "topup") && <ChoiceField className="catchup-field" label={t("otherAccount")} value={row.counterparty || ""} onValueChange={(value) => chooseOtherAccount(row, value)} placeholder={t("chooseOtherAccount")} options={data.accounts.filter((item) => item !== account).map((item) => ({ value: item, label: item }))} />}
             {row.direction === "expense" && row.activity === "purchase" && <ChoiceField className="catchup-field" label={t("budgetPocket")} value={row.pocketId} onValueChange={(value) => edit(row.id, { pocketId: value })} options={[{ value: "", label: t("noPocket") }, ...data.pockets.map((pocket) => ({ value: pocket.id, label: pocket.name }))]} />}
             {data.creditCards.some((card) => card.name === account) && row.activity === "purchase" && <label className="catchup-field">{t("firstDueMonth")}<input type="month" min={row.date.slice(0, 7)} value={importRowFirstDueMonth(row)} onChange={(event) => edit(row.id, { firstDueMonth: event.target.value })} /></label>}
-            {duplicate && <label className="catchup-confirm"><input type="checkbox" checked={!!row.confirmedSeparate} onChange={(event) => edit(row.id, { confirmedSeparate: event.target.checked })} /> {t("separateTransaction")}</label>}
             {row.decision === "ready" && !rowReady && <p className="catchup-issue" role="status">{importRowReviewIssue(row, account, data, duplicate)}</p>}
             <div className="catchup-decision"><div role="group" aria-label={t("importChoiceFor", { name: importRowName(row) })}>
               <button type="button" className={row.decision === "ready" ? "selected" : ""} aria-pressed={row.decision === "ready"} onClick={() => decide(row.id, "ready")}>{t("addToSaku")}</button>
@@ -203,6 +218,6 @@ export default function NotificationReview({ data, userId, commit, getCurrentDat
         </div></Modal>}
       </div>;
     })}
-    <div className={`catchup-save is-compact${saveBarHidden ? " is-hidden" : ""}`}><p><strong>{t("readyCount", { count: ready.length })}</strong>{skipped.length > 0 && <small>{t("skippedCount", { count: skipped.length })}</small>}</p><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}>{ready.length ? t("addCount", { count: ready.length }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
+    <div className={`catchup-save is-compact${saveBarHidden ? " is-hidden" : ""}`}><p><strong>{t("readyCount", { count: ready.length })}</strong>{skipped.length > 0 && <small>{t("skippedCount", { count: skipped.length })}</small>}{leftOut > 0 && <small>{t("needLookCount", { count: leftOut })}</small>}</p><button className="button primary" disabled={(!ready.length && !skipped.length) || busy || saving} onClick={() => void save()}>{ready.length ? t("addCount", { count: ready.length }) : t("removeSkipped", { count: skipped.length })} <ArrowRight size={16} /></button></div>
   </section></>;
 }

@@ -309,13 +309,11 @@ export function PocketCard({
   onClick,
   onEdit,
   onDelete,
-  onCover,
 }: {
   p: Pocket & { limit: number; spent: number };
   onClick: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
-  onCover?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -351,7 +349,7 @@ export function PocketCard({
       <h3>{p.name}</h3>
       <div className={`pocket-value ${remaining < 0 ? "negative" : ""}`}>
         <strong className="pocket-money"><FitMoney amount={Math.abs(remaining)} prefix={remaining < 0 ? "−" : ""} /></strong>
-        {remaining < 0 ? <span className="pocket-over-chip"><TriangleAlert size={13} />{translate("over")}</span> : <span>{translate("left")}</span>}
+        {remaining < 0 ? <span className="pocket-over-chip"><TriangleAlert size={13} />{translate("overBudgetLabel")}</span> : <span>{translate("left")}</span>}
       </div>
       <div className="progress">
         <i
@@ -366,7 +364,6 @@ export function PocketCard({
         {remaining >= 0 && <span>{percent}%</span>}
       </div>
     </button>
-    {remaining < 0 && onCover && <button type="button" className="pocket-cover-action" onClick={onCover}>{translate("coverIt")}</button>}
     {onEdit && <div className="pocket-card-actions"><button type="button" className="pocket-menu-trigger" aria-label={translate("optionsFor", { name: p.name })} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={20} /></button>
       {menuOpen && <div className="pocket-menu"><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }}>{translate("editPocket")}</button><button type="button" onClick={() => { setMenuOpen(false); (onDelete || onEdit)(); }}>{translate("deletePocketMenu")}</button></div>}
     </div>}
@@ -422,7 +419,7 @@ export function TransactionList({
               </strong>
               <span>
                 {t.kind === "balance_adjustment" ? t.account : <>{t.kind === "account_transfer" ? translate("accountTransfer") : t.kind === "opening_balance" ? translate("openingBalance") : t.kind === "card_payment" ? translate("cardPayment") : t.kind === "reimbursement" ? translate("repaidByFriend") : t.type === "income" ? translate("income") : p?.name || translate("unassigned")}{" "}
-                <span className="dot">·</span> {t.account}</>}
+                <span className="dot">·</span> {t.account}</>}{t.time && <> <span className="dot">·</span> <time className="transaction-time">{t.time}</time></>}
               </span>
             </span>
             <span className="transaction-date">
@@ -613,4 +610,15 @@ export function DirectionIcon({ income }: { income: boolean }) {
 // The Lipat brand mark; the coin keeps the landing page's accent while the pocket follows currentColor.
 export function SakuMark({ size = 24 }: { size?: number }) {
   return <svg className="saku-mark" width={size} height={size} viewBox="-12 -6 160 166" aria-hidden="true"><path d={markBack} fill="var(--mark-pocket, #24604D)" /><path d={markCoin} fill="var(--mark-dot, #A8E6C1)" /><path d={markFront} fill="currentColor" /></svg>;
+}
+
+// A Settings card (master plan 2.3): a native <details> whose summary row is at least 48 px tall, names the card
+// and says its state in a few words. No buttons live in the summary row.
+export function SettingsCard({ title, summary, defaultOpen = false, className = "", children }: { title: string; summary?: ReactNode; defaultOpen?: boolean; className?: string; children: ReactNode }) {
+  // Only the first value counts: a later change (for example sync finishing) never closes a card the user opened.
+  const [openAtFirst] = useState(defaultOpen);
+  return <details className={`settings-card ${className}`.trim()} open={openAtFirst || undefined}>
+    <summary><span className="settings-card-title">{title}</span>{summary !== undefined && summary !== "" && <span className="settings-card-summary">{summary}</span>}<ChevronDown size={18} aria-hidden="true" /></summary>
+    <div className="settings-card-body">{children}</div>
+  </details>;
 }

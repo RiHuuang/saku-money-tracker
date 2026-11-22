@@ -1,3 +1,4 @@
+import "./csp";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "@fontsource/plus-jakarta-sans/400.css";
@@ -9,9 +10,14 @@ import ErrorBoundary from "./ErrorBoundary";
 import { AppUpdateProvider } from "./appUpdate";
 import { loadSystemTheme, loadTheme, paintTheme, watchSystemTheme } from "./appearance";
 import "./styles.css";
+import { loadLanguage, prepareLanguage } from "./i18n";
 void loadTheme().catch(() => "system" as const).then(async (preference) => {
   await loadSystemTheme();
   paintTheme(preference);
+  // The saved language and the device language (used until the saved one is read) are ready before the first render.
+  const language = await loadLanguage().catch(() => "system" as const);
+  // A failed download (offline web, stale cache) retries with English, then renders anyway rather than stay blank.
+  await Promise.all([prepareLanguage(language), prepareLanguage("system")]).catch(() => prepareLanguage("en")).catch(() => undefined);
   watchSystemTheme();
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode><ErrorBoundary><AppUpdateProvider><App /></AppUpdateProvider></ErrorBoundary></React.StrictMode>,

@@ -84,6 +84,8 @@ A bank stays `beta: true` in `worker/banks.js` until its fixtures pass on stage.
 | blu by BCA | `blu.json` | ✓ | 2/2 synthetic text rows on stage, 2026-11-06 | beta |
 | GoPay | `gopay.json` | no balance column, so AI | 3/3 synthetic text rows on stage, 2026-11-06 (including "Isi saldo"); phone 2026-11-05: 2/3 names before the hint change | beta |
 | DANA | `dana.json` | no balance column, so AI | 2/2 synthetic text rows on stage, 2026-11-06; phone 2026-11-05: 2/2 rows read but names and amounts not inspected | beta |
+| Mandiri, BNI, BSI, CIMB Niaga, Permata, OCBC, Maybank, Danamon, BTN, Superbank, LinkAja | `<id>.json` (added 2026-11-22, master plan Pass 5B; layouts from public sources, no real statement checked) | ✓ | not run yet | beta |
+| Jenius, OVO, ShopeePay | none (screenshots only) | — | not run yet | beta |
 
 **Run the gate** with `scripts/fixtures/statements/bench.mjs`. It sends every bank's fixture page through stage `/v1/import/extract` with `source: "auto"`, as the app does for a page it can't prove locally, and exits non-zero on a miss:
 

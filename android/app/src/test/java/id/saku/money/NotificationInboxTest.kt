@@ -36,9 +36,9 @@ class NotificationInboxTest {
         inbox.add(item("other").copy(amount = 1000))
         assertEquals(48500L, NotificationParsers.cancelledSpend("com.bca", "Financial Diary", "Spending of IDR 48,500.00 in Shopping category in 28 October 2026 was cancelled."))
         assertNull(NotificationParsers.cancelledSpend("com.bca", "Financial Diary", "You spent IDR 48,500.00 at Shopping."))
-        assertEquals(2, inbox.cancel("com.bca", 48500, now))
+        assertEquals(2, inbox.cancel("com.bca", 48500, now, "cancel-1"))
         assertEquals(listOf("old", "other"), inbox.items().map { it.id })
-        assertEquals(2, inbox.cancel("com.bca", 48500, now))
+        assertEquals(2, inbox.cancel("com.bca", 48500, now, "cancel-1"))
     }
 
     @Test
@@ -84,8 +84,9 @@ class NotificationInboxTest {
         store(key).add(original)
         store(key).remove(setOf(original.id))
         assertTrue(store(key).items().isEmpty())
-        store(key).add(original)
-        store(key).add(original)
+        assertEquals("a handled row is not captured again", 0, store(key).add(original))
+        store(key).restore(listOf(original))
+        store(key).restore(listOf(original))
         assertEquals(listOf(original), store(key).items())
     }
 

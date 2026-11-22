@@ -1,6 +1,6 @@
 import { Preferences } from "@capacitor/preferences";
 import type { Data } from "./domain";
-import { suggestMerchant } from "./merchants";
+import { learnMerchant, suggestMerchant } from "./merchants";
 
 // Off by default: unknown merchant names leave the phone only after the user opts in on this device.
 const key = "saku-merchant-cleaning-v1";
@@ -18,4 +18,21 @@ export function namesToClean(rows: readonly { name: string; activity: string }[]
     if (names.length === limit) break;
   }
   return names;
+}
+
+// Tidying runs only after rows are in the ledger (master plan 1B, HC3): a captured row still waiting in the
+// inbox never leaves the phone. Names the AI returns become merchant rules, and the rows just added take the
+// tidy name if the user hasn't renamed them since.
+export function applyTidiedNames(data: Data, addedIds: ReadonlySet<string>, results: readonly { name: string; cleanName: string }[], now = new Date().toISOString()): Data {
+  let merchantRules = data.merchantRules;
+  for (const result of results) merchantRules = learnMerchant({ ...data, merchantRules }, result.name, { name: result.cleanName, pocketId: suggestMerchant({ ...data, merchantRules }, result.name)?.pocketId || "" }, now, true);
+  const renames = new Map(results.filter((result) => result.cleanName.trim() && result.cleanName !== result.name).map((result) => [result.name, result.cleanName.trim()]));
+  let renamed = false;
+  const transactions = data.transactions.map((transaction) => {
+    const next = addedIds.has(transaction.id) ? renames.get(transaction.name) : undefined;
+    if (!next) return transaction;
+    renamed = true;
+    return { ...transaction, name: next };
+  });
+  return merchantRules === data.merchantRules && !renamed ? data : { ...data, merchantRules, transactions };
 }

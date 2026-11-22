@@ -1,4 +1,3 @@
-import Papa from "papaparse";
 import { localeTag } from "./i18n";
 
 export type Pocket = {
@@ -16,6 +15,8 @@ export type Transaction = {
   amount: number;
   type: "income" | "expense";
   date: string;
+  // Local time of day, "HH:MM". Captured rows keep the notification's first post time; widget entries stamp now.
+  time?: string;
   pocketId: string;
   account: string;
   note: string;
@@ -190,6 +191,15 @@ export function shiftMonth(month: string, delta: number) {
   const d = new Date(`${month}-01T12:00:00`);
   d.setMonth(d.getMonth() + delta);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+export const validTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+export const timeOfDay = (at: Date | number) => { const date = new Date(at); return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`; };
+// Newest first: by date, then time of day, then the order rows were added (later is newer). Rows without a time
+// sit below timed rows of the same day.
+export function newestFirst<T extends Pick<Transaction, "date" | "time">>(list: readonly T[]): T[] {
+  return list.map((item, index) => ({ item, index }))
+    .sort((a, b) => b.item.date.localeCompare(a.item.date) || (b.item.time || "").localeCompare(a.item.time || "") || b.index - a.index)
+    .map(({ item }) => item);
 }
 export const validDate = (s: string) =>
   /^\d{4}-\d{2}-\d{2}$/.test(s) &&
@@ -596,7 +606,8 @@ export function validateData(input: unknown): Data {
       (t.occurrenceMonth !== undefined && (!t.recurringRuleId || !validDate(`${t.occurrenceMonth}-01`))) ||
       typeof t.note !== "string" ||
       t.note.length > 500 ||
-      (t.verified !== undefined && typeof t.verified !== "boolean")
+      (t.verified !== undefined && typeof t.verified !== "boolean") ||
+      (t.time !== undefined && (typeof t.time !== "string" || !validTime(t.time)))
     )
       throw new Error("The backup contains an invalid transaction.");
     txIds.add(t.id);
@@ -698,34 +709,6 @@ export type BankRow = {
   account: string;
   error?: string;
 };
-export function readCSV(text: string) {
-  const result = Papa.parse<Record<string, string>>(text, {
-    header: true,
-    skipEmptyLines: "greedy",
-    transformHeader: (h) => h.trim().replace(/^\uFEFF/, ""),
-  });
-  if (result.errors.length)
-    throw new Error(`CSV could not be read: ${result.errors[0].message}`);
-  const headers = result.meta.fields || [];
-  if (!headers.length || !result.data.length)
-    throw new Error("This file has no transaction rows.");
-  if (result.data.length > 10000)
-    throw new Error("Use statements with fewer than 10,000 rows.");
-  const find = (names: string[]) =>
-    headers.find((h) => names.includes(h.toLowerCase())) || "";
-  return {
-    headers,
-    raw: result.data,
-    mapping: {
-      date: find(["date", "tanggal", "transaction date"]),
-      name: find(["description", "keterangan", "name", "uraian", "merchant"]),
-      amount: find(["amount", "jumlah", "nominal"]),
-      type: find(["type", "tipe", "jenis", "debit/credit", "db/cr"]),
-      debit: find(["debit", "debet", "withdrawal"]),
-      credit: find(["credit", "kredit", "deposit"]),
-    },
-  };
-}
 export function parseMoney(raw: string, format: "id" | "en"): number {
   let s = raw
     .trim()
@@ -879,33 +862,6 @@ export function reconcile(
       ? { ...r, status: "different" as const, matchId: candidates[0].id }
       : { ...r, status: "missing" as const, matchId: "" };
   });
-}
-export function exportCSV(transactions: Transaction[], pockets: Pocket[]) {
-  return Papa.unparse(
-    transactions.map((t) => ({
-      date: t.date,
-      description: t.name,
-      amount: t.amount,
-      type: t.type,
-      account: t.account,
-      pocket: pockets.find((p) => p.id === t.pocketId)?.name || "",
-      note: t.note,
-      id: t.id,
-      kind: t.kind || (t.type === "income" ? "income" : "expense"),
-      personalAmount: isSpending(t) ? personalAmount(t) : "",
-      cardId: t.cardId || "",
-      installments: t.installments || "",
-      firstDueMonth: t.firstDueMonth || "",
-      recurringRuleId: t.recurringRuleId || "",
-      occurrenceMonth: t.occurrenceMonth || "",
-      splitPeople: t.split?.people || "",
-      splitOwnAmount: t.split?.ownAmount || "",
-      forTransactionId: t.forTransactionId || "",
-      transferId: t.transferId || "",
-      statementChecked: !!t.verified,
-    })),
-    { escapeFormulae: true },
-  );
 }
 
 export const pocketHasReferences = (data: Pick<Data, "transactions" | "recurring" | "favorites" | "pocketTransfers">, pocketId: string) =>

@@ -7,7 +7,7 @@ export const reducedMotion = () => {
 };
 
 // Counts from the previous value to the new one over `duration` ms with the house ease-out.
-export function useCountUp(value: number, duration = 520, initial = value): number {
+export function useCountUp(value: number, duration = 300, initial = value): number {
   const [shown, setShown] = useState(reducedMotion() ? value : initial);
   const from = useRef(reducedMotion() ? value : initial);
   useEffect(() => {
@@ -29,6 +29,6 @@ export function useCountUp(value: number, duration = 520, initial = value): numb
 }
 
 export function CountUp({ value, format = String, fromZero = false }: { value: number; format?: (value: number) => string; fromZero?: boolean }) {
-  const shown = useCountUp(value, 520, fromZero ? 0 : value);
+  const shown = useCountUp(value, 300, fromZero ? 0 : value);
   return <span className="count-up">{format(shown)}</span>;
 }

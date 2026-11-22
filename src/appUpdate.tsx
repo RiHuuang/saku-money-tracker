@@ -160,7 +160,7 @@ export function AppUpdateSettings() {
   if (!update.native) return null;
   return <section className="app-update-settings">
     <div className="cloud-heading"><span className="connection-icon"><RefreshCw size={23} /></span><div><h2>{t("appUpdates")}</h2><p>{t("appUpdatesBody")}</p></div></div>
-    <div className="app-update-row"><span><strong>{t("updateInstalled")}</strong><small>{update.installed ? t("updateInstalledVersion", { version: update.installed.versionName, build: update.installed.versionCode }) : t("updateCheckingInstall")}</small></span><span className={`sync-state ${update.available ? "pending" : ""}`}>{update.available ? t("updateVersionReady", { version: update.release?.versionName ?? "" }) : t("upToDate")}</span></div>
+    <div className="app-update-row"><span><strong>{t("updateInstalled")}</strong><small>{update.installed ? t("updateInstalledVersion", { version: update.installed.versionName }) : t("updateCheckingInstall")}</small></span><span className={`sync-state ${update.available ? "pending" : ""}`}>{update.available ? t("updateVersionReady", { version: update.release?.versionName ?? "" }) : t("upToDate")}</span></div>
     {update.error && <p className="form-error" role="alert">{update.error}</p>}
     <div className="settings-actions"><button className="button secondary" disabled={update.checking} onClick={() => void update.checkNow()}><RefreshCw size={16} />{update.checking ? t("updateChecking") : t("updateCheckNow")}</button>{update.available && <button className="button primary" onClick={() => void update.install()}><Download size={16} />{t("updateInstall")}</button>}</div>
   </section>;

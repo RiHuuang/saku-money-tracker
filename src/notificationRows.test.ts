@@ -78,3 +78,30 @@ test("an unmapped account leaves the row waiting for a choice", () => {
   const [row] = inboxRows([item({ account: "Old bank" })], ledger());
   assert.equal(row.account, "");
 });
+
+test("captured income starts ready only when it can't be the user's own money moving (4.2)", () => {
+  const data = ledger();
+  data.name = "Rina Wijaya";
+  const income = (patch: Partial<InboxItem> = {}) => item({ id: "in", direction: "income", amount: 250_000, rawMerchant: "PT MAJU JAYA", ...patch });
+  assert.equal(inboxRows([income()], data)[0].decision, "ready");
+  assert.equal(inboxRows([income({ amount: 10_000_000 })], data)[0].decision, "later", "Rp 10.000.000 or more waits");
+  assert.equal(inboxRows([income({ rawMerchant: "RINA WIJAYA" })], data)[0].decision, "later", "money from the user's own name waits");
+  const spend = item({ id: "out", amount: 250_000, occurredAt: at - 10 * 60_000, rawMerchant: "BUDI" });
+  assert.equal(inboxRows([spend, income()], data).find((row) => row.id === "in")?.decision, "later", "an opposite row in the inbox within 30 min");
+  assert.equal(inboxRows([{ ...spend, occurredAt: at - 2 * 3_600_000 }, income()], data).find((row) => row.id === "in")?.decision, "ready", "two hours apart is fine");
+  const base = { name: "Transfer", amount: 250_000, type: "expense" as const, date: "2026-10-26", pocketId: "", account: "BCA", note: "" };
+  data.transactions = [{ ...base, id: "t1", time: "12:20" }];
+  assert.equal(inboxRows([income()], data)[0].decision, "later", "an opposite ledger row 10 minutes earlier");
+  data.transactions = [{ ...base, id: "t1", time: "09:00" }];
+  assert.equal(inboxRows([income()], data)[0].decision, "ready");
+  data.transactions = [{ ...base, id: "t1" }];
+  assert.equal(inboxRows([income()], data)[0].decision, "later", "a same-day ledger row with no time counts as close");
+});
+
+test("the last pocket used for a name is prefilled, and a rule is learned only with a pocket (4.3)", () => {
+  const data = ledger();
+  data.transactions = [{ id: "old", name: "QRIS ALFAMART 0123", amount: 20_000, type: "expense", date: "2026-10-20", pocketId: "groceries", account: "BCA", note: "" }];
+  assert.equal(inboxRows([item()], data)[0].pocketId, "groceries");
+  assert.equal(inboxRows([item({ rawMerchant: "SHOP NEW" })], data)[0].pocketId, "");
+  assert.equal(inboxRows([item({ direction: "income", rawMerchant: "QRIS ALFAMART 0123" })], data)[0].pocketId, "", "income never takes a pocket");
+});

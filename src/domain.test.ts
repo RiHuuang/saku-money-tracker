@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { exportCSV, readCSV } from "./csv";
 import {
   COLORS,
   ICONS,
@@ -21,12 +22,10 @@ import {
   dueRules,
   recurringStartMonth,
   emptyData,
-  exportCSV,
   extendPocketsToTransactions,
   installmentAmounts,
   receiptSuggestion,
   parseMoney,
-  readCSV,
   reassignAndDeletePocket,
   reconcile,
   renameAccount,
@@ -536,4 +535,28 @@ test("account renaming preserves statement mappings and checked balance referenc
  const next=renameAccount(data,"BCA","BCA Main")!;
  assert.equal(next.statementAccountMappings![0].account,"BCA Main");assert.equal(next.statementBalanceObservations![0].account,"BCA Main");
  assert.doesNotThrow(()=>validateData(next));
+});
+
+test("an optional HH:MM time is validated and orders same-day rows", async () => {
+  const { newestFirst, validTime, timeOfDay } = await import("./domain");
+  assert.ok(validTime("00:00") && validTime("14:22") && validTime("23:59"));
+  for (const bad of ["24:00", "9:05", "12:60", "12:5", "12:05:00", ""]) assert.equal(validTime(bad), false, bad);
+  assert.equal(timeOfDay(new Date(2026, 10, 22, 7, 5)), "07:05");
+  const rows = [
+    { id: "a", date: "2026-11-21", time: "23:00" },
+    { id: "b", date: "2026-11-22" },
+    { id: "c", date: "2026-11-22", time: "08:15" },
+    { id: "d", date: "2026-11-22", time: "14:22" },
+    { id: "e", date: "2026-11-22" },
+  ];
+  assert.deepEqual(newestFirst(rows).map((row) => row.id), ["d", "c", "e", "b", "a"], "date, then time, then the later-added row first");
+  assert.deepEqual(rows.map((row) => row.id), ["a", "b", "c", "d", "e"], "the input is not reordered");
+});
+
+test("backups accept a valid time and refuse a malformed one", async () => {
+  const { emptyData, validateData } = await import("./domain");
+  const data = emptyData();
+  const row = { id: "t1", name: "Coffee", amount: 25_000, type: "expense" as const, date: "2026-11-22", pocketId: "", account: data.accounts[0], note: "" };
+  assert.equal(validateData({ ...data, transactions: [{ ...row, time: "14:22" }] }).transactions[0].time, "14:22");
+  assert.throws(() => validateData({ ...data, transactions: [{ ...row, time: "25:00" }] }));
 });

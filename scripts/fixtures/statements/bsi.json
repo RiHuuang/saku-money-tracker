@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic BSI rekening koran: row numbers, ISO dates, signed Debit with 0.00 in the unused column (made-up names).",
+ "month": "2026-10",
+ "bank": "bsi",
+ "text": "PT Bank Syariah Indonesia Tbk\nBSI TABUNGAN EASY WADIAH\nPeriode : 2026-10-01 s/d 2026-10-31\nNo. Tgl dan Waktu No Referensi Deskripsi Kode D/K Debit Kredit Saldo\nSaldo Awal 2,000,000.00\n1 2026-10-03 09:12:44 FT26276ABC Transfer ke SITI AMINAH 1040 D -500,000.00 0.00 1,500,000.00\n2 2026-10-10 14:00:01 FT26283DEF Bagi Hasil Oktober 1202 K 0.00 1,250.00 1,501,250.00\n3 2026-10-28 10:30:00 FT26301GHI QRIS RM PADANG SEDERHANA 2061 D -75,000.00 0.00 1,426,250.00\nSaldo Akhir 1,426,250.00",
+ "rows": [
+  [
+   "2026-10-03",
+   500000,
+   "expense"
+  ],
+  [
+   "2026-10-10",
+   1250,
+   "income"
+  ],
+  [
+   "2026-10-28",
+   75000,
+   "expense"
+  ]
+ ],
+ "names": [
+  "SITI AMINAH",
+  "Bagi Hasil",
+  "RM PADANG SEDERHANA"
+ ]
+}

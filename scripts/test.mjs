@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 
 const directory = await mkdtemp(join(tmpdir(), "saku-tests-"));
 try {
-  const tests = ["src/domain.test.ts", "src/reconciliationBatches.test.ts", "src/pdfStatement.test.ts", "src/importTransactions.test.ts", "src/importFlow.test.ts", "src/appearance.test.ts", "src/appUpdateLogic.test.ts", "src/merchants.test.ts", "src/appLock.test.ts", "src/notificationRows.test.ts", "src/merchantCleaning.test.ts", "src/balanceCheckins.test.ts", "src/statementBalances.test.ts", "src/transactionMerge.test.ts", "src/i18n.test.ts", "src/reminders.test.ts", "src/backupCrypto.test.ts", "src/statementMatch.test.ts", "src/allocation.test.ts"];
+  const tests = ["src/domain.test.ts", "src/reconciliationBatches.test.ts", "src/importTransactions.test.ts", "src/importFlow.test.ts", "src/appearance.test.ts", "src/appUpdateLogic.test.ts", "src/merchants.test.ts", "src/appLock.test.ts", "src/notificationRows.test.ts", "src/merchantCleaning.test.ts", "src/balanceCheckins.test.ts", "src/statementBalances.test.ts", "src/transactionMerge.test.ts", "src/i18n.test.ts", "src/reminders.test.ts", "src/backupCrypto.test.ts", "src/statementMatch.test.ts", "src/allocation.test.ts", "src/csp.test.ts", "src/captureHealth.test.ts", "src/consent.test.ts"];
   const outputs = tests.map((file) => join(directory, file.split("/").at(-1).replace(".ts", ".mjs")));
-  await Promise.all(tests.map((entryPoints, index) => build({ entryPoints: [entryPoints], outfile: outputs[index], bundle: true, platform: "node", format: "esm" })));
+  await Promise.all(tests.map((entryPoints, index) => build({ entryPoints: [entryPoints], outfile: outputs[index], bundle: true, platform: "node", format: "esm", inject: ["scripts/test-locales.ts"] })));
   const child = spawn(process.execPath, ["--test", ...outputs], { stdio: "inherit" });
   const code = await new Promise((resolve) => child.on("exit", resolve));
   process.exitCode = code ?? 1;
@@ -30,13 +30,18 @@ try {
     await import("../worker/live.test.mjs");
     await import("../worker/live-route.test.mjs");
     await import("../worker/agreement-route.test.mjs");
+    await import("../worker/consent-route.test.mjs");
     await import("../worker/merchant-clean.test.mjs");
     await import("../worker/legal.test.mjs");
     await import("../worker/security-headers.test.mjs");
+    await import("../worker/csp-report.test.mjs");
     await import("../worker/refresh-reuse.test.mjs");
     await import("../worker/sessions-route.test.mjs");
     await import("../worker/monthly-check-route.test.mjs");
     await import("./statement-bench.test.mjs");
+    await import("./android-permissions.test.mjs");
+    await import("./no-leak.test.mjs");
+    await import("./ui-ratchet.test.mjs");
   }
 } finally {
   await rm(directory, { recursive: true, force: true });

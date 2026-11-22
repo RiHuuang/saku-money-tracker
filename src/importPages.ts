@@ -1,7 +1,7 @@
 // The legacy build carries polyfills for older Android System WebViews (e.g. no global Iterator).
 import { getDocument, GlobalWorkerOptions, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { parseBcaStatement, parseSeaBankStatement, parseBcaCardStatement, parseGoPayStatement, parseJagoStatement, parseStatementPage, type PageResult } from "./statementLines";
+import { pageLines, parseBcaStatement, parseSeaBankStatement, parseBcaCardStatement, parseGoPayStatement, parseJagoStatement, parseStatementPage, type PageResult, type TextPiece } from "./statementLines";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 export type ImportPage = { kind: "text"; text: string; reading?: PageResult } | { kind: "image"; image: string };
@@ -27,17 +27,7 @@ export async function openImportPages(file: File, password = "", reviewMonth = "
   const textCache = new Map<number, string>();
   const readText = async (page: Awaited<ReturnType<typeof pdf.getPage>>) => {
     const content = await page.getTextContent();
-    const parts = content.items.filter((item): item is typeof item & { str: string; transform: number[]; width: number } => "str" in item && "transform" in item && "width" in item);
-    const rows = new Map<number, { x: number; right: number; text: string }[]>();
-    for (const part of parts) {
-      const y = Math.round(part.transform[5] / 4) * 4;
-      rows.set(y, [...(rows.get(y) || []), { x: part.transform[4], right: part.transform[4] + part.width, text: part.str }]);
-    }
-    const text = [...rows.entries()].sort((a, b) => b[0] - a[0]).map(([, line]) => {
-      let right = -Infinity;
-      return line.sort((a, b) => a.x - b.x).map((item) => { const gap = item.x - right; right = Math.max(right, item.right); return `${gap > 2 ? " " : ""}${item.text}`; }).join("").trim();
-    }).filter(Boolean).join("\n");
-    return text;
+    return pageLines(content.items.filter((item): item is typeof item & TextPiece => "str" in item && "transform" in item && "width" in item)).join("\n");
   };
   let documentReading: PageResult[] | null = null;
   try {

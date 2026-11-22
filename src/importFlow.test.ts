@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { runImportSources } from "./importFlow";
+import { pdfPasswords, runImportSources } from "./importFlow";
+
+test("a typed birth date is tried as typed, then as DDMMYYYY and DDMMYY", () => {
+  assert.deepEqual(pdfPasswords("05/10/1990"), ["05/10/1990", "05101990", "051090"]);
+  assert.deepEqual(pdfPasswords("5-10-1990"), ["5-10-1990", "05101990", "051090"]);
+  assert.deepEqual(pdfPasswords("051090"), ["051090", "05101990"]);
+  assert.deepEqual(pdfPasswords("05101990"), ["05101990", "051090"]);
+  assert.deepEqual(pdfPasswords("Rahasia123"), ["Rahasia123"], "a custom password is tried once, as typed");
+  assert.deepEqual(pdfPasswords("12345678"), ["12345678"], "month 34 is not a date");
+});
 
 test("a failed source is recorded and later sources still run", async () => {
   const attempted: string[] = [], errors: string[] = [];

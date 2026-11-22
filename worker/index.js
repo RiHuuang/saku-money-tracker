@@ -11,6 +11,8 @@ import { BUDGET_RESERVATION, budgetMessages, parseBudgetAnswer, validateBudgetIn
 import { aiImportAvailable, answerBank, importMessages, importVerificationMessages, mergeImportPasses, MODEL, parseImportAnswer, parseImportSummary, reserveImport, settleImport, USER_BUDGET_TABLE, validateImportInput } from "./import-ai.js";
 import { bcaCheckMessages, bcaMessages, jakartaToday, looksLikeBcaStatement, mergeBcaReads, parseBcaAnswer } from "./import-bca.js";
 import { withSecurityHeaders } from "./security-headers.js";
+import { CSP_REPORT_TABLE, cspDirectives } from "./csp-report.js";
+import { CONSENT_TABLE, consentPurposeFor, hasConsent, recordConsent, validateConsentInput } from "./consent.js";
 export { UserLiveUpdates } from "./live.js";
 
 let jwks;
@@ -458,7 +460,9 @@ async function deleteAccount(env, uid, user, sessionId) {
       .bind(uid, sessionId).run();
     if (started.meta.changes) {
       await env.DB.prepare(USER_BUDGET_TABLE).run();
+      await env.DB.prepare(CONSENT_TABLE).run();
       await env.DB.batch([
+        env.DB.prepare("DELETE FROM consents WHERE uid=?").bind(uid),
         env.DB.prepare("DELETE FROM import_ai_user_budget WHERE uid=?").bind(uid),
         env.DB.prepare("DELETE FROM sessions WHERE uid=? AND id<>?").bind(uid, sessionId),
         env.DB.prepare("DELETE FROM snapshot_upload_parts WHERE id IN (SELECT id FROM snapshot_uploads WHERE uid=?)").bind(uid),
@@ -490,8 +494,7 @@ async function route(request, env) {
   if (["GET", "HEAD"].includes(request.method) && path === "/") return withSecurityHeaders(await env.ASSETS.fetch(request));
   const allowedOrigins = new Set((env.ALLOWED_ORIGINS || "https://localhost").split(",").map((item) => item.trim()));
   const cors = corsHeaders(origin, env);
-  const landingReleaseRequest = request.method === "GET" && path === "/v1/releases/android/latest" && origin === "https://sakumoney.my.id";
-  if (origin && origin !== url.origin && !allowedOrigins.has(origin) && !landingReleaseRequest) throw fault(403, "Origin is not allowed");
+  if (origin && origin !== url.origin && !allowedOrigins.has(origin)) throw fault(403, "Origin is not allowed");
   if (request.method === "GET" && path === "/v1/live") {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") throw fault(400, "WebSocket required");
     const room = url.searchParams.get("room"), ticket = url.searchParams.get("ticket");
@@ -501,7 +504,20 @@ async function route(request, env) {
   if (request.method === "OPTIONS" && /^\/v[12]\//.test(path)) return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-headers": "authorization,content-type,x-saku-version,x-saku-user-id,x-saku-app-build", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" } });
   if (request.method === "GET" && ["/", "/privacy", "/terms", "/account-deletion"].includes(path) && path !== "/") return legalPage(path, env, legalLanguage(url));
   if (request.method === "GET" && path === "/health") return reply({ ok: true });
-  if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, ...(landingReleaseRequest ? { "access-control-allow-origin": origin, vary: "Origin" } : {}), "cache-control": "public, max-age=300" });
+  // Counts CSP violations by day and directive only; no URLs, samples or identifiers are kept (master plan 1D).
+  if (request.method === "POST" && path === "/v1/csp-report") {
+    // Unauthenticated by nature (browsers send it), so it shares the per-IP limiter and needs a declared, small body.
+    const length = Number(request.headers.get("content-length") || 0);
+    const limited = env.AUTH_RATE_LIMITER && !(await env.AUTH_RATE_LIMITER.limit({ key: `csp:${request.headers.get("cf-connecting-ip") || "unknown"}` })).success;
+    const directives = limited || !length || length > 16_000 ? [] : cspDirectives(await request.text().catch(() => ""));
+    if (directives.length) {
+      await env.DB.prepare(CSP_REPORT_TABLE).run();
+      const day = new Date().toISOString().slice(0, 10);
+      await env.DB.batch(directives.map((directive) => env.DB.prepare("INSERT INTO csp_reports(day,directive,count) VALUES(?,?,1) ON CONFLICT(day,directive) DO UPDATE SET count=count+1").bind(day, directive)));
+    }
+    return new Response(null, { status: 204 });
+  }
+  if (request.method === "GET" && path === "/v1/releases/android/latest") return reply(await androidReleaseManifest(env), 200, { ...cors, "cache-control": "public, max-age=300" });
   if (["GET", "HEAD"].includes(request.method) && path === "/download/saku.apk") return androidReleaseResponse(request, env, await androidReleaseManifest(env), false);
   const androidDownload = path.match(/^\/download\/android\/(\d+)\.apk$/);
   if (["GET", "HEAD"].includes(request.method) && androidDownload) {
@@ -629,11 +645,14 @@ async function route(request, env) {
   const auth = await authenticate(request, env);
   const expectedUid = request.headers.get("x-saku-user-id");
   if (expectedUid && expectedUid !== auth.uid) throw fault(409, "Google account changed during synchronization");
-  if (auth.browser && request.method !== "GET" && (path.startsWith("/v2/") || path === "/v1/me" || path === "/v1/me/agreement" || path.startsWith("/v1/sessions") || path === "/v1/live-ticket") && expectedUid !== auth.uid) throw fault(403, "Account identity is required");
+  if (auth.browser && request.method !== "GET" && (path.startsWith("/v2/") || path === "/v1/me" || path === "/v1/me/agreement" || path === "/v1/me/consent" || path.startsWith("/v1/sessions") || path === "/v1/live-ticket") && expectedUid !== auth.uid) throw fault(403, "Account identity is required");
   const user = auth.user;
   if (!user) throw fault(404, "Account not found");
   if (user.deleting && !(request.method === "DELETE" && path === "/v1/me")) throw fault(410, "Account deletion is in progress");
   if (env.WRITE_ENABLED !== "true" && ((request.method === "PUT" && (path === "/v1/me" || path.startsWith("/v2/"))) || (request.method === "DELETE" && path === "/v1/me") || (request.method === "POST" && (path === "/v1/auth/google/drive" || path.startsWith("/v2/"))))) throw fault(503, "Cloud writes are paused for migration");
+  // Cloud AI runs only with a consent receipt (master plan 1B). Enforced once every supported client records one.
+  const consentPurpose = request.method === "POST" ? consentPurposeFor(path) : null;
+  if (consentPurpose && env.AI_CONSENT_REQUIRED === "true" && !(await hasConsent(env.DB, auth.uid, consentPurpose))) throw fault(403, "consent_required");
   if (request.method === "POST" && path === "/v1/merchants/clean") {
     if (expectedUid !== auth.uid) throw fault(403, "Account identity is required");
     if (!aiImportAvailable(env)) throw fault(503, "AI name cleaning is unavailable");
@@ -783,6 +802,12 @@ async function route(request, env) {
     if (bytes.length !== size || !validAvatar(bytes)) throw fault(400, "Choose a static profile image up to 512 pixels");
     const next = await saveCustomAvatar(env, auth, name, bytes);
     return reply({ user: ownUser(next) }, 200, cors);
+  }
+  if (request.method === "POST" && path === "/v1/me/consent") {
+    let input;
+    try { input = validateConsentInput(await readBody(request)); }
+    catch (error) { throw fault(400, error.message); }
+    return reply({ consent: await recordConsent(env.DB, auth.uid, input) }, 200, cors);
   }
   if (request.method === "POST" && path === "/v1/me/agreement") {
     const input = await readBody(request);

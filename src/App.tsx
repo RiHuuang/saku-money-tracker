@@ -1,3 +1,4 @@
+import { retryPendingWithdrawals } from "./consent";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { App as NativeApp } from "@capacitor/app";
@@ -9,6 +10,7 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  BellRing,
   Camera,
   Check,
   CheckCheck,
@@ -50,7 +52,6 @@ import {
   dayLabel,
   dueRules,
   emptyData,
-  exportCSV,
   extendPocketsToTransactions,
   groupDigits,
   isIncome,
@@ -79,10 +80,13 @@ import {
   pocketHasReferences,
   applyPocketPlan,
   rollbackPocketPlan,
+  newestFirst,
+  timeOfDay,
 } from "./domain";
 import { learnMerchant, suggestMerchant } from "./merchants";
 import { listImportDrafts } from "./importDraft";
 import { notificationCapture, notificationCaptureSupported } from "./notificationCapture";
+import { inboxReadiness, inboxRows } from "./notificationRows";
 import NotificationAccess from "./NotificationAccess";
 import { importRowsWaiting } from "./importTransactions";
 import { AccountEditor, AccountsOverview, accountColor } from "./AccountsOverview";
@@ -107,8 +111,8 @@ import {
   SakuMark,
   SegmentedChoice,
   TransactionList,
+  SettingsCard,
 } from "./components";
-const Statements = lazy(() => import("./Statements"));
 const Onboarding = lazy(() => import("./Onboarding"));
 const PocketPlanner = lazy(() => import("./PocketPlanner"));
 const CsvStatements = lazy(() => import("./CsvStatements"));
@@ -128,9 +132,9 @@ function SheetMessage({ children }: { children: ReactNode }) {
 import { localStatementAI, nativeAIAvailable } from "./localStatementAI";
 import { homeWidgetRevision } from "./homeWidget";
 import { loadTheme, saveTheme, type ThemePreference } from "./appearance";
-import { loadLanguage, localeTag, saveLanguage, setActiveLanguage, t, t as translate, type LanguagePreference } from "./i18n";
+import { loadLanguage, localeTag, prepareLanguage, saveLanguage, setActiveLanguage, t, t as translate, type LanguagePreference } from "./i18n";
 import { backDestination, moreViews, popSheet, pushSheet, type View } from "./navigation";
-import { AppUpdateSettings } from "./appUpdate";
+import { AppUpdateSettings, useAppUpdate } from "./appUpdate";
 import { version as appVersion } from "../package.json";
 import {
   connectGoogleDrive,
@@ -170,7 +174,6 @@ type Edit =
   | { type: "start" }
   | { type: "plan" }
   | null;
-const cloudImportEnabled = true;
 const catchUpDismissedKey = "saku-catch-up-dismissed-v1";
 const navigation = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
@@ -178,7 +181,7 @@ const navigation = [
   { id: "pockets", label: "Pockets", icon: Wallet },
   { id: "plans", label: "Plans", icon: CreditCard },
   { id: "insights", label: "Insights", icon: BarChart3 },
-  { id: "check", label: cloudImportEnabled ? "Catch up" : "Check", icon: FileCheck2 },
+  { id: "check", label: "Catch up", icon: FileCheck2 },
 ] as const;
 const navigationKeys = { overview: "home", transactions: "activity", pockets: "pockets", plans: "plans", insights: "insights", check: "catchUp", more: "more" } as const;
 const mobileNavigation = [
@@ -190,7 +193,7 @@ export default function App() {
     [loadError, setLoadError] = useState(""),
     [view, setView] = useState<View>("overview"),
     [month, setMonth] = useState(today().slice(0, 7)),
-    [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">(cloudImportEnabled ? "catchup" : "csv"),
+    [checkTab, setCheckTab] = useState<"catchup" | "notifications" | "statement" | "csv">("catchup"),
     [editStack, setEditStack] = useState<Exclude<Edit, null>[]>([]),
     [toast, setToast] = useState<string | { message: string; action: { label: string; run: () => void }; secondaryAction?: { label: string; run: () => void } }>(""),
     [busy, setBusy] = useState(false),
@@ -204,6 +207,8 @@ export default function App() {
     [catchUpDismissed, setCatchUpDismissed] = useState(() => { try { return localStorage.getItem(catchUpDismissedKey) || ""; } catch { return ""; } }),
     [importWaiting, setImportWaiting] = useState(0), [draftsWaiting, setDraftsWaiting] = useState(0),
     [waitingRecount, setWaitingRecount] = useState(0),
+    // Captured rows for the Home card (master plan 4.1): null until counted, so the card never pops in and out.
+    [inboxSummary, setInboxSummary] = useState<{ ready: number; look: number } | null>(null), [autoAdd, setAutoAdd] = useState(false),
     // Native builds start covered until the lock setting is read, so no amount can flash before authentication.
     [lockState, setLockState] = useState<"checking" | "covered" | "locked" | "open">(appLockSupported() ? "checking" : "open"),
     [appLock, setAppLock] = useState<AppLockSettings>(defaultAppLock);
@@ -410,7 +415,7 @@ export default function App() {
   }, [cloud?.user?.id, data]);
   useEffect(() => {
     void loadTheme().then(setThemePreference).catch(() => {});
-    void loadLanguage().then(setLanguagePreference).catch(() => {});
+    void loadLanguage().then(async (preference) => { await prepareLanguage(preference); setLanguagePreference(preference); }).catch(() => {});
   }, []);
   async function unlock() {
     if (authenticating.current) return;
@@ -455,10 +460,18 @@ export default function App() {
     let live = true;
     void Promise.all([
       cloud?.signedIn && cloud.user?.id ? listImportDrafts(cloud.user.id).then((drafts) => importRowsWaiting(drafts, data)).catch(() => 0) : 0,
-      notificationCaptureSupported() ? notificationCapture.inbox().then((inbox) => inbox.items.length).catch(() => 0) : 0,
+      notificationCaptureSupported() ? notificationCapture.inbox().then((inbox) => {
+        const rows = inboxRows(inbox.items, data), summary = inboxReadiness(rows, data), ready = summary.ready;
+        if (live) setInboxSummary({ ready: ready.length, look: summary.look });
+        return inbox.items.length;
+      }).catch(() => 0) : 0,
     ]).then(([drafts, inbox]) => { if (live) { setImportWaiting(drafts + inbox); setDraftsWaiting(drafts); } });
     return () => { live = false; };
   }, [data, view, cloud?.signedIn, cloud?.user?.id, waitingRecount]);
+  // A Home "Add N" that didn't run (Catch up was left or another tab opened first) never fires later.
+  useEffect(() => { if (checkTab !== "notifications") setAutoAdd(false); }, [checkTab]);
+  // Consent withdrawals that failed offline are sent again on each start.
+  useEffect(() => { if (cloud?.signedIn && cloud.user?.id) void retryPendingWithdrawals(cloud.user.id); }, [cloud?.signedIn, cloud?.user?.id]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);
@@ -677,9 +690,7 @@ export default function App() {
       </div>
     );
   const stats = summary(data, month),
-    sorted = [...stats.transactions].sort(
-      (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
-    );
+    sorted = newestFirst(stats.transactions);
   const topPocket = [...stats.pockets].sort((a, b) => b.spent - a.spent)[0];
   const weekStart = new Date();
   weekStart.setHours(0, 0, 0, 0);
@@ -703,9 +714,10 @@ export default function App() {
     settings: [t("settingsIntro"), t("settings")],
   };
   const go = (v: View) => {
+    if (v !== "check") setAutoAdd(false);
     if (v !== view) setViewHistory((history) => [...history.slice(-11), view]);
     // Opening Catch up lands on what is actually waiting: captured notifications, unless a screenshot draft is open.
-    if (v === "check" && view !== "check" && cloudImportEnabled && importWaiting > draftsWaiting && !draftsWaiting) setCheckTab("notifications");
+    if (v === "check" && view !== "check" && importWaiting > draftsWaiting && !draftsWaiting) setCheckTab("notifications");
     setSelectedPocketId(null);
     setSelectedAccount("");
     setAccountsOpen(false);
@@ -885,7 +897,8 @@ export default function App() {
           </section>}
           {view === "overview" && (
             <>
-              {showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { go("check"); setCheckTab(cloudImportEnabled ? "catchup" : "csv"); }}>{cloudImportEnabled ? t("importScreenshot") : t("catchUpMonthly")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
+              {inboxSummary && inboxSummary.ready + inboxSummary.look > 0 ? <section className="catch-up-card inbox-card" aria-label={t("notificationsTitle")}><BellRing size={20} /><div><strong>{t("homeInboxSummary", { ready: inboxSummary.ready, look: inboxSummary.look })}</strong><div className="catch-up-actions">{inboxSummary.ready > 0 && <button className="button primary" onClick={() => { setAutoAdd(true); go("check"); setCheckTab("notifications"); }}>{t("addCount", { count: inboxSummary.ready })}</button>}<button className="button secondary" onClick={() => { setAutoAdd(false); go("check"); setCheckTab("notifications"); }}>{t("reviewRows")}</button></div></div></section>
+              : showCatchUp && <section className="catch-up-card" aria-label={t("catchUpDays")}><CalendarDays size={20} /><div><strong>{catchUpDays.length === 14 ? t("lastEntryOld") : `${catchUpAnchorChecked ? t("checkedUpTo") : t("lastEntry")} ${dayLabel(shiftDate(catchUpDays[0], -1))}`} · {t(catchUpDays.length === 1 ? "oneDayToCatchUp" : "daysToCatchUp", { count: catchUpDays.length })}</strong><div className="catch-up-actions"><button className="button primary" onClick={() => setCatchUpSheet({ days: catchUpDays, index: 0 })}>{t("fillByDay")}</button><button className="button secondary" onClick={() => { go("check"); setCheckTab("catchup"); }}>{t("importScreenshot")}</button></div></div><button className="icon-button catch-up-dismiss" aria-label={t("hideTomorrow")} title={t("hideTomorrow")} onClick={dismissCatchUp}><X size={18} /></button></section>}
               <section className="summary-grid">
                 <div className="balance-panel balance-action" role="button" tabIndex={0} aria-label={t("openMoneyByAccount")} onClick={() => setAccountsOpen(true)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setAccountsOpen(true); } }}>
                   <div className="balance-top">
@@ -988,7 +1001,6 @@ export default function App() {
                         onClick={() => openPocket(p.id)}
                         onEdit={() => setEdit({ type: "pocket", value: p })}
                         onDelete={() => setEdit({ type: "pocket_delete", value: p })}
-                        onCover={() => setEdit(data.pockets.length > 1 ? { type: "pocket_transfer", toPocketId: p.id, amount: p.spent - p.limit } : { type: "pocket", value: p, focusBudget: true })}
                       />
                     ))}
                   </div>
@@ -1073,7 +1085,7 @@ export default function App() {
             <div className="pocket-activity-summary"><button type="button" onClick={() => setEdit({ type: "pocket", value: selectedPocket, focusBudget: true })}><span>{t("budget")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0)}</strong></button><div><span>{t("spent2")}</span><strong>{money(stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)}</strong></div><div><span>{(stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) < (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0) ? t("overBudget") : t("left")}</span><strong>{money(Math.abs((stats.pockets.find((p) => p.id === selectedPocket.id)?.limit || 0) - (stats.pockets.find((p) => p.id === selectedPocket.id)?.spent || 0)))}</strong></div></div>
             <div className="section-heading"><h2>{t("history")}</h2><button className="text-button" onClick={() => setPocketAllHistory((value) => !value)}>{pocketAllHistory ? t("selectedMonth") : t("allHistory")}</button></div>
             {data.pocketTransfers.filter((move) => (move.fromPocketId === selectedPocket.id || move.toPocketId === selectedPocket.id) && (pocketAllHistory || move.month === month)).map((move) => <div className="pocket-move" key={move.id}><span>{move.toPocketId === selectedPocket.id ? t("budgetMovedIn") : t("budgetMovedOut")} · {monthLabel(move.month, true)}</span><strong>{move.toPocketId === selectedPocket.id ? "+" : "−"}{money(move.amount)}</strong></div>)}
-            <TransactionList transactions={data.transactions.filter((t) => t.pocketId === selectedPocket.id && (pocketAllHistory || t.date.startsWith(month))).sort((a, b) => b.date.localeCompare(a.date))} pockets={data.pockets} onEdit={(value) => setEdit({ type: "transaction", value })} groupDates />
+            <TransactionList transactions={newestFirst(data.transactions.filter((t) => t.pocketId === selectedPocket.id && (pocketAllHistory || t.date.startsWith(month))))} pockets={data.pockets} onEdit={(value) => setEdit({ type: "transaction", value })} groupDates />
           </section>}
           {view === "pockets" && !selectedPocket && (
             <>
@@ -1100,7 +1112,6 @@ export default function App() {
                     onClick={() => openPocket(p.id)}
                     onEdit={() => setEdit({ type: "pocket", value: p })}
                     onDelete={() => setEdit({ type: "pocket_delete", value: p })}
-                    onCover={() => setEdit(data.pockets.length > 1 ? { type: "pocket_transfer", toPocketId: p.id, amount: p.spent - p.limit } : { type: "pocket", value: p, focusBudget: true })}
                   />
                 ))}
                 <button
@@ -1223,9 +1234,9 @@ export default function App() {
           )}
           {view === "check" && (
             <Suspense fallback={<p className="loading-view">{t("loadingMonthlyCheck")}</p>}>
-              {cloudImportEnabled && <div className="check-tabs" role="tablist" aria-label={t("importMode")}><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>}
-              {cloudImportEnabled && (checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">{t("loadingNotifications")}</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} onSettings={() => go("settings")} getCurrentData={() => latest.current.cloud?.user?.id === cloud?.user?.id ? latest.current.data : null} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null)}
-              {cloudImportEnabled ? <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div> : <Statements data={data} month={month} commit={commit} busy={busy} notify={setToast} />}
+              <div className="check-tabs" role="tablist" aria-label={t("importMode")}><button role="tab" aria-selected={checkTab === "catchup"} className={checkTab === "catchup" ? "selected" : ""} onClick={() => setCheckTab("catchup")}>{t("catchUp")}</button>{notificationCaptureSupported() && <button role="tab" aria-selected={checkTab === "notifications"} className={checkTab === "notifications" ? "selected" : ""} onClick={() => setCheckTab("notifications")}>{t("notificationsTab")}</button>}<button role="tab" aria-selected={checkTab === "statement"} className={checkTab === "statement" ? "selected" : ""} onClick={() => setCheckTab("statement")}>{t("catchUpMonthly")}</button><button role="tab" aria-selected={checkTab === "csv"} className={checkTab === "csv" ? "selected" : ""} onClick={() => setCheckTab("csv")}>{t("csvOnDevice")}</button></div>
+              {checkTab === "catchup" ? <CatchUp key={`catchup-${cloud?.signedIn ? cloud.user?.id : "local"}`} data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : checkTab === "notifications" ? <Suspense fallback={<p className="loading-view">{t("loadingNotifications")}</p>}><NotificationReview data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} onCount={() => setWaitingRecount((value) => value + 1)} autoAdd={autoAdd} onAutoAdded={() => setAutoAdd(false)} onSettings={() => go("settings")} getCurrentData={() => latest.current.cloud?.user?.id === cloud?.user?.id ? latest.current.data : null} /></Suspense> : checkTab === "statement" ? <CatchUp key={`statement-${cloud?.signedIn ? cloud.user?.id : "local"}`} statementMode data={data} month={month} userId={cloud?.signedIn ? cloud.user?.id : undefined} commit={commit} busy={busy} notify={setToast} /> : null}
+              <div hidden={checkTab !== "csv"}><CsvStatements cloudImportEnabled data={data} month={month} commit={commit} busy={busy} notify={setToast} /></div>
             </Suspense>
           )}
           {view === "plans" && <Suspense fallback={<p className="loading-view">{t("loadingPlans")}</p>}><Plans data={data} month={month} busy={busy} commit={commit} notify={setToast} onNewPurchase={(cardId) => setEdit({ type: "transaction", cardId })} initialTab={plansTab} /></Suspense>}
@@ -1244,7 +1255,7 @@ export default function App() {
               themePreference={themePreference}
               onThemeChange={(preference) => { setThemePreference(preference); void saveTheme(preference).catch(() => setToast(t("appearanceCouldNotBeSaved"))); }}
               languagePreference={languagePreference}
-              onLanguageChange={(preference) => { setLanguagePreference(preference); void saveLanguage(preference).catch(() => setToast(t("languageSaveError"))); }}
+              onLanguageChange={(preference) => { void prepareLanguage(preference).then(() => { setLanguagePreference(preference); return saveLanguage(preference); }).catch(() => setToast(t("languageSaveError"))); }}
               onOpenAccount={(account) => setSelectedAccount(account)}
               onRemoveAccount={(account) => { const index = data.accounts.indexOf(account); void commit({ ...data, accounts: data.accounts.filter((item) => item !== account) }, "").then((ok) => { if (ok) setToast({ message: t("accountRemoved"), action: { label: t("undo"), run: () => { const current = latest.current.data; if (current && !current.accounts.includes(account)) void commit({ ...current, accounts: [...current.accounts.slice(0, index), account, ...current.accounts.slice(index)] }, t("accountRestored")); } } }); }); }}
               appLock={appLock}
@@ -1484,7 +1495,7 @@ function AccountActivity({ data, account, month, onMonthChange, onBack, onRename
   const transactions = data.transactions.filter((transaction) => transaction.account === account && transaction.kind !== "card_purchase");
   const monthRows = transactions.filter((transaction) => transaction.date.startsWith(month));
   const amount = (type: Transaction["type"]) => monthRows.filter((transaction) => transaction.type === type).reduce((total, transaction) => total + transaction.amount, 0);
-  const shown = (allHistory ? transactions : monthRows).sort((a, b) => b.date.localeCompare(a.date));
+  const shown = newestFirst(allHistory ? transactions : monthRows);
   return <section className="account-activity">
     <div className="page-heading"><div><button className="back-to-more" onClick={onBack}><ChevronLeft size={17} />{t("back")}</button><p>{t("accountActivity")}</p><h1>{account}<button type="button" className="pocket-heading-edit" aria-label={t("editAccountNamed", { account })} onClick={onRename}><PencilLine size={17} /></button></h1></div>
       <div className="heading-actions"><div className="month-picker"><IconButton label={t("previousMonth")} onClick={() => onMonthChange(shiftMonth(month, -1))}><ChevronLeft size={16} /></IconButton><label><CalendarDays size={16} /><span>{monthLabel(month, true)}</span><input aria-label={t("selectedMonth")} type="month" value={month} onChange={(event) => { if (/^\d{4}-\d{2}$/.test(event.target.value)) onMonthChange(event.target.value); }} /></label><IconButton label={t("nextMonth")} onClick={() => onMonthChange(shiftMonth(month, 1))}><ChevronRight size={16} /></IconButton></div></div>
@@ -1523,7 +1534,7 @@ function Transactions({
     [type, setType] = useState("all"),
     [pocket, setPocket] = useState("all"),
     [account, setAccount] = useState("all");
-  const rows = data.transactions
+  const rows = newestFirst(data.transactions
     .filter(
       (t) =>
         t.date.startsWith(month) &&
@@ -1533,8 +1544,7 @@ function Transactions({
         `${t.name} ${t.note} ${t.account}`
           .toLowerCase()
           .includes(query.toLowerCase()),
-    )
-    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+    ));
   return (
     <>
       <div className="transaction-tools">
@@ -1559,8 +1569,8 @@ function Transactions({
           ))}
         </div>
         <details ref={exportMenu} className="export-menu" onKeyDown={(event) => { if (event.key === "Escape") { exportMenu.current?.removeAttribute("open"); event.stopPropagation(); } }}><summary className="button secondary"><Download size={16} /> {t("exportCsv")}</summary><div>
-          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download(`saku-${month}.csv`, exportCSV(rows, data.pockets), "text/csv").catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("currentResults", { count: rows.length })}</button>
-          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void download("saku-all-transactions.csv", exportCSV(data.transactions, data.pockets), "text/csv").catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("allHistory")}</button>
+          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void import("./csv").then(({ exportCSV }) => download(`saku-${month}.csv`, exportCSV(rows, data.pockets), "text/csv")).catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("currentResults", { count: rows.length })}</button>
+          <button onClick={() => { exportMenu.current?.removeAttribute("open"); void import("./csv").then(({ exportCSV }) => download("saku-all-transactions.csv", exportCSV(data.transactions, data.pockets), "text/csv")).catch(() => notify(t("exportCouldNotBeSaved"))); }}>{t("allHistory")}</button>
         </div></details>
       </div>
       <div className="transaction-filters">
@@ -1772,13 +1782,15 @@ function TransactionEditor({
       const base64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
       canvas.width = 0; canvas.height = 0;
       const suggestion = receiptSuggestion((await localStatementAI.recognizeImage({ image: base64 })).text);
-      if (suggestion.amount) setAmount(String(suggestion.amount));
+      const filled = !!suggestion.amount && !amount;
+      if (filled) setAmount(String(suggestion.amount));
       if (suggestion.merchant && !name) setName(suggestion.merchant);
-      setScanInfo(suggestion.amount ? t("receiptAmountSuggested") : t("receiptNoTotal"));
+      setScanInfo(filled ? t("receiptAmountSuggested") : suggestion.amount ? "" : t("receiptNoTotal"));
     } catch (e) { setError(e instanceof Error ? e.message : t("receiptScanError")); }
     finally { setScanning(false); }
   }
   const amountField = useRef<HTMLDivElement>(null);
+  const receiptInput = useRef<HTMLInputElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
   const keepOpen = useRef(false);
   async function submit(e: FormEvent) {
@@ -1827,6 +1839,8 @@ function TransactionEditor({
       amount: Number(amount),
       type,
       date,
+      // Keeps a recorded time while the date is unchanged; a new entry for today is stamped now.
+      ...(transaction?.time && transaction.date === date ? { time: transaction.time } : !transaction && date === today() ? { time: timeOfDay(Date.now()) } : {}),
       pocketId: type === "income" || transaction?.kind === "card_payment" ? "" : pocket,
       account: type === "expense" && card && !special ? card.name : account,
       note: note.trim(),
@@ -1904,10 +1918,10 @@ function TransactionEditor({
                 aria-invalid={fieldError?.field === "amount"}
                 aria-label={t("amountInRupiah")}
               />
+              {!transaction && nativeAIAvailable && <><button type="button" className="icon-button amount-scan" aria-label={scanning ? t("readingReceipt") : t("scanReceipt")} title={t("scanReceipt")} disabled={scanning || busy} onClick={(event) => { event.preventDefault(); receiptInput.current?.click(); }}><Camera size={18} /></button><input ref={receiptInput} type="file" accept="image/*" capture="environment" hidden tabIndex={-1} onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></>}
             </div>
             {fieldError?.field === "amount" && <span className="field-error" role="alert">{fieldError.message}</span>}
           </label>
-          {!transaction && nativeAIAvailable && <label className="button secondary receipt-capture"><Camera size={16} /> {scanning ? t("readingReceipt") : t("scanReceipt")}<input type="file" accept="image/*" capture="environment" disabled={scanning || busy} hidden onChange={(e) => { void scanReceipt(e.target.files?.[0]); e.target.value = ""; }} /></label>}
           {scanInfo && <p className="editor-help" role="status">{scanInfo}</p>}
           {error && <p className="field-error" role="alert">{error}</p>}
           <label className="field">
@@ -2377,6 +2391,7 @@ function SettingsView({
     finally { setBackupBusy(false); }
   }
   function closeBackupDialog() { setProtectOpen(false); setLockedBackup(null); setBackupPassword(""); setBackupConfirm(""); setBackupError(""); }
+  const update = useAppUpdate();
   async function readBackup(file?: File) {
     if (!file) return;
     try {
@@ -2398,202 +2413,210 @@ function SettingsView({
   }
   return (
     <div className="settings-content">
-      <section className="appearance-section">
-        <h2>{t("appearance")}</h2>
-        <p>{t("chooseHowSakuLooksOn")}</p>
-        <div className="appearance-options" role="group" aria-label={t("appearance")}>
-          {(["system", "light", "dark"] as const).map((option) => <button key={option} type="button" aria-pressed={themePreference === option} className={themePreference === option ? "selected" : ""} onClick={() => onThemeChange(option)}>{option === "system" ? t("themeSystem") : option === "light" ? t("light") : t("dark")}</button>)}
-        </div>
-      </section>
-      <section className="appearance-section">
-        <h2>{t("language")}</h2>
-        <p>{t("languageHelp")}</p>
-        <div className="appearance-options" role="group" aria-label={t("language")}>
-          {(["system", "id", "en"] as const).map((option) => <button key={option} type="button" aria-pressed={languagePreference === option} className={languagePreference === option ? "selected" : ""} onClick={() => onLanguageChange(option)}>{option === "system" ? t("followDevice") : option === "id" ? t("indonesian") : t("english")}</button>)}
-        </div>
-      </section>
-      <AppUpdateSettings />
-      {notificationCaptureSupported() && <NotificationAccess data={data} notify={notify} />}
-      {appLockSupported() && <AppLockSection settings={appLock} onChange={onAppLockChange} />}
-      {remindersSupported() && <ReminderSection settings={reminder} onChange={onReminderChange} notify={notify} />}
-      <section>
-        <h2>{t("localProfile")}</h2>
-        <p>{t("yourWorkspaceOnThisDevice")}</p>
-        <form
-          className="settings-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void cloudAction(async () => {
-              if (!(await commit({ ...data, name: name.trim() }, t("profileUpdated")))) return;
-              if (cloud?.signedIn) setCloud(await updateProfile(name.trim(), profileImage));
-              setProfileImage(undefined);
-            });
-          }}
-        >
-          <label className="field">
-            {t("yourName")}
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              maxLength={40}
-              pattern=".*\S.*"
-            />
-          </label>
-          <div className="profile-photo-field"><span>{t("profilePhoto")} <span className="optional">{t("optional")}</span></span><button type="button" className="profile-photo-button" aria-label={t("chooseProfilePhoto")} onClick={() => profileFile.current?.click()}>{profileImage || avatarUrl ? <img src={profileImage || avatarUrl} alt="" /> : <span>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}<span className="profile-photo-edit"><Camera size={15} /></span></button><small>{t("tapThePhotoToChoose")}</small><input ref={profileFile} type="file" accept="image/*" hidden onChange={(e) => { void readProfileImage(e.target.files?.[0]); e.target.value = ""; }} /></div>
-          <button className="button primary" disabled={busy}>
-            {t("saveProfile")}
-          </button>
-        </form>
-      </section>
-      <section>
-        <h2>{t("yourAccounts")}</h2>
-        <p>{t("keepCashBanksAndE")}</p>
-        <div className="account-list">
-          {data.accounts.map((a) => (
-            <div className="account-row" key={a}>
-              <button type="button" className="account-adjust-button" disabled={busy} onClick={() => onOpenAccount(a)} aria-label={t("viewAccountActivityNamed", { account: a })}>
-                <span className="account-list-icon"><Wallet size={19} /></span>
-                <span className="account-list-name"><strong>{a}</strong><small>{t("tapToViewAccount")}</small></span>
-                <strong className="account-list-balance">{money(accountBalance(data, a))}</strong>
-                <PencilLine size={16} aria-hidden="true" />
-              </button>
-              {!accountIsReferenced(data, a) &&
-                data.accounts.length > 1 && (
-                  <IconButton
-                    label={t("deleteAccountNamed", { account: a })}
-                    disabled={busy}
-                    onClick={() => onRemoveAccount(a)}
-                  >
-                    <Trash2 size={16} />
-                  </IconButton>
-                )}
-            </div>
-          ))}
-        </div>
-        <form
-          className="inline-form account-add-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const a = account.trim();
-            if (!a) { setAccountError(t("accountNameNeeded")); return; }
-            if (
-              data.accounts.some((x) => x.toLowerCase() === a.toLowerCase())
-            ) {
-              setAccountError(t("thisAccountAlreadyExists"));
-              return;
-            }
-            const balance = Number(startingBalance || 0);
-            if (!Number.isSafeInteger(balance) || balance < 0 || balance > 1e12) { setAccountError(t("enterNewBalance")); return; }
-            void commit(
-              { ...data, accounts: [...data.accounts, a], transactions: balance > 0 ? [...data.transactions, { id: uid(), name: t("openingBalance"), amount: balance, type: "income", kind: "opening_balance", date: today(), pocketId: "", account: a, note: "" }] : data.transactions },
-              t("accountAdded"),
-            ).then((ok) => {
-              if (ok) { setAccount(""); setStartingBalance(""); setAccountError(""); onOpenAccount(a); }
-            });
-          }}
-        >
-          <input
-            aria-label={t("newAccountName")}
-            placeholder={t("newAccountName")}
-            maxLength={50}
-            value={account}
-            onChange={(e) => { setAccount(e.target.value); setAccountError(""); }}
-          />
-          <label className="field">{t("startingBalanceAmount")}<MoneyInput min="0" value={startingBalance} onValueChange={(value) => { setStartingBalance(value); setAccountError(""); }} /></label>
-          {accountError && <p className="field-error" role="alert">{accountError}</p>}
-          <button className="button secondary" disabled={busy}>
-            <Plus size={16} />
-            {t("addAccount2")}
-          </button>
-        </form>
-      </section>
-      <section className="cloud-section">
-        <div className="cloud-heading">
-          <span className="connection-icon"><ShieldCheck size={24} /></span>
-          <div>
-            <h2>{t("googleBackup")}</h2>
-            <p>{t("keepAPrivateBackupIn")}</p>
+      {notificationCaptureSupported() && <NotificationAccess data={data} userId={cloud?.signedIn ? cloud.user?.id : undefined} notify={notify} />}
+      <SettingsCard title={t("yourAccounts")} summary={t("accountsCount", { count: data.accounts.length })} defaultOpen>
+        <section>
+          <h2>{t("yourAccounts")}</h2>
+          <p>{t("keepCashBanksAndE")}</p>
+          <div className="account-list">
+            {data.accounts.map((a) => (
+              <div className="account-row" key={a}>
+                <button type="button" className="account-adjust-button" disabled={busy} onClick={() => onOpenAccount(a)} aria-label={t("viewAccountActivityNamed", { account: a })}>
+                  <span className="account-list-icon"><Wallet size={19} /></span>
+                  <span className="account-list-name"><strong>{a}</strong><small>{t("tapToViewAccount")}</small></span>
+                  <strong className="account-list-balance">{money(accountBalance(data, a))}</strong>
+                  <PencilLine size={16} aria-hidden="true" />
+                </button>
+                {!accountIsReferenced(data, a) &&
+                  data.accounts.length > 1 && (
+                    <IconButton
+                      label={t("deleteAccountNamed", { account: a })}
+                      disabled={busy}
+                      onClick={() => onRemoveAccount(a)}
+                    >
+                      <Trash2 size={16} />
+                    </IconButton>
+                  )}
+              </div>
+            ))}
           </div>
-        </div>
-        {!cloud?.signedIn ? (
-          <div className="cloud-signed-out">
-            <p>{t("signingInAlsoCreatesYour")}</p>
-            <button className="button primary" disabled={cloudBusy || !cloud?.configured} onClick={() => void cloudAction(async () => {
-              const next = await signInGoogle();
-              await onSignedIn(next);
-              setName(next.user?.name || name);
-              notify(t("googleAccountConnected"));
-            })}>
-              <CircleUserRound size={18} />
-              {t(cloudBusy ? "connecting" : "continueGoogle")}
+          <form
+            className="inline-form account-add-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const a = account.trim();
+              if (!a) { setAccountError(t("accountNameNeeded")); return; }
+              if (
+                data.accounts.some((x) => x.toLowerCase() === a.toLowerCase())
+              ) {
+                setAccountError(t("thisAccountAlreadyExists"));
+                return;
+              }
+              const balance = Number(startingBalance || 0);
+              if (!Number.isSafeInteger(balance) || balance < 0 || balance > 1e12) { setAccountError(t("enterNewBalance")); return; }
+              void commit(
+                { ...data, accounts: [...data.accounts, a], transactions: balance > 0 ? [...data.transactions, { id: uid(), name: t("openingBalance"), amount: balance, type: "income", kind: "opening_balance", date: today(), pocketId: "", account: a, note: "" }] : data.transactions },
+                t("accountAdded"),
+              ).then((ok) => {
+                if (ok) { setAccount(""); setStartingBalance(""); setAccountError(""); onOpenAccount(a); }
+              });
+            }}
+          >
+            <input
+              aria-label={t("newAccountName")}
+              placeholder={t("newAccountName")}
+              maxLength={50}
+              value={account}
+              onChange={(e) => { setAccount(e.target.value); setAccountError(""); }}
+            />
+            <label className="field">{t("startingBalanceAmount")}<MoneyInput min="0" value={startingBalance} onValueChange={(value) => { setStartingBalance(value); setAccountError(""); }} /></label>
+            {accountError && <p className="field-error" role="alert">{accountError}</p>}
+            <button className="button secondary" disabled={busy}>
+              <Plus size={16} />
+              {t("addAccount2")}
             </button>
-            {!cloud?.configured && <small className="cloud-note">{t("googleSignInIsAvailable")}</small>}
-          </div>
-        ) : (
-          <div className="cloud-account">
-            <div className="cloud-user">
-              <CircleUserRound size={21} />
-              <span><strong>{cloud.user?.name}</strong><small>{cloud.user?.email}</small></span>
-              <span className={`sync-state ${cloud.dirty || cloud.sheetPending ? "pending" : ""}`}>{cloud.dirty ? t("changesWaiting") : cloud.sheetPending ? t("sheetPending") : t("upToDate")}</span>
+          </form>
+        </section>
+      </SettingsCard>
+      <SettingsCard title={t("googleBackup")} summary={!cloud?.signedIn ? t("stateOff") : cloud.dirty ? t("changesWaiting") : cloud.sheetPending ? t("sheetPending") : cloud.lastSyncedAt ? `${t("upToDate")} · ${timeOfDay(Date.parse(cloud.lastSyncedAt))}` : t("upToDate")} defaultOpen={!!cloud?.dirty}>
+        <section className="cloud-section">
+          <div className="cloud-heading">
+            <span className="connection-icon"><ShieldCheck size={24} /></span>
+            <div>
+              <h2>{t("googleBackup")}</h2>
+              <p>{t("keepAPrivateBackupIn")}</p>
             </div>
-            <div className="settings-actions">
-              {(cloud.dirty || cloud.sheetPending) && <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(syncNow)}><Upload size={17} />{t("retrySync")}</button>}
-              {cloud.sheetPending && <button className="button secondary" disabled={cloudBusy} onClick={() => void cloudAction(async () => { setCloud(await connectGoogleDrive()); notify(t("googleDriveConnected")); })}><ExternalLink size={17} />{cloud.spreadsheetUrl ? t("reconnectGoogleDrive") : t("connectGoogleDrive")}</button>}
-              <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(true)}><Download size={17} />{t("restoreCloud")}</button>
-              {cloud.spreadsheetUrl && <a className="button secondary" href={cloud.spreadsheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} />{t("openSheet")}</a>}
-              <button className="button text-button" disabled={cloudBusy} onClick={() => { if (!Capacitor.isNativePlatform() && cloud.dirty) setSignOutConfirm(true); else void cloudAction(() => signOut()); }}><LogOut size={16} />{t("signOut")}</button>
-            </div>
-            <small className="cloud-note">{t("changesSyncAutomaticallyIncludingWidget")} {cloud.lastSyncedAt ? t("lastSynced", { time: new Date(cloud.lastSyncedAt).toLocaleString(localeTag()) }) : t("notBackedUpYet")}</small>
-            {cloud.sheetPending && <p className="inline-warning">{t("yourCloudSnapshotIsSaved")}</p>}
-            <SignedInDevices notify={notify} onSignedOutHere={async (id) => {
-              // Revoking this session first would strand any changes still waiting to sync.
-              if (cloud.dirty) await syncNow();
-              const latest = await loadCloudState();
-              if (!latest.signedIn || latest.user?.id !== cloud.user?.id || latest.dirty) throw new Error(t("syncYourChangesBeforeSigning"));
-              await signOutDevice(id);
-              await signOutGoogle();
-              setCloud(await loadCloudState());
-            }} />
           </div>
-        )}
-      </section>
-      <section>
-        <h2>{t("yourDataStaysWithYou")}</h2>
-        <p>{t("keepABackupBeforeSwitching")}</p>
-        <div className="settings-actions">
-          <button className="button secondary" onClick={() => void backup()}>
-            <Download size={17} />
-            {t("backUpData")}
-          </button>
-          <button className="button secondary" onClick={() => setProtectOpen(true)}>
-            <LockKeyhole size={17} />
-            {t("backUpWithPassword")}
-          </button>
-          <label className="button secondary">
-            <Upload size={17} />
-            {t("restoreBackup")}
-            <input
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={(e) => {
-                void readBackup(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
-          </label>
-        </div>
-        <p className="legal-links"><a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a><span>·</span><a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a><span>·</span><a href={legalUrl("account-deletion")} target="_blank" rel="noreferrer">{t("accountDeletion")}</a></p>
-        {cloud?.signedIn && <div className="danger-zone"><div><strong>{t("deleteSakuAccount")}</strong><p>{t("permanentlyRemoveSakuCloudData")}</p></div><button className="button danger-button" disabled={cloudBusy} onClick={() => setDeleteConfirm(true)}><Trash2 size={16} />{t("deleteAccount")}</button></div>}
-      </section>
-      <section className="connection-section">
-        <span className="connection-icon"><CheckCheck size={25} /></span>
-        <div><h2>{t("offlineFirst")}</h2><p>{cloudImportEnabled ? t("yourLedgerWorksWithoutInternet") : nativeAIAvailable ? t("yourLedgerWorksWithoutInternet2") : t("yourLedgerWorksWithoutInternet3")}</p></div>
-      </section>
-      <footer className="settings-footer">
-        Saku {appVersion} <span>·</span> {t("madeForMindfulMonth")}
-      </footer>
+          {!cloud?.signedIn ? (
+            <div className="cloud-signed-out">
+              <p>{t("signingInAlsoCreatesYour")}</p>
+              <button className="button primary" disabled={cloudBusy || !cloud?.configured} onClick={() => void cloudAction(async () => {
+                const next = await signInGoogle();
+                await onSignedIn(next);
+                setName(next.user?.name || name);
+                notify(t("googleAccountConnected"));
+              })}>
+                <CircleUserRound size={18} />
+                {t(cloudBusy ? "connecting" : "continueGoogle")}
+              </button>
+              {!cloud?.configured && <small className="cloud-note">{t("googleSignInIsAvailable")}</small>}
+            </div>
+          ) : (
+            <div className="cloud-account">
+              <div className="cloud-user">
+                <CircleUserRound size={21} />
+                <span><strong>{cloud.user?.name}</strong><small>{cloud.user?.email}</small></span>
+                <span className={`sync-state ${cloud.dirty || cloud.sheetPending ? "pending" : ""}`}>{cloud.dirty ? t("changesWaiting") : cloud.sheetPending ? t("sheetPending") : t("upToDate")}</span>
+              </div>
+              <div className="settings-actions">
+                {(cloud.dirty || cloud.sheetPending) && <button className="button primary" disabled={cloudBusy} onClick={() => void cloudAction(syncNow)}><Upload size={17} />{t("retrySync")}</button>}
+                {cloud.sheetPending && <button className="button secondary" disabled={cloudBusy} onClick={() => void cloudAction(async () => { setCloud(await connectGoogleDrive()); notify(t("googleDriveConnected")); })}><ExternalLink size={17} />{cloud.spreadsheetUrl ? t("reconnectGoogleDrive") : t("connectGoogleDrive")}</button>}
+                <button className="button secondary" disabled={cloudBusy} onClick={() => setPullConfirm(true)}><Download size={17} />{t("restoreCloud")}</button>
+                {cloud.spreadsheetUrl && <a className="button secondary" href={cloud.spreadsheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} />{t("openSheet")}</a>}
+                <button className="button text-button" disabled={cloudBusy} onClick={() => { if (!Capacitor.isNativePlatform() && cloud.dirty) setSignOutConfirm(true); else void cloudAction(() => signOut()); }}><LogOut size={16} />{t("signOut")}</button>
+              </div>
+              <small className="cloud-note">{t("changesSyncAutomaticallyIncludingWidget")} {cloud.lastSyncedAt ? t("lastSynced", { time: new Date(cloud.lastSyncedAt).toLocaleString(localeTag()) }) : t("notBackedUpYet")}</small>
+              {cloud.sheetPending && <p className="inline-warning">{t("yourCloudSnapshotIsSaved")}</p>}
+              <SignedInDevices notify={notify} onSignedOutHere={async (id) => {
+                // Revoking this session first would strand any changes still waiting to sync.
+                if (cloud.dirty) await syncNow();
+                const latest = await loadCloudState();
+                if (!latest.signedIn || latest.user?.id !== cloud.user?.id || latest.dirty) throw new Error(t("syncYourChangesBeforeSigning"));
+                await signOutDevice(id);
+                await signOutGoogle();
+                setCloud(await loadCloudState());
+              }} />
+            </div>
+          )}
+        </section>
+      </SettingsCard>
+      {remindersSupported() && <SettingsCard title={t("dailyReminder")} summary={reminder.enabled ? `${t("stateOn")} · ${reminder.time}` : t("stateOff")}><ReminderSection settings={reminder} onChange={onReminderChange} notify={notify} /></SettingsCard>}
+      {appLockSupported() && <SettingsCard title={t("appLock")} summary={appLock.enabled ? t("stateOn") : t("stateOff")}><AppLockSection settings={appLock} onChange={onAppLockChange} /></SettingsCard>}
+      <SettingsCard title={t("display")} summary={`${themePreference === "system" ? t("themeSystem") : themePreference === "light" ? t("light") : t("dark")} · ${languagePreference === "system" ? t("followDevice") : languagePreference === "id" ? t("indonesian") : t("english")}`}>
+        <section className="appearance-section">
+          <h2>{t("appearance")}</h2>
+          <p>{t("chooseHowSakuLooksOn")}</p>
+          <div className="appearance-options" role="group" aria-label={t("appearance")}>
+            {(["system", "light", "dark"] as const).map((option) => <button key={option} type="button" aria-pressed={themePreference === option} className={themePreference === option ? "selected" : ""} onClick={() => onThemeChange(option)}>{option === "system" ? t("themeSystem") : option === "light" ? t("light") : t("dark")}</button>)}
+          </div>
+        </section>
+        <section className="appearance-section">
+          <h2>{t("language")}</h2>
+          <p>{t("languageHelp")}</p>
+          <div className="appearance-options" role="group" aria-label={t("language")}>
+            {(["system", "id", "en"] as const).map((option) => <button key={option} type="button" aria-pressed={languagePreference === option} className={languagePreference === option ? "selected" : ""} onClick={() => onLanguageChange(option)}>{option === "system" ? t("followDevice") : option === "id" ? t("indonesian") : t("english")}</button>)}
+          </div>
+        </section>
+      </SettingsCard>
+      <SettingsCard title={t("localProfile")} summary={data.name}>
+        <section>
+          <h2>{t("localProfile")}</h2>
+          <p>{t("yourWorkspaceOnThisDevice")}</p>
+          <form
+            className="settings-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void cloudAction(async () => {
+                if (!(await commit({ ...data, name: name.trim() }, t("profileUpdated")))) return;
+                if (cloud?.signedIn) setCloud(await updateProfile(name.trim(), profileImage));
+                setProfileImage(undefined);
+              });
+            }}
+          >
+            <label className="field">
+              {t("yourName")}
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                maxLength={40}
+                pattern=".*\S.*"
+              />
+            </label>
+            <div className="profile-photo-field"><span>{t("profilePhoto")} <span className="optional">{t("optional")}</span></span><button type="button" className="profile-photo-button" aria-label={t("chooseProfilePhoto")} onClick={() => profileFile.current?.click()}>{profileImage || avatarUrl ? <img src={profileImage || avatarUrl} alt="" /> : <span>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}<span className="profile-photo-edit"><Camera size={15} /></span></button><small>{t("tapThePhotoToChoose")}</small><input ref={profileFile} type="file" accept="image/*" hidden onChange={(e) => { void readProfileImage(e.target.files?.[0]); e.target.value = ""; }} /></div>
+            <button className="button primary" disabled={busy}>
+              {t("saveProfile")}
+            </button>
+          </form>
+        </section>
+      </SettingsCard>
+      <SettingsCard title={t("yourDataStaysWithYou")} summary={t("yourDataSummary")}>
+        <section>
+          <h2>{t("yourDataStaysWithYou")}</h2>
+          <p>{t("keepABackupBeforeSwitching")}</p>
+          <div className="settings-actions">
+            <button className="button secondary" onClick={() => void backup()}>
+              <Download size={17} />
+              {t("backUpData")}
+            </button>
+            <button className="button secondary" onClick={() => setProtectOpen(true)}>
+              <LockKeyhole size={17} />
+              {t("backUpWithPassword")}
+            </button>
+            <label className="button secondary">
+              <Upload size={17} />
+              {t("restoreBackup")}
+              <input
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(e) => {
+                  void readBackup(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          <p className="legal-links"><a href={legalUrl("privacy")} target="_blank" rel="noreferrer">{t("privacyNotice")}</a><span>·</span><a href={legalUrl("terms")} target="_blank" rel="noreferrer">{t("userAgreement")}</a><span>·</span><a href={legalUrl("account-deletion")} target="_blank" rel="noreferrer">{t("accountDeletion")}</a></p>
+          {cloud?.signedIn && <div className="danger-zone"><div><strong>{t("deleteSakuAccount")}</strong><p>{t("permanentlyRemoveSakuCloudData")}</p></div><button className="button danger-button" disabled={cloudBusy} onClick={() => setDeleteConfirm(true)}><Trash2 size={16} />{t("deleteAccount")}</button></div>}
+        </section>
+      </SettingsCard>
+      <SettingsCard title={t("about")} summary={update.available ? t("updateVersionReady", { version: update.release?.versionName ?? "" }) : `${appVersion} · ${t("upToDate")}`}>
+        <AppUpdateSettings />
+        <footer className="settings-footer">
+          Saku {appVersion} <span>·</span> {t("madeForMindfulMonth")}
+        </footer>
+      </SettingsCard>
       {restore && (
         <Modal
           title={t("restoreThisBackup")}

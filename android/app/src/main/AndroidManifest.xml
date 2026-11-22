@@ -17,6 +17,8 @@
         <package android:name="com.gojek.app" />
         <package android:name="id.co.bankbkemobile.digitalbank" />
         <package android:name="id.dana" />
+        <!-- Samsung Device care, so the "Never sleeping apps" list can be checked before it is offered. -->
+        <package android:name="com.samsung.android.lool" />
     </queries>
 
     <application

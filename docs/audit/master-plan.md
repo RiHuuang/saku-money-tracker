@@ -2,6 +2,8 @@
 
 Audited on 2026-11-20 at commit `9844806` (branch `claude/saku-audit-redesign-plan-a0cc1c`). The owner approved it on 2026-11-21 with one change, rule O1 below. No code has changed yet. Line numbers refer to that commit.
 
+**Pass 5 (statement reading) was added on 2026-11-22** at the owner's request. It draws on the owner's Gemini deep research of 2026-11-21 on Indonesian notifications, e-statements and reconciliation. Triage G, triage H and Pass 5 cite line numbers from commit `00ce3ba`.
+
 ## Owner rule O1 (2026-11-21)
 
 **No SHA or other hash appears anywhere in production: not in the app, on the landing page or on the install page.** Users don't need to know the app's SHA.
@@ -137,6 +139,39 @@ Audited on 2026-11-20 at commit `9844806` (branch `claude/saku-audit-redesign-pl
 | F5 | *New:* captured rows silently expire after 7 days | NEEDED (S) | `NotificationInbox.kt:48,81` | Show "N expire soon" and fix the count |
 | F6 | *New:* captured income is never pre-selected | NEEDED, with guards | `src/importTransactions.ts:43-47` | 4.2 |
 | F7 | *New:* opted-in reminders stop after 7 days | NEEDED (S) | `src/reminders.ts:12` | 4.4 |
+
+### G. Statement reading (OCR), from the Gemini research
+
+Gemini's instructions were followed only where they beat what Saku already does.
+
+| # | Research claim | Verdict | Evidence | Decision |
+|---|---|---|---|---|
+| G1 | A four-layer pipeline: decrypt, text layer or raster OCR, issuer classifier, then a polarity, locale and balance solver | MOSTLY HANDLED | Text layers are read on the phone and proven against the running balance (`src/statementLines.ts:4-9`). Raster pages go to Gemma 4 on Workers AI (`src/importPages.ts:62-79`, `worker/import-ai.js:1`). `worker/banks.js` classifies 7 issuers. | Keep the architecture and fill the gaps in G2–G9 |
+| G2 | Unlock PDFs with the stored date of birth, DDMMYYYY first, then DDMMYY | BETTER ALTERNATIVE | Saku stores no birth date. Storing one would add personal data to Data Safety (HC5). | The prompt says the password is often the birth date. Saku tries what the user typed, then its DDMMYYYY and DDMMYY forms. Nothing is stored. |
+| G3 | BRI's diagonal watermark corrupts text extraction ("RUBRI", "Page 1 of 7 RI") | NEEDED | The line builder keeps rotated text (`src/importPages.ts:28-41`) | Drop rotated text before building lines. Table text is never rotated. |
+| G4 | Y-baseline row clustering and X-coordinate column masks | PARTLY → BETTER ALTERNATIVE | Rows come from fixed 4-pt buckets (`src/importPages.ts:33`). Two parts of one row 0.2 pt apart can land in different buckets, which splits the row. | Cluster rows by baseline, within half a glyph height. No per-bank X masks: a merged column breaks the balance chain, and the page safely goes to AI. |
+| G5 | One number normalizer: the last separator decides (two digits are sen, three are thousands). It repairs OCR flips such as `42.940.00` and OVO's `Rp100.000.00`. | PARTLY NEEDED, for AI answers only | `wholeRupiah` returns 0 for `100.000.00`, `42.940.00` and `500.00` (`worker/import-ai.js:95-106`), so those rows arrive with no amount. Non-zero sen also return 0, deliberately: those rows wait for review (`worker/import-ai.test.mjs:96-98`). Text layers are exact, so `moneyToken` stays strict. | Accept zero sen after either mark. Non-zero sen still wait for review; Gemini's rounding is not adopted. |
+| G6 | Five polarity grammars | PARTLY | Signed amounts, DB/CR flags and balance deltas already work. Two gaps: split Debet/Kredit columns with `0.00` in the unused side are refused (`src/statementLines.ts:164`), and trailing-hyphen debits (`303,201.91-`, BSI) are not read. | Accept both. The running balance still proves each row's direction. |
+| G7 | *New:* a row number before the date (Mandiri Livin' "No", BSI "No.") | NEEDED | `leadingDate` reads `1 01 Okt 2026` as 1 January (`src/statementLines.ts:57`). The balance proof checks money, not dates, so it accepts the wrong date. | Skip a leading number only when a full date or a month name follows. Also read ISO dates (`2026-10-01`, BSI). |
+| G8 | Product gate: a mortgage statement (BTN "SALINAN REKENING KORAN KPR") is not cash | NEEDED | Once its bank is supported, a loan's "Sisa Kredit" chain can pass the balance proof | `detectBank` names no bank for loan statements, so they are never read as cash |
+| G9 | 19 more institutions | NEEDED, as beta | Text pages from unknown banks are refused before the local proof runs (`src/CatchUp.tsx:240-241`). `bankUnsupported` hard-codes six names and already omits BRI (`src/locales/en.ts:97`). | Add the 14 that public 2025–26 sources verify (5B), all `beta: true`. Rows proven by the balance still skip review. The message stops listing banks. |
+| G10 | Per-bank X-coordinate templates and OCR layout-model training | SKIP | Saku trains no OCR model. Text layers are parsed deterministically; everything else goes to Gemma 4. | — |
+| G11 | Credit-card rules: inverted CR polarity, REVERSAL CICILAN pairs, FX sub-lines, the Tagihan Baru check | PARTLY HANDLED | BCA cards are parsed locally (`src/statementLines.ts:401`); other issuers' cards go to AI | The new banks' hints say CR means a payment or refund. Netting installment reversals waits for 5E. |
+| G12 | Cross-account reconciliation: self-transfer chains, pocket moves, GoPay mirrors, subset-sum card payments | DEFERRED | The research's largest accuracy lever, but it changes matching, not reading | 5E, after 5A–5D ship |
+| G13 | The owner's real October PDFs as a CI regression suite | VETO | Real statements are never committed (`docs/monthly-check-3.0.md:77`) | Synthetic fixtures for each grammar. Real files are checked only on the owner's phone. |
+| G14 | A QA sprint to capture Tier-3 PDFs (Allo, Bank Neo Commerce, Saqu, Krom, LINE Bank) | DEFERRED | No layouts to verify | Leave them out until a consented sample exists |
+
+### H. Notification items in the same research (for Pass 1A)
+
+| # | Research claim | Verdict | Evidence | Decision |
+|---|---|---|---|---|
+| H1 | Allowlist 33 bank and wallet packages | NEEDED | `KNOWN_APPS` has 7 (`NotificationCapture.kt:10-18`) | Add packages in 1A, each confirmed on a real phone, as the code comment already requires |
+| H2 | Read WhatsApp and LINE, filtered to the bank's sender | VETO | HC4: filtering by sender means reading messages the user didn't choose | — |
+| H3 | A 60-second dedupe across parent and standalone apps (GoPay and Gojek) | BETTER ALTERNATIVE | They are two different notifications, so 1A-3's repost dedupe doesn't apply | Show the pair as "Looks like a duplicate" (2.5) |
+| H4 | A `BOOT_COMPLETED` receiver | SKIP | The system rebinds the listener after boot (B5); HC2 | — |
+| H5 | OTP, promo and reminder filters | ALREADY HANDLED | `NotificationParsers.kt:22` | Add "split bill", "dana tertahan" and "pop-up awareness" when 1A next touches the parser |
+| H6 | OVO's `Rp100.000.00` plus a fee sentence; ShopeePay's "Saldo saat ini" | NEEDED with H1 | Matters only once OVO and ShopeePay are allowed apps | Parser fixtures in 1A |
+| H7 | Android 15/16 hides OTP-like text | ALREADY PLANNED | B16, 1A-3 | — |
 
 ## 2. Staged roadmap
 
@@ -393,6 +428,53 @@ A copy lint test enforces these banned patterns in `src/locales` and `landing/*.
 | 4.5 Smaller main chunk | Lazy-load the inactive language and the CSV/papaparse code | Target 450 KB or less |
 | 4.6 On-device AI | Nothing to build; Tier 1 is removed in 1E | Revive only under HC9: opt-in, downloaded on demand, own process, served from R2 with SHA-256 |
 
+### Pass 5: statement reading (OCR)
+
+The goal is more statement pages proven on the phone (no AI call, no neurons) and fewer misreads where AI is still needed. 5A–5D are independent chains. 5E is planning only.
+
+**5A Text-layer reader** (`src/statementLines.ts`, `src/importPages.ts`, tests in `src/statementMatch.test.ts`)
+
+1. **Lines.** One pure `pageLines(items)` replaces the 4-pt buckets. Rows cluster by baseline, within half a glyph height, and rotated text (watermarks) is dropped. `src/pdfReader.ts` keeps its own copy, because 1E deletes it with the dead screen.
+2. **Dates.** Skip a row number before a date when a full date or a month name follows. Read ISO dates (`2026-10-01`). A wrapped time line (`08:15:00 WIB`) is not part of the description. The year must repeat the day/month separator: before this, `03/10 2061` (a Maybank KODE after the date) read as the year 2061, and `02/10 15` as 2015.
+3. **Amounts.** Read three new forms:
+   - split Debet/Kredit columns with a printed zero in the unused one;
+   - trailing-hyphen debits (`303,201.91-`);
+   - a currency word before each amount (`IDR 150.000 IDR 2.850.000`).
+
+   The running balance still proves every direction. "Bagi hasil" counts as interest. A "Saldo Awal" or "Saldo Akhir" line with no amount is a column title (LinkAja), so it no longer rejects the page.
+4. **Loan gate.** `detectBank` names no bank for a loan or mortgage statement (`REKENING KORAN KPR`; `Sisa Kredit`, `Sisa Pinjaman` or `Sisa Pokok`), so it is never read as cash.
+
+**5B Banks** (`worker/banks.js`, `scripts/fixtures/statements/`, `docs/monthly-check-3.0.md`, `src/locales/*`)
+
+1. **New banks, all `beta: true`.**
+   - Statements and screenshots: Mandiri, BNI, BSI, CIMB Niaga, Permata, OCBC, Maybank, Danamon, BTN, Superbank, LinkAja, Jenius.
+   - Screenshots only: OVO, ShopeePay.
+   - Each signature uses a legal name or statement title. Each hint gives the bank's polarity grammar and number format in one or two sentences.
+   - Every bank's hint moves to `worker/import-ai.js`, its only reader, so the app bundle carries no prompt text (HC7).
+2. **Fixtures.** Each statement bank gets a synthetic text fixture in the grammar the research describes. A unit test checks that `detectBank` names the bank and that the page is proven locally.
+3. **Copy.** `bankUnsupported` stops listing banks: "Saku can't read this bank yet." / "Saku belum bisa membaca bank ini."
+4. **Beta exit.** A bank stays beta until the stage AI bench passes on its fixtures. The owner approves each run, because it spends the AI allowance that stage and production share.
+
+**5C AI answers** (`worker/import-ai.js`)
+
+1. **Amounts.** In `wholeRupiah`, two digits after the last mark are sen, whichever mark it is. `Rp100.000.00`, OCR's `42.940.00` and `500.00` then read correctly. Non-zero sen and decimal numbers still return 0, so the row waits for review, as today.
+2. **Notifications stay strict.** `NotificationParsers.kt` keeps its stricter rule, because notification text is never OCR'd. Its comment says so.
+
+**5D PDF password** (`src/importFlow.ts`, `src/CatchUp.tsx`, `src/locales/*`)
+
+1. **Birth-date forms.** The prompt says the password is often the birth date. Saku tries what was typed, then its DDMMYYYY and DDMMYY forms, and stores none of them.
+2. **Wrong password.** It says so in the user's language, instead of pdf.js's English error.
+
+**5E Reconciliation** (plan only; its own pass after 5A–5D ship)
+
+- **Self-transfer chains** across wallets: opposite rows of the same amount within ±24 h, naming the user or their account.
+- **Pocket moves and auto-sweeps** count as internal.
+- **Mirrored wallet rows** (GoPay, OVO) only lend a merchant name to the bank or card row they mirror.
+- **Card payments:** one savings debit is matched against several card payments (subset sum, same customer number, ±1 business day). Installment reversals are netted.
+- **Gate:** the principal reviews the matching rules. No row is ever dropped silently (HC10).
+
+**Gate:** `npm test` passes, and the tests and fixtures of the seven existing banks are unchanged. Main chunk (HC7): 601,764 bytes after 5A–5D, against 600,576 at `00ce3ba`, which is already over 600,000. Pass 4.5 brings it down.
+
 ## 3. Conflicts resolved in Phase 2
 
 | Topic | Positions | Resolution |
@@ -429,8 +511,17 @@ A copy lint test enforces these banned patterns in `src/locales` and `landing/*.
 - **Animation:** the `grid 0fr/1fr` + `inert` approach and JS height animation.
 - **Reminders and prompts:** a 14-day reminder horizon; a pop-up after onboarding (a card is fine).
 - **AI tiers:** Play Asset Delivery, FunctionGemma and Gemma 3 1B.
+- **From the Gemini research:**
+  - storing the user's birth date to unlock PDFs;
+  - per-bank X-coordinate templates and OCR model training;
+  - the owner's real statements as a CI suite;
+  - reading WhatsApp or LINE to catch bank alerts;
+  - a boot receiver.
 
 **Deferred**
+
+- Tier-3 institutions (Allo, Bank Neo Commerce, Saqu, Krom, LINE Bank), until a consented sample exists.
+- Reconciliation (5E), until 5A–5D ship.
 
 - A Sheets `time` column, until the minimum supported APK writes it.
 - Encrypting the ledger at rest, unless the threat model changes.
@@ -472,3 +563,8 @@ Run from the repo root in PowerShell. Device checks use a test phone with a debu
 | V4.1 | Main chunk size | `npm run build`, then `Get-ChildItem dist\assets\index-*.js \| Select-Object Name, Length` | 450,000 bytes or less |
 | V4.2 | Home layout shift | Lighthouse or DevTools Performance on a signed-in Home | CLS ≤ 0.1 with the card slot |
 | V4.3 | Convenience logic | `npm test` | Income guards (own name; matching row in inbox and ledger), pocket prefill, learn only with a pocket, and the reminder tail (one a day, cancelled on opt-out) all pass |
+| V5.1 | Reader logic | `npm test` | New tests pass: watermark dropped, baseline jitter kept on one row, row number before a date, ISO date, split columns, trailing-hyphen debit, currency words, loan gate, password forms, AI amount forms. Every new statement fixture is detected as its bank and proven locally. |
+| V5.2 | Existing banks unchanged | `npm test`, then `node scripts/fixtures/statements/bench.mjs --local` | The BCA, Jago, GoPay, SeaBank, BRI and blu tests pass unchanged |
+| V5.3 | AI gate for the new banks (stage; the owner approves the neurons) | `node scripts/fixtures/statements/stage-bench.mjs` | 100% of amounts and directions, at least 95% of names, 0 invented rows. Record neurons per bank, and flip `beta` only then. |
+| V5.4 | Real PDFs (owner's phone; never committed) | Catch Up with the owner's BRI PDF and one Mandiri or BNI PDF | BRI: no "RUBRI" text, and its pages are proven with no AI call. Mandiri or BNI: every date matches the PDF. |
+| V5.5 | Password forms | A PDF locked with DDMMYY; type the birth date as `05/10/1990` | Opens on the first prompt |

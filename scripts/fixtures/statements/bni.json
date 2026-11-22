@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic BNI Laporan Mutasi Rekening: posting and value dates, D/K flags, US number format (made-up names).",
+ "month": "2026-10",
+ "bank": "bni",
+ "text": "PT. BANK NEGARA INDONESIA (PERSERO) TBK.\nBNI TAPLUS\nLaporan Mutasi Rekening\nPeriode: 01/10/2026 - 31/10/2026\nMATA UANG : IDR\nTGL. POSTING TGL. VALUTA NO. JURNAL URAIAN MUTASI D/K SALDO\nSaldo Awal 3,000,000.00\n01/10/2026 01/10/2026 123456 TRANSFER KE ANDI WIJAYA 150,000.00 D 2,850,000.00\n05/10/2026 05/10/2026 123457 GAJI PT SUMBER REJEKI 7,500,000.00 K 10,350,000.00\n12/10/2026 12/10/2026 123458 QRIS INDOMARET KEMANG 87,300.00 D 10,262,700.00\nSaldo Akhir 10,262,700.00",
+ "rows": [
+  [
+   "2026-10-01",
+   150000,
+   "expense"
+  ],
+  [
+   "2026-10-05",
+   7500000,
+   "income"
+  ],
+  [
+   "2026-10-12",
+   87300,
+   "expense"
+  ]
+ ],
+ "names": [
+  "ANDI WIJAYA",
+  "PT SUMBER REJEKI",
+  "INDOMARET"
+ ]
+}

@@ -5,6 +5,8 @@ import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.time.YearMonth
 import java.util.UUID
 
@@ -31,6 +33,9 @@ object WidgetLedger {
 
     private fun capacitor(context: Context) = context.getSharedPreferences(CAPACITOR_STORAGE, Context.MODE_PRIVATE)
     fun widgetPreferences(context: Context) = context.getSharedPreferences(WIDGET_STORAGE, Context.MODE_PRIVATE)
+
+    // Time of day for new entries, "HH:mm", so same-day rows sort in the order they happened.
+    internal fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
     @Synchronized
     fun load(context: Context): WidgetData? {
@@ -95,7 +100,7 @@ object WidgetLedger {
         val transaction = JSONObject()
             .put("id", id).put("name", name).put("amount", amount)
             .put("type", type).put("date", LocalDate.now().toString()).put("pocketId", pocketId)
-            .put("account", account).put("note", "").put("verified", false)
+            .put("account", account).put("note", "").put("verified", false).put("time", nowTime())
         if (cardId.isNotBlank()) {
             transaction.put("kind", "card_purchase").put("cardId", cardId).put("installments", 1)
                 .put("firstDueMonth", YearMonth.now().plusMonths(1).toString())
@@ -121,7 +126,7 @@ object WidgetLedger {
         val id = UUID.randomUUID().toString()
         val row = JSONObject().put("id", id).put("name", label).put("amount", amount).put("type", mode)
             .put("date", LocalDate.now().toString()).put("pocketId", if (mode == "income") "" else pocketId)
-            .put("account", account).put("note", "").put("verified", false)
+            .put("account", account).put("note", "").put("verified", false).put("time", nowTime())
         if (mode == "expense" && card != null) row.put("kind", "card_purchase").put("cardId", card.id)
             .put("installments", 1).put("firstDueMonth", YearMonth.now().plusMonths(1).toString())
         appendAndSave(context, data, listOf(row))
@@ -136,14 +141,15 @@ object WidgetLedger {
         require(accountBalance(data.ledger, from) >= amount) { "The source account does not have enough money" }
         val transferId = UUID.randomUUID().toString()
         val date = LocalDate.now().toString()
+        val time = nowTime()
         val outgoing = JSONObject().put("id", UUID.randomUUID().toString()).put("transferId", transferId)
             .put("kind", "account_transfer").put("name", "Transfer to $to").put("amount", amount)
             .put("type", "expense").put("date", date).put("pocketId", "").put("account", from)
-            .put("note", "").put("verified", false)
+            .put("note", "").put("verified", false).put("time", time)
         val incoming = JSONObject().put("id", UUID.randomUUID().toString()).put("transferId", transferId)
             .put("kind", "account_transfer").put("name", "Transfer from $from").put("amount", amount)
             .put("type", "income").put("date", date).put("pocketId", "").put("account", to)
-            .put("note", "").put("verified", false)
+            .put("note", "").put("verified", false).put("time", time)
         appendAndSave(context, data, listOf(outgoing, incoming))
         transferId
     }

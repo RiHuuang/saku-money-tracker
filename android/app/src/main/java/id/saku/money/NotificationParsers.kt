@@ -1,5 +1,10 @@
 package id.saku.money
 
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+
 data class ParsedNotification(val amount: Long, val direction: String, val rawMerchant: String, val balance: Long?, val occurredAt: Long)
 
 // Deterministic parsing of bank and wallet notifications, in Indonesian or English
@@ -19,7 +24,7 @@ object NotificationParsers {
     private val money = Regex("""(?i)\b(?:Rp\.?|IDR)\s?(\d[\d.,]*\d|\d)""")
     private val balanceLead = Regex("""(?i)(?<!isi\s)(?<!top\s?-?up\s)\b(?:sisa\s+)?(?:saldo|balance)(?:\s+\p{L}+){0,3}\s*(?::|adalah|menjadi|jadi)?\s*$""")
     private val unsettled = Regex("""(?i)\b(?:gagal|dibatalkan|batal|expired|kedaluwarsa|kadaluarsa|ditolak|tertunda|pending|menunggu|sedang\s+diproses|diproses|failed|declined)\b""")
-    private val notATransaction = Regex("""(?i)\b(?:otp|kode\s+verifikasi|promo|diskon|voucher|hingga|s\.?d\.?|dapatkan|nikmati|tagihan\s+akan|jatuh\s+tempo|limit|pengingat)\b""")
+    private val notATransaction = Regex("""(?i)\b(?:otp|kode\s+verifikasi|promo|diskon|voucher|hingga|s\.?d\.?|dapatkan|nikmati|tagihan\s+akan|jatuh\s+tempo|limit|pengingat|split\s+bill|dana\s+tertahan|pop-?up\s+awareness)\b""")
     private val incoming = Regex("""(?i)\b(?:masuk|diterima|menerima|kamu\s+terima|anda\s+terima|kredit|refund|pengembalian|cashback\s+(?:diterima|masuk)|uang\s+dari|dana\s+dari|kiriman\s+dari|received|credited|refunded|incoming)\b""")
     private val topUp = Regex("""(?i)\b(?:top\s?-?up|isi\s+saldo)\b""")
     private val outgoing = Regex("""(?i)\b(?:pembayaran|bayar|dibayar|pembelian|beli|transfer|kirim|dikirim|debit|qris|tarik\s+tunai|transaksi|keluar|paid|payment|purchase|transaction|sent|spent|spending|debited|transferred)\b""")
@@ -29,7 +34,7 @@ object NotificationParsers {
     private val notAName = Regex("""(?i)^(?:rekening|akun|saldo|nomor|rp|idr|kamu|anda)\b""")
     private val topUpTarget = Regex("""(?i)\b(?:top\s?-?up|isi\s+saldo)\s+(?!rp|idr|\d|berhasil|sukses|sebesar|senilai)([^.,!\n]+)""")
 
-    // Same accepted shapes as wholeRupiah in worker/import-ai.js.
+    // Stricter than wholeRupiah in worker/import-ai.js, which also accepts OCR-flipped marks (42.940.00): notification text is never OCR'd.
     fun wholeRupiah(printed: String): Long? {
         val value = printed.trim()
         val digits = when {
@@ -66,15 +71,17 @@ object NotificationParsers {
     }
 
     // "Spending of IDR 61,160.00 … was cancelled": the amount of an earlier spend that no longer happened.
+    private fun rulesFor(packageName: String) = apps[packageName] ?: if (BuildConfig.DEBUG && packageName == NotificationCapture.DEBUG_SHELL) AppRules(wallet = false) else null
+
     fun cancelledSpend(packageName: String, title: String, text: String): Long? {
-        if (packageName !in apps) return null
+        if (rulesFor(packageName) == null) return null
         val message = message(title, text)
         if (!cancelled.containsMatchIn(message) || notATransaction.containsMatchIn(message) || incoming.containsMatchIn(message)) return null
         return amounts(message)?.first
     }
 
     fun parse(packageName: String, title: String, text: String, postedAt: Long): ParsedNotification? {
-        val rules = apps[packageName] ?: return null
+        val rules = rulesFor(packageName) ?: return null
         val message = message(title, text)
         if (unsettled.containsMatchIn(message) || cancelled.containsMatchIn(message) || notATransaction.containsMatchIn(message)) return null
         val (amount, balance) = amounts(message) ?: return null
@@ -84,7 +91,34 @@ object NotificationParsers {
             outgoing.containsMatchIn(message) -> "expense"
             else -> return null
         }
-        return ParsedNotification(amount, direction, merchant(message), balance, postedAt)
+        return ParsedNotification(amount, direction, merchant(message), balance, printedTime(message, postedAt) ?: postedAt)
+    }
+
+    private val months = mapOf("jan" to 1, "feb" to 2, "peb" to 2, "mar" to 3, "apr" to 4, "mei" to 5, "may" to 5, "jun" to 6, "jul" to 7, "agu" to 8, "agt" to 8, "aug" to 8,
+        "sep" to 9, "okt" to 10, "oct" to 10, "nov" to 11, "nop" to 11, "des" to 12, "dec" to 12)
+    private val numericStamp = Regex("""\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\D{1,12}?(\d{1,2})[:.](\d{2})(?::\d{2})?+(?![\d:])(?!\s*[AaPp]\.?[Mm]\b)""")
+    private val isoStamp = Regex("""\b(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::\d{2})?+(?![\d:])(?!\s*[AaPp]\.?[Mm]\b)""")
+    private val wordStamp = Regex("""(?i)\b(\d{1,2})\s+(\p{L}{3})\p{L}*\s+(\d{4})\D{1,12}?(\d{1,2})[:.](\d{2})(?::\d{2})?+(?![\d:])(?!\s*[AaPp]\.?[Mm]\b)""")
+
+    // A time the bank printed, used only with a full date that falls between 36 hours before and 5 minutes after
+    // the post time. Anything else (a due date, a time with no date) is ignored and the post time is kept.
+    // Indonesian banks print local time with its zone (WIB, WITA, WIT); without one, WIB. Never the phone's zone.
+    private fun zoneOf(message: String, fallback: ZoneId): ZoneId = when {
+        Regex("""\bWITA\b""").containsMatchIn(message) -> ZoneId.of("Asia/Makassar")
+        Regex("""\bWIT\b""").containsMatchIn(message) -> ZoneId.of("Asia/Jayapura")
+        Regex("""\bWIB\b""").containsMatchIn(message) -> ZoneId.of("Asia/Jakarta")
+        else -> fallback
+    }
+
+    fun printedTime(message: String, postedAt: Long, defaultZone: ZoneId = ZoneId.of("Asia/Jakarta")): Long? {
+        val zone = zoneOf(message, defaultZone)
+        val stamp = isoStamp.find(message)?.groupValues?.let { g -> listOf(g[1], g[2], g[3], g[4], g[5]).map(String::toInt) }
+            ?: numericStamp.find(message)?.groupValues?.let { g -> listOf(g[3], g[2], g[1], g[4], g[5]).map(String::toInt) }
+            ?: wordStamp.find(message)?.groupValues?.let { g -> months[g[2].lowercase().take(3)]?.let { listOf(g[3].toInt(), it, g[1].toInt(), g[4].toInt(), g[5].toInt()) } }
+            ?: return null
+        val (year, month, day, hour, minute) = stamp
+        val at = runCatching { LocalDateTime.of(LocalDate.of(year, month, day), LocalTime.of(hour, minute)).atZone(zone).toInstant().toEpochMilli() }.getOrNull() ?: return null
+        return at.takeIf { it in (postedAt - 36 * 3_600_000L)..(postedAt + 5 * 60_000L) }
     }
 
     private fun merchant(message: String): String {

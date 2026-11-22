@@ -75,3 +75,21 @@ CREATE TABLE IF NOT EXISTS import_ai_user_budget (
   neurons INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(uid, day)
 );
+
+-- Consent receipts for cloud AI (worker/consent.js creates it lazily too).
+CREATE TABLE IF NOT EXISTS consents (
+  uid TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  granted_at INTEGER NOT NULL,
+  withdrawn_at INTEGER,
+  PRIMARY KEY(uid, purpose)
+);
+
+-- CSP violation counts by day and directive only (worker/csp-report.js creates it lazily too).
+CREATE TABLE IF NOT EXISTS csp_reports (
+  day TEXT NOT NULL,
+  directive TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(day, directive)
+);

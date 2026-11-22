@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic Danamon D-Bank PRO statement: Indonesian month names, debits printed with a minus (made-up names).",
+ "month": "2026-10",
+ "bank": "danamon",
+ "text": "PT Bank Danamon Indonesia Tbk\nRekening Tabungan D-Bank PRO\nTanggal Transaksi Keterangan Debit (IDR) Kredit (IDR) Saldo (IDR)\nSaldo Awal 2.000.000,00\n05 Okt 2026 Tarik Tunai ATM -100.000,00 1.900.000,00\n18 Okt 2026 Transfer dari HENDRA GUNAWAN 750.000,00 2.650.000,00\n27 Okt 2026 Pembayaran BPJS KESEHATAN -150.000,00 2.500.000,00\nSaldo Akhir 2.500.000,00",
+ "rows": [
+  [
+   "2026-10-05",
+   100000,
+   "expense"
+  ],
+  [
+   "2026-10-18",
+   750000,
+   "income"
+  ],
+  [
+   "2026-10-27",
+   150000,
+   "expense"
+  ]
+ ],
+ "names": [
+  "Tarik Tunai",
+  "HENDRA GUNAWAN",
+  "BPJS KESEHATAN"
+ ]
+}

@@ -1,6 +1,10 @@
 import { Preferences } from "@capacitor/preferences";
-import { en } from "./locales/en";
-import { id } from "./locales/id";
+import type { en } from "./locales/en";
+
+// Only the active language is downloaded (master plan 4.5); main.tsx waits for it before the first render.
+type Dictionary = Record<keyof typeof en, string>;
+const dictionaries: Partial<Record<"id" | "en", Dictionary>> = {};
+export function registerDictionary(language: "id" | "en", dictionary: Dictionary) { dictionaries[language] = dictionary; }
 
 export type LanguagePreference = "system" | "id" | "en";
 const KEY = "saku-language-v1";
@@ -10,9 +14,15 @@ export function resolveLanguage(preference: LanguagePreference, deviceLanguage =
   return preference === "system" ? /^id(?:-|$)/i.test(deviceLanguage) ? "id" : "en" : preference;
 }
 export function setActiveLanguage(preference: LanguagePreference): void { activeLanguage = resolveLanguage(preference); }
+export async function prepareLanguage(preference: LanguagePreference): Promise<void> {
+  const language = resolveLanguage(preference);
+  if (dictionaries[language]) return;
+  dictionaries[language] = language === "id" ? (await import("./locales/id")).id : (await import("./locales/en")).en;
+}
 export function localeTag(): string { return activeLanguage === "id" ? "id-ID" : "en-GB"; }
 export function t(key: keyof typeof en, values: Record<string, string | number> = {}): string {
-  const phrase = activeLanguage === "id" ? id[key] : en[key];
+  // Falls back to whichever language is loaded while a switch is still downloading.
+  const phrase = (dictionaries[activeLanguage] ?? dictionaries.en ?? dictionaries.id)?.[key] ?? key;
   return phrase.replace(/\{(\w+)\}/g, (match, name: string) => name in values ? String(values[name]) : match);
 }
 export async function loadLanguage(): Promise<LanguagePreference> {

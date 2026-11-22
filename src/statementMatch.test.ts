@@ -6,7 +6,7 @@ import { emptyData, type Transaction } from "./domain";
 import type { ImportRow } from "./importDraft";
 import { learnMerchant } from "./merchants";
 import { analyzeStatement, applyVerdict, balanceMismatch, type MatchRow } from "./statementMatch";
-import { moneyToken, parseStatementPage, statementTotals } from "./statementLines";
+import { leadingDate, moneyToken, pageLines, parseStatementPage, statementTotals } from "./statementLines";
 
 const data = emptyData();
 data.name = "Rina Wulandari";
@@ -25,7 +25,13 @@ test("banks: statements, accounts and descriptions resolve to the right bank", (
   assert.equal(detectBank("REKENING TAHAPAN XPRESI\nTransfer BANK JAGO"), "bca", "the BCA title identifies a statement without a text logo");
   assert.equal(detectBank("bluAccount\nDana masuk BANK JAGO\nBCA Digital"), "blu", "blu's header wins over a transfer bank");
   assert.equal(detectBank("PT Espay Debit Indonesia Koe"), "dana");
-  assert.equal(detectBank("Bank Mandiri rekening koran"), "");
+  assert.equal(detectBank("Bank Mandiri rekening koran"), "", "a bank's name alone, as in a transfer line, names no statement");
+  assert.equal(detectBank("PT Bank Danamon Indonesia Tbk\nTransfer ke DANA riwayat"), "danamon");
+  assert.equal(bankOfAccount("Mandiri Syariah"), "bsi", "BSI is checked before Mandiri");
+  assert.equal(bankOfAccount("Livin Mandiri"), "mandiri");
+  assert.equal(bankOfAccount("OVO Nabung"), "superbank", "OVO Nabung is a Superbank account");
+  assert.equal(bankOfAccount("OVO"), "ovo");
+  assert.equal(bankOfAccount("Danamon"), "danamon", "not the DANA wallet");
   assert.equal(bankOfAccount("BCA Utama"), "bca");
   assert.equal(bankOfAccount("blu BCA"), "blu");
   assert.equal(bankOfAccount("Dana Darurat"), "", "an emergency fund is not the DANA wallet");
@@ -199,9 +205,9 @@ test("pages continue the proof from the balance the previous page ended on", () 
   assert.equal(parseStatementPage("15/12 SALDO AWAL 100.000,00\n31/12 TRANSFER 50.000,00 DB 50.000,00", "2027-01")?.rows[0].date, "2026-12-31", "December rows in a January check");
 });
 
-test("synthetic statements for all six banks: detected, and proven locally wherever a running balance is printed", async () => {
+test("synthetic statements for every bank: detected, and proven locally wherever a running balance is printed", async () => {
   const { readFileSync } = await import("node:fs");
-  for (const bank of ["bca", "jago", "seabank", "blu", "gopay", "dana"]) {
+  for (const bank of ["bca", "jago", "seabank", "blu", "gopay", "dana", "mandiri", "bni", "bsi", "cimb", "permata", "ocbc", "maybank", "danamon", "btn", "superbank", "linkaja"]) {
     const fixture = JSON.parse(readFileSync(`scripts/fixtures/statements/${bank}.json`, "utf8"));
     assert.equal(detectBank(fixture.text), fixture.bank, `${bank}: detected`);
     const parsed = parseStatementPage(fixture.text, fixture.month);
@@ -210,6 +216,28 @@ test("synthetic statements for all six banks: detected, and proven locally where
     assert.deepEqual(parsed.rows.map((item) => [item.date, item.amount, item.direction]), fixture.rows, `${bank}: rows`);
     assert.equal(balanceMismatch(parsed.rows, statementTotals(fixture.text)), false, `${bank}: balance adds up`);
   }
+});
+
+test("text layer: a diagonal watermark is dropped, and one row stays one line across the old 4-pt grid", () => {
+  const piece = (str: string, x: number, y: number, rotated = false) => ({ str, width: str.length * 4, transform: rotated ? [7, 7, -7, 7, x, y] : [10, 0, 0, 10, x, y] });
+  // 98.1 and 97.9 used to round into different 4-pt buckets and split the row.
+  assert.deepEqual(pageLines([piece("SALDO", 300, 98.1), piece("02/10 TRANSFER", 10, 97.9), piece("50,000.00", 200, 98.1), piece("BRI", 150, 98, true), piece("BUDI", 10, 86)]),
+    ["02/10 TRANSFER 50,000.00 SALDO", "BUDI"]);
+});
+
+test("text layer: row numbers, ISO dates, trailing-minus debits and loan statements", () => {
+  assert.equal(leadingDate("1 01 Okt 2026 Transfer -250.000,00 4.750.000,00", "2026-10")?.date, "2026-10-01", "a row number is not the day");
+  assert.equal(leadingDate("12 2026-10-03 09:12:44 FT1 Transfer", "2026-10")?.date, "2026-10-03");
+  assert.equal(leadingDate("2026-10-03 Transfer", "2026-10")?.evidence, "2026-10-03");
+  assert.equal(leadingDate("24 OCT Bunga 1,234.56", "2026-10")?.date, "2026-10-24", "a day before a month name stays the day");
+  assert.equal(leadingDate("02/10 TRSF E-BANKING DB", "2026-10")?.date, "2026-10-02");
+  assert.equal(leadingDate("03/10 2061 TRANSFER KE ARIF", "2026-10")?.date, "2026-10-03", "a transaction code after the date is not its year");
+  assert.equal(leadingDate("1 05/10 TRANSFER", "2026-10")?.date, "2026-10-05");
+  assert.equal(leadingDate("15 10 TRANSFER", "2026-10")?.date, "2026-10-15", "day and month with only a space stay a date");
+  assert.deepEqual(moneyToken("303,201.91-"), { sen: 30_320_191, sign: -1 });
+  const legacy = "PT Bank Syariah Indonesia Tbk\nSaldo Awal 2,000,000.00\n02/10/2026 02/10/2026 REF1 TRANSFER KE TOKO MAJU D 303,201.91- 1,696,798.09\nSaldo Akhir 1,696,798.09";
+  assert.deepEqual(parseStatementPage(legacy, "2026-10")?.rows.map((row) => [row.amount, row.direction]), [[303_202, "expense"]]);
+  assert.equal(detectBank("PT Bank Tabungan Negara (Persero) Tbk\nSALINAN REKENING KORAN KPR\nSisa Kredit 250,000,000.00"), "", "a mortgage is debt, not cash");
 });
 
 test("equal amounts with no sign of a transfer are asked about, never paired", () => {

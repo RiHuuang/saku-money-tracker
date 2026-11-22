@@ -10,36 +10,6 @@ const desktopJourney = matchMedia('(min-width: 901px) and (min-height: 650px)');
 
 document.getElementById('year').textContent = String(new Date().getFullYear());
 
-// This public endpoint reads the same latest.json that serves the APK download.
-fetch('https://app.sakumoney.my.id/v1/releases/android/latest', { cache: 'no-store' })
-  .then(response => {
-    if (!response.ok) throw new Error('Release unavailable');
-    return response.json();
-  })
-  .then(release => {
-    if (!/^\d+\.\d+\.\d+$/.test(release.versionName) || !/^[a-f0-9]{64}$/.test(release.sha256) || !Number.isFinite(Date.parse(release.releasedAt)) || !Array.isArray(release.notes)) return;
-    document.querySelectorAll('[data-release]').forEach(panel => {
-      panel.querySelector('[data-release-version]').textContent = 'Versi ' + release.versionName;
-      const date = panel.querySelector('[data-release-date]');
-      date.dateTime = release.releasedAt;
-      date.textContent = new Date(release.releasedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-      panel.querySelector('[data-release-hash]').textContent = release.sha256.slice(0, 12) + '…' + release.sha256.slice(-8);
-      const notes = panel.querySelector('[data-release-notes]');
-      release.notes.slice(0, 3).forEach(note => {
-        const item = document.createElement('li');
-        item.textContent = note;
-        notes.append(item);
-      });
-      const copy = panel.querySelector('[data-release-copy]');
-      if (!navigator.clipboard?.writeText) copy.hidden = true;
-      else copy.addEventListener('click', () => {
-        navigator.clipboard.writeText(release.sha256).then(() => { copy.textContent = 'Tersalin'; }, () => { copy.textContent = 'Gagal menyalin'; });
-      });
-      panel.hidden = false;
-    });
-  })
-  .catch(() => {});
-
 document.querySelectorAll('.dark-image').forEach(image => {
   // Each theme image sits in its own <picture>, so its light twin is in the previous one.
   image.alt = image.parentElement.previousElementSibling.querySelector('img').alt;
@@ -70,13 +40,10 @@ const controls = [...document.querySelectorAll('[data-select-step]')];
 const stageCounter = document.querySelector('.stage-counter');
 const stageProgress = document.querySelector('.stage-progress span');
 const stageVisual = document.querySelector('.stage-visual');
-const stageWord = document.querySelector('.stage-word');
-const stageWords = ['CATAT', 'ATUR', 'PAHAMI'];
 let activeStep = -1;
 
 function selectStep(index) {
   if (index === activeStep) return;
-  const previousStep = activeStep;
   activeStep = index;
   steps.forEach((step, i) => step.classList.toggle('is-active', i === index));
   screens.forEach((screen, i) => {
@@ -88,13 +55,6 @@ function selectStep(index) {
   stageCounter.textContent = String(index + 1).padStart(2, '0') + ' / 03';
   stageProgress.style.transform = 'scaleX(' + ((index + 1) / steps.length) + ')';
   stageVisual.dataset.phase = String(index);
-  stageWord.textContent = stageWords[index];
-  if (!reducedMotion.matches && previousStep >= 0) {
-    stageWord.animate([
-      { opacity: 0, transform: 'translateY(18px)' },
-      { opacity: 1, transform: 'translateY(0)' }
-    ], { duration: 550, easing: 'cubic-bezier(.16,1,.3,1)' });
-  }
 }
 
 controls.forEach((button, index) => button.addEventListener('click', () => {
@@ -174,3 +134,18 @@ function configureReveals() {
 }
 configureReveals();
 reducedMotion.addEventListener('change', configureReveals);
+
+// Hero: the sample amount counts up once, in tabular figures so nothing shifts. Still with reduced motion.
+const heroAmount = document.querySelector('[data-count-to]');
+if (heroAmount && !reducedMotion.matches) {
+  const target = Number(heroAmount.dataset.countTo), began = performance.now(), duration = 700;
+  const format = value => 'Rp' + value.toLocaleString('id-ID');
+  heroAmount.textContent = format(0);
+  const tick = now => {
+    const progress = Math.min(1, (now - began - 450) / duration);
+    if (progress > 0) heroAmount.textContent = format(Math.round(target * (1 - Math.pow(1 - progress, 3)) / 500) * 500);
+    if (progress < 1) requestAnimationFrame(tick);
+    else heroAmount.textContent = format(target);
+  };
+  requestAnimationFrame(tick);
+}

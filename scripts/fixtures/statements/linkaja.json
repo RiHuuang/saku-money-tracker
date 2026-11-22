@@ -1,0 +1,28 @@
+{
+ "note": "Synthetic LinkAja e-statement: split Uang Keluar/Uang Masuk, a Saldo Akhir column title, whole rupiah (made-up names).",
+ "month": "2026-10",
+ "bank": "linkaja",
+ "text": "E-Statement LinkAja\nPeriode: Oktober 2026\nDetil Transaksi Bulanan\nWaktu Transaksi Jenis Transaksi Uang Keluar Uang Masuk Saldo Akhir\nSaldo Awal 500.000\n03/10/2026 10:15 Pembayaran QRIS WARUNG SEDERHANA 25.000 475.000\n11/10/2026 08:30 Isi Saldo dari BANK BRI 200.000 675.000\n19/10/2026 18:05 Bayar Tagihan PDAM 85.000 590.000\nSaldo Akhir 590.000",
+ "rows": [
+  [
+   "2026-10-03",
+   25000,
+   "expense"
+  ],
+  [
+   "2026-10-11",
+   200000,
+   "income"
+  ],
+  [
+   "2026-10-19",
+   85000,
+   "expense"
+  ]
+ ],
+ "names": [
+  "WARUNG SEDERHANA",
+  "Isi Saldo",
+  "PDAM"
+ ]
+}
