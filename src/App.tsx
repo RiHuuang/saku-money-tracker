@@ -1001,7 +1001,6 @@ export default function App() {
                         onClick={() => openPocket(p.id)}
                         onEdit={() => setEdit({ type: "pocket", value: p })}
                         onDelete={() => setEdit({ type: "pocket_delete", value: p })}
-                        onCover={() => setEdit(data.pockets.length > 1 ? { type: "pocket_transfer", toPocketId: p.id, amount: p.spent - p.limit } : { type: "pocket", value: p, focusBudget: true })}
                       />
                     ))}
                   </div>
@@ -1113,7 +1112,6 @@ export default function App() {
                     onClick={() => openPocket(p.id)}
                     onEdit={() => setEdit({ type: "pocket", value: p })}
                     onDelete={() => setEdit({ type: "pocket_delete", value: p })}
-                    onCover={() => setEdit(data.pockets.length > 1 ? { type: "pocket_transfer", toPocketId: p.id, amount: p.spent - p.limit } : { type: "pocket", value: p, focusBudget: true })}
                   />
                 ))}
                 <button

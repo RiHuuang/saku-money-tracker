@@ -3839,7 +3839,6 @@ input, select, textarea { background: var(--surface); border-color: var(--contro
 .pocket-card-shell.is-over-budget .pocket-value strong { color: var(--danger); font-weight: 750; }
 .pocket-card-shell.is-over-budget .pocket-card-bottom { color: var(--ink); font-size: 11px; }
 .pocket-card-shell.is-over-budget .pocket-over-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 15%, var(--surface)); color: var(--danger); font-size: 11px; font-weight: 700; }
-.pocket-cover-action { margin-top: 6px; color: var(--danger); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .budget-overview > button { display: grid; gap: 4px; align-content: start; color: var(--ink); text-align: left; border-radius: 10px; cursor: pointer; }
 .budget-overview > button:hover { background: var(--surface-muted); }
 .budget-overview > button.shortfall-tile strong, .budget-overview > button.shortfall-tile span { color: var(--danger); }

@@ -252,9 +252,9 @@ export const en = {
   removeShortcut: "Remove {name} shortcut",
   onePocketOverBudget: "1 pocket is over budget. Review the highlighted balance below.",
   pocketsOverBudget: "{count} pockets are over budget. Review the highlighted balances below.",
-  over: "Over",
+  
   spentOf: "{spent} spent of {budget}",
-  coverIt: "Cover it",
+  
   freeToSpend: "Free to spend",
   shortBy: "Short by",
   addIncome: "Add income",
@@ -327,4 +327,5 @@ export const en = {
   yourDataSummary: "Backup · Restore · Delete",
   homeInboxSummary: "{ready} ready · {look} need a look",
   reviewRows: "Review",
+  overBudgetLabel: "Over budget",
 } as const;

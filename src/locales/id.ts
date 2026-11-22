@@ -254,9 +254,9 @@ export const id = {
   removeShortcut: "Hapus pintasan {name}",
   onePocketOverBudget: "1 kantong melebihi anggaran. Periksa saldo yang ditandai di bawah.",
   pocketsOverBudget: "{count} kantong melebihi anggaran. Periksa saldo yang ditandai di bawah.",
-  over: "Melebihi",
+  
   spentOf: "{spent} terpakai dari {budget}",
-  coverIt: "Tutupi selisih",
+  
   freeToSpend: "Bisa dibelanjakan",
   shortBy: "Kurang",
   addIncome: "Tambah pemasukan",
@@ -329,4 +329,5 @@ export const id = {
   yourDataSummary: "Cadangan · Pulihkan · Hapus",
   homeInboxSummary: "{ready} siap · {look} perlu dicek",
   reviewRows: "Tinjau",
+  overBudgetLabel: "Melebihi anggaran",
 } satisfies Record<keyof typeof en, string>;
