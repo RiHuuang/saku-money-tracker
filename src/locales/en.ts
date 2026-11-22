@@ -305,8 +305,8 @@ export const en = {
   notificationHealthQuiet: "No bank alert for {days} days.",
   notificationHealthStopped: "Phone stopped Saku. Tap to fix.",
   fixReader: "Fix",
-  samsungKeepRunning: "Set Saku to Unrestricted in battery.",
-  openBatterySettings: "Open battery",
+  samsungKeepRunning: "Set Saku's battery to Unrestricted.",
+  
   restrictedSettingsHelp: "Blocked? Open Saku's app info, tap ⋮, then Allow restricted settings.",
   inboxResetNotice: "Saku couldn't open waiting payments, so they were cleared.",
   minutesAgo: "{count} min ago",
@@ -328,4 +328,6 @@ export const en = {
   homeInboxSummary: "{ready} ready · {look} need a look",
   reviewRows: "Review",
   overBudgetLabel: "Over budget",
+  samsungNeverSleep: "Add Saku to Never sleeping apps.",
+  openSettingsShort: "Open",
 } as const;

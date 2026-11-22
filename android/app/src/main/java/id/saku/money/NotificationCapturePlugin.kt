@@ -19,6 +19,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 
 @CapacitorPlugin(name = "NotificationCapture")
 class NotificationCapturePlugin : Plugin() {
+    private companion object { const val SAMSUNG_SLEEP_LIST = "com.samsung.android.sm.ACTION_OPEN_CHECKABLE_LISTACTIVITY" }
     private val brand = when (Build.MANUFACTURER.lowercase()) {
         "xiaomi", "redmi", "poco" -> "xiaomi"
         "samsung" -> "samsung"
@@ -72,6 +73,8 @@ class NotificationCapturePlugin : Plugin() {
             put("backgroundRestricted", backgroundRestricted)
             put("standbyRestricted", standbyBucket >= UsageStatsManager.STANDBY_BUCKET_RESTRICTED)
             put("autoRevokeExempt", runCatching { context.packageManager.isAutoRevokeWhitelisted }.getOrDefault(true))
+            // Whether this phone has Samsung's Never sleeping apps list to send the user to.
+            put("sleepListAvailable", brand == "samsung" && samsungSleepList.any(::resolves))
         })
     }
 
@@ -96,38 +99,62 @@ class NotificationCapturePlugin : Plugin() {
     // so capture stops until the app is opened again. Opens the Autostart list, or Saku's app info if it has moved.
     @PluginMethod
     fun openAutostart(call: PluginCall) {
-        runCatching { activity.startActivity(brandScreen("xiaomi")!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        runCatching { activity.startActivity(brandScreens("xiaomi").first().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .recoverCatching { activity.startActivity(appInfo().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onSuccess { call.resolve() }.onFailure { call.reject("Could not open settings") }
     }
 
-    // At most one brand screen per OEM. Their names change between OS versions, so each is tried, never trusted.
-    private fun brandScreen(family: String): Intent? = when (family) {
-        "xiaomi" -> Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"))
-        "samsung" -> Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity"))
-        "oppo" -> Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity"))
-        "vivo" -> Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"))
-        "transsion" -> Intent().setComponent(ComponentName("com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity"))
-        else -> null
+    // Brand screens, tried in order; their names change between OS versions, so each is tried, never trusted.
+    // Samsung: its documented deep link to Background usage limits > Never sleeping apps (activity_type 2,
+    // developer.samsung.com/mobile/app-management.html), then the same list by component, then Device care's
+    // Battery screen. Xiaomi: the Autostart list.
+    private fun brandScreens(family: String): List<Intent> = when (family) {
+        "xiaomi" -> listOf(Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")))
+        "samsung" -> listOf(
+            Intent(SAMSUNG_SLEEP_LIST).setPackage("com.samsung.android.lool").putExtra("activity_type", 2),
+            Intent(SAMSUNG_SLEEP_LIST).setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.usage.CheckableAppListActivity")).putExtra("activity_type", 2),
+            Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity")),
+        )
+        "oppo" -> listOf(Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity")))
+        "vivo" -> listOf(Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")))
+        "transsion" -> listOf(Intent().setComponent(ComponentName("com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity")))
+        else -> emptyList()
     }
+    private val samsungSleepList get() = brandScreens("samsung").take(2)
+    private fun resolves(intent: Intent) = runCatching { context.packageManager.resolveActivity(intent, 0) != null }.getOrDefault(false)
 
-    // The one Fix tap: reconnect the reader, then open the screen most likely to keep it running.
-    @PluginMethod
-    fun fix(call: PluginCall) {
-        SakuNotificationListener.rebind(context)
-        val restricted = backgroundRestricted || standbyBucket >= UsageStatsManager.STANDBY_BUCKET_RESTRICTED
-        val screens = buildList {
-            if (restricted) add("app_info" to appInfo())
-            if (!batteryExempt) add("battery" to Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            brandScreen(brand)?.let { add("brand" to it) }
-            add("app_info" to appInfo())
-        }
+    private fun openFirst(screens: List<Pair<String, Intent>>, call: PluginCall) {
         for ((name, intent) in screens) {
-            if (runCatching { activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) {
+            if (runCatching { activity.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) {
                 call.resolve(JSObject().put("opened", name)); return
             }
         }
         call.reject("Could not open settings")
+    }
+
+    // The one Fix tap: reconnect the reader, then open the screen most likely to keep it running. App info comes
+    // first while Saku is restricted or not Unrestricted, because there the Battery item is one tap away; the
+    // system-wide battery list (missing or very long on some phones) is a late fallback.
+    @PluginMethod
+    fun fix(call: PluginCall) {
+        SakuNotificationListener.rebind(context)
+        val restricted = backgroundRestricted || standbyBucket >= UsageStatsManager.STANDBY_BUCKET_RESTRICTED
+        openFirst(buildList {
+            if (restricted || !batteryExempt) add("app_info" to appInfo())
+            brandScreens(brand).forEach { add("brand" to it) }
+            add("battery" to Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            add("app_info" to appInfo())
+        }, call)
+    }
+
+    // The two Samsung "keep running" steps: battery (App info > Battery > Unrestricted) and sleep (Never sleeping apps).
+    @PluginMethod
+    fun openKeepRunning(call: PluginCall) {
+        when (call.getString("step")) {
+            "battery" -> openFirst(listOf("app_info" to appInfo()), call)
+            "sleep" -> openFirst(samsungSleepList.map { "sleep_list" to it }, call)
+            else -> call.reject("Unknown step")
+        }
     }
 
     @PluginMethod

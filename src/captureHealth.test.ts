@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { captureHealth, showKeepRunning } from "./captureHealth";
+import { captureHealth, keepRunningSteps, showKeepRunning } from "./captureHealth";
 import type { CaptureStatus } from "./notificationCapture";
 
 const now = Date.parse("2026-11-22T12:00:00Z");
@@ -25,4 +25,14 @@ test("quiet days and a missing battery exemption never trigger a check", () => {
   assert.equal(quiet.quietDays, 6);
   assert.equal(showKeepRunning({ ...base, brand: "samsung" }), true);
   assert.equal(showKeepRunning({ ...base, brand: "oppo" }), false);
+});
+
+test("Samsung keep-running steps end when Android reports Unrestricted and when the user confirms the sleep list", () => {
+  const samsung = { ...base, brand: "samsung" as const, batteryExempt: false, sleepListAvailable: true };
+  assert.deepEqual(keepRunningSteps(samsung, false), ["battery", "sleep"]);
+  assert.deepEqual(keepRunningSteps({ ...samsung, batteryExempt: true }, false), ["sleep"]);
+  assert.deepEqual(keepRunningSteps({ ...samsung, batteryExempt: true }, true), []);
+  assert.deepEqual(keepRunningSteps({ ...samsung, sleepListAvailable: false }, false), ["battery"], "no list on this phone, no dead-end step");
+  assert.deepEqual(keepRunningSteps({ ...base, brand: "xiaomi", needsAutostart: true }, false), ["autostart"]);
+  assert.deepEqual(keepRunningSteps({ ...base, brand: "oppo" }, false), []);
 });

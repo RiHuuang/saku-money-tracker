@@ -22,3 +22,16 @@ export function captureHealth(status: CaptureStatus, now = Date.now()): CaptureH
 
 // The proactive "Keep running" row shows only where phones are known to stop listeners.
 export const showKeepRunning = (status: CaptureStatus) => status.brand === "samsung" || status.brand === "xiaomi";
+
+export type KeepRunningStep = "autostart" | "battery" | "sleep";
+// The steps still to do. Xiaomi: Autostart. Samsung: battery set to Unrestricted (Android reports it, so the step
+// disappears by itself), then Saku in Never sleeping apps (Android can't report it, so it ends only when the user
+// taps Done, and it is offered only where the list exists).
+export function keepRunningSteps(status: CaptureStatus, sleepConfirmed: boolean): KeepRunningStep[] {
+  if (status.brand === "xiaomi" || (status.needsAutostart && status.brand !== "samsung")) return ["autostart"];
+  if (status.brand !== "samsung") return [];
+  return [
+    ...(status.batteryExempt ? [] : ["battery" as const]),
+    ...(status.sleepListAvailable && !sleepConfirmed ? ["sleep" as const] : []),
+  ];
+}

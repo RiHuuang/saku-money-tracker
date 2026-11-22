@@ -308,7 +308,7 @@ export const id = {
   notificationHealthStopped: "HP menghentikan Saku. Ketuk untuk memperbaiki.",
   fixReader: "Perbaiki",
   samsungKeepRunning: "Atur baterai Saku ke Tidak dibatasi.",
-  openBatterySettings: "Buka baterai",
+  
   restrictedSettingsHelp: "Diblokir? Buka info aplikasi Saku, ketuk ⋮, lalu Izinkan setelan terbatas.",
   inboxResetNotice: "Saku tidak bisa membuka pembayaran yang menunggu, jadi dihapus.",
   minutesAgo: "{count} mnt lalu",
@@ -330,4 +330,6 @@ export const id = {
   homeInboxSummary: "{ready} siap · {look} perlu dicek",
   reviewRows: "Tinjau",
   overBudgetLabel: "Melebihi anggaran",
+  samsungNeverSleep: "Tambahkan Saku ke Aplikasi yang tidak pernah tidur.",
+  openSettingsShort: "Buka",
 } satisfies Record<keyof typeof en, string>;

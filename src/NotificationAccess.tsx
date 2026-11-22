@@ -7,8 +7,9 @@ import { notificationCapture, type CaptureStatus } from "./notificationCapture";
 import { loadCleaningOptIn, saveCleaningOptIn } from "./merchantCleaning";
 import { ensureConsentReceipt, hasConsentReceipt, retryPendingWithdrawals, withdrawConsentReceipt } from "./consent";
 import { ChoiceField, SettingsCard } from "./components";
-import { captureHealth, showKeepRunning } from "./captureHealth";
+import { captureHealth, keepRunningSteps, showKeepRunning } from "./captureHealth";
 
+const SLEEP_DONE_KEY = "saku-never-sleeping-confirmed-v1";
 const ago = (at: number, now = Date.now()) => {
   const minutes = Math.max(1, Math.round((now - at) / 60_000));
   return minutes < 60 ? t("minutesAgo", { count: minutes }) : minutes < 48 * 60 ? t("hoursAgo", { count: Math.round(minutes / 60) }) : t("daysAgoShort", { count: Math.round(minutes / 1440) });
@@ -21,6 +22,8 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
   // Refs, because refresh also runs from the resume listener registered on mount: it must see the current user,
   // and know a "Turn on" is waiting for Android's toggle so it doesn't withdraw the receipt that tap just sent.
   const userRef = useRef(userId), awaitingAccess = useRef(false);
+  // Android can't tell whether Saku is in Samsung's Never sleeping apps, so that step ends with the user's Done.
+  const [sleepOpened, setSleepOpened] = useState(false), [sleepConfirmed, setSleepConfirmed] = useState(() => { try { return localStorage.getItem(SLEEP_DONE_KEY) === "1"; } catch { return false; } });
   userRef.current = userId;
   useEffect(() => { void loadCleaningOptIn().then(setCleaning).catch(() => {}); }, []);
   const refresh = () => notificationCapture.status().then((next) => {
@@ -78,9 +81,12 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
       {health.state === "check" && <button className="button primary" disabled={busy} onClick={() => void run(() => notificationCapture.fix())}>{t("fixReader")}</button>}
       {reading && <button className="text-button" disabled={busy} onClick={() => void run(() => notificationCapture.setPaused({ paused: !status.paused }))}>{status.paused ? <><Play size={14} /> {t("resume")}</> : <><Pause size={14} /> {t("pause")}</>}</button>}</p>
     {health.state === "on" && health.quietDays >= 5 && <p className="cloud-note">{t("notificationHealthQuiet", { days: health.quietDays })}</p>}
-    {reading && showKeepRunning(status) && (status.brand === "xiaomi" || status.needsAutostart
-      ? <p className="cloud-note">{t("xiaomiAutostart")} <button className="text-button" onClick={() => void notificationCapture.openAutostart().catch(() => notify(t("changeNotSaved")))}>{t("openAutostart")}</button></p>
-      : <p className="cloud-note">{t("samsungKeepRunning")} <button className="text-button" onClick={() => void notificationCapture.fix().catch(() => notify(t("changeNotSaved")))}>{t("openBatterySettings")}</button></p>)}
+    {reading && showKeepRunning(status) && keepRunningSteps(status, sleepConfirmed).map((step) => step === "autostart"
+      ? <p className="cloud-note" key={step}>{t("xiaomiAutostart")} <button className="text-button" onClick={() => void notificationCapture.openAutostart().catch(() => notify(t("changeNotSaved")))}>{t("openAutostart")}</button></p>
+      : step === "battery"
+        ? <p className="cloud-note" key={step}>{t("samsungKeepRunning")} <button className="text-button" onClick={() => void notificationCapture.openKeepRunning({ step }).catch(() => notify(t("changeNotSaved")))}>{t("openSettingsShort")}</button></p>
+        : <p className="cloud-note" key={step}>{t("samsungNeverSleep")} <button className="text-button" onClick={() => void notificationCapture.openKeepRunning({ step }).then(() => setSleepOpened(true)).catch(() => notify(t("changeNotSaved")))}>{t("openSettingsShort")}</button>
+          {sleepOpened && <button className="text-button" onClick={() => { try { localStorage.setItem(SLEEP_DONE_KEY, "1"); } catch { /* Shown again next time. */ } setSleepConfirmed(true); }}>{t("done")}</button>}</p>)}
     <div className="notification-apps">{status.apps.map((app) => <div className="notification-app" key={app.packageName}>
       <label className="checkbox-label"><input type="checkbox" checked={!!app.account} disabled={busy || !app.installed || !data.accounts.length} onChange={(event) => void run(() => notificationCapture.setApp({ packageName: app.packageName, account: event.target.checked ? accountFor(app.suggestedAccount) : "" }))} /> {app.name}{!app.installed && <small> · {t("notInstalled")}</small>}</label>
       {app.account && <ChoiceField className="notification-app-account" label={t("sakuAccountFor", { app: app.name })} hideLabel value={data.accounts.includes(app.account) ? app.account : ""} disabled={busy} placeholder={t("chooseAnAccount")} onValueChange={(account) => void run(() => notificationCapture.setApp({ packageName: app.packageName, account }))} options={data.accounts.map((name) => ({ value: name, label: name }))} />}

@@ -7,6 +7,7 @@ export type CaptureStatus = {
   brand?: "xiaomi" | "samsung" | "oppo" | "vivo" | "transsion" | "other"; lowRam?: boolean; directBuild?: boolean; sdk?: number; everGranted?: boolean;
   connectedAt?: number; disconnectedAt?: number; lastCapturedAt?: number; redactedCount?: number; expiredCount?: number; inboxResetAt?: number;
   systemKillAt?: number; systemKillReason?: string; batteryExempt?: boolean; backgroundRestricted?: boolean; standbyRestricted?: boolean; autoRevokeExempt?: boolean;
+  sleepListAvailable?: boolean;
 };
 export type InboxItem = { id: string; packageName: string; account: string; amount: number; direction: "expense" | "income"; rawMerchant: string; balance: number | null; occurredAt: number; cancels?: boolean };
 type NotificationCapturePlugin = {
@@ -14,6 +15,7 @@ type NotificationCapturePlugin = {
   openSettings(): Promise<{ opened?: "listener" | "app_info" }>;
   fix(): Promise<{ opened: "app_info" | "battery" | "brand" }>;
   acknowledgeReset(): Promise<void>;
+  openKeepRunning(options: { step: "battery" | "sleep" }): Promise<{ opened: string }>;
   openAutostart(): Promise<void>;
   setApp(options: { packageName: string; account: string }): Promise<void>;
   setPaused(options: { paused: boolean }): Promise<void>;
