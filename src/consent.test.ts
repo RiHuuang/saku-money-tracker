@@ -77,3 +77,16 @@ test("clearing the account forgets every choice, and a stale mark from earlier b
   await store.ensure("u", R);
   assert.deepEqual(server.sent, [true, true], "after deletion the receipt is sent again");
 });
+
+test("a 403 after the user turned a purpose off is not overridden by a resend", async () => {
+  const { withConsentFor } = await import("./consent");
+  const { server, send } = fakeServer(), storage = memory(), store = createConsentStore(() => storage, send);
+  const refused = Object.assign(new Error("consent_required"), { status: 403 });
+  let calls = 0;
+  await assert.rejects(withConsentFor(store, "u", "merchant_tidy", async () => { calls++; await store.withdraw("u", "merchant_tidy"); throw refused; }), /consent_required/);
+  assert.equal(calls, 1, "no second AI call");
+  assert.equal(store.isOn("u", "merchant_tidy"), false);
+  assert.equal(server.state.get("u|merchant_tidy"), false, "the server keeps the withdrawal");
+  let retried = 0;
+  assert.equal(await withConsentFor(store, "u", "ai_import", async () => { if (retried++ === 0) throw refused; return "ok"; }), "ok", "a lost receipt is re-sent once and the call retried");
+});

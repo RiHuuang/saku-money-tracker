@@ -5,7 +5,7 @@ import { BellRing, Pause, Play, Settings } from "lucide-react";
 import type { Data } from "./domain";
 import { notificationCapture, type CaptureStatus } from "./notificationCapture";
 import { loadCleaningOptIn, saveCleaningOptIn } from "./merchantCleaning";
-import { ensureConsentReceipt, hasConsentReceipt, withdrawConsentReceipt } from "./consent";
+import { ensureConsentReceipt, hasConsentReceipt, retryPendingWithdrawals, withdrawConsentReceipt } from "./consent";
 import { ChoiceField, SettingsCard } from "./components";
 import { captureHealth, showKeepRunning } from "./captureHealth";
 
@@ -33,8 +33,11 @@ export default function NotificationAccess({ data, userId, notify }: { data: Dat
     const owner = userRef.current, readingNow = next.granted && next.apps.some((app) => app.account);
     if (readingNow) awaitingAccess.current = false;
     const stopped = !readingNow && !awaitingAccess.current && (next.everGranted || !next.apps.some((app) => app.account));
-    if (owner && readingNow && !hasConsentReceipt(owner, "notification_reader")) void ensureConsentReceipt(owner, "notification_reader").catch(() => { /* Next check. */ });
-    if (owner && stopped && hasConsentReceipt(owner, "notification_reader")) void withdrawConsentReceipt(owner, "notification_reader").catch(() => { /* retryPendingWithdrawals */ });
+    // ensure is free once the server has the choice, and re-sends it if an earlier send failed (offline).
+    if (owner && readingNow) void ensureConsentReceipt(owner, "notification_reader").catch(() => { /* Next check. */ });
+    else if (owner && stopped && hasConsentReceipt(owner, "notification_reader")) void withdrawConsentReceipt(owner, "notification_reader").catch(() => { /* Next check. */ });
+    // Any other choice not yet on the server (a withdrawal sent while offline) goes out again on every check.
+    else if (owner) void retryPendingWithdrawals(owner);
   }).catch(() => notify(t("notificationStatusUnavailable")));
   useEffect(() => {
     void refresh();

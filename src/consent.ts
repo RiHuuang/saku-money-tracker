@@ -76,11 +76,14 @@ export const clearConsentReceipts = store.clear;
 
 // Runs a cloud AI call with its receipt. If the server has none (403 consent_required), the receipt is sent again
 // and the call retried once, so a stale record on this phone can't block the feature.
-export async function withConsent<T>(userId: string, purpose: ConsentPurpose, call: () => Promise<T>): Promise<T> {
+export const withConsent = <T>(userId: string, purpose: ConsentPurpose, call: () => Promise<T>) => withConsentFor(store, userId, purpose, call);
+export async function withConsentFor<T>(store: ReturnType<typeof createConsentStore>, userId: string, purpose: ConsentPurpose, call: () => Promise<T>): Promise<T> {
   await store.ensure(userId, purpose);
   try { return await call(); }
   catch (error) {
     if ((error as { status?: number })?.status !== 403 || !/consent_required/.test(String((error as Error)?.message))) throw error;
+    // If the user turned it off while the call was out, the 403 is right: never turn it back on for them.
+    if (!store.isOn(userId, purpose)) throw error;
     await store.resend(userId, purpose);
     return call();
   }
