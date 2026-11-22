@@ -17,20 +17,16 @@ test("reminder settings parse defensively", () => {
   assert.deepEqual(parseReminder(JSON.stringify({ enabled: true, time: "25:00" })), { enabled: true, time: "20:00" });
 });
 
-test("daily reminders cover the coming week with gentle, current wording", () => {
+test("one plain daily reminder repeats at the chosen time until turned off (4.4)", () => {
   assert.deepEqual(reminderPlan(ledger(), defaultReminder, new Date(2026, 9, 26, 10)), [], "nothing is planned while off");
-  const plan = reminderPlan(ledger(), on, new Date(2026, 9, 26, 10));
-  assert.equal(plan.length, 7);
-  assert.deepEqual(plan[0].at, new Date(2026, 9, 26, 20, 0));
-  assert.equal(plan[0].body, "3 days to catch up, about 1 minute.");
-  assert.equal(plan[1].body, "4 days to catch up, about 1 minute.");
-  assert.equal(plan.every((item) => item.extra.kind === "catchup" && !/streak|miss/i.test(item.body)), true);
-  assert.equal(reminderPlan(ledger(), on, new Date(2026, 9, 26, 21)).length, 6, "a time already passed today waits for tomorrow");
-  const caughtUp = ledger();
-  caughtUp.transactions.push({ id: "today", name: "Bakso", amount: 20000, type: "expense", date: "2026-10-26", pocketId: "", account: "Cash", note: "" });
-  const next = reminderPlan(caughtUp, on, new Date(2026, 9, 26, 10));
-  assert.equal(next[0].body, "Anything else to add today?");
-  assert.equal(next[1].body, "1 day to catch up, about 1 minute.");
+  const daily = reminderPlan(ledger(), on, new Date(2026, 9, 26, 10)).filter((item) => item.daily);
+  assert.equal(daily.length, 1, "one repeating reminder, so never two in a day");
+  assert.deepEqual(daily[0].daily, { hour: 20, minute: 0 });
+  assert.deepEqual(daily[0].at, new Date(2026, 9, 26, 20, 0), "next time is today when it hasn't passed");
+  assert.deepEqual(reminderPlan(ledger(), on, new Date(2026, 9, 26, 21)).find((item) => item.daily)?.at, new Date(2026, 9, 27, 20, 0), "otherwise tomorrow");
+  assert.doesNotMatch(daily[0].body, /Rp|\d/, "no amounts on the lock screen");
+  assert.equal(daily[0].extra.kind, "catchup");
+  assert.deepEqual(reminderPlan(ledger(), { enabled: true, time: "07:30" }, new Date(2026, 9, 26, 10)).find((item) => item.daily)?.daily, { hour: 7, minute: 30 });
 });
 
 test("card reminders come 3 days before a due payment and never show amounts", () => {
@@ -40,5 +36,5 @@ test("card reminders come 3 days before a due payment and never show amounts", (
   const cards = reminderPlan(data, on, new Date(2026, 9, 26, 10)).filter((item) => item.extra.kind === "card");
   assert.deepEqual(cards.map((item) => [item.at.getMonth() + 1, item.at.getDate(), item.body]), [[10, 28, "BCA Visa payment is due in 3 days."], [11, 27, "BCA Visa payment is due in 3 days."]], "October 31 and November's last day (30)");
   assert.equal(cards.some((item) => /\d{3}/.test(item.body)), false);
-  assert.equal(new Set(reminderPlan(data, on, new Date(2026, 9, 26, 10)).map((item) => item.id)).size, 9);
+  assert.equal(new Set(reminderPlan(data, on, new Date(2026, 9, 26, 10)).map((item) => item.id)).size, 3, "one daily and two card reminders, each with its own ID");
 });

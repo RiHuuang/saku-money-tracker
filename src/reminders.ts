@@ -2,14 +2,15 @@ import { t } from "./i18n";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { Preferences } from "@capacitor/preferences";
-import { cardDue, catchUpGap, shiftDate, shiftMonth, type Data } from "./domain";
+import { cardDue, shiftDate, shiftMonth, type Data } from "./domain";
 
 export type ReminderSettings = { enabled: boolean; time: string };
-export type PlannedReminder = { id: number; at: Date; title: string; body: string; extra: { kind: "catchup" | "card"; cardId?: string } };
+// daily: repeats every day at this time until cancelled (master plan 4.4, option a). `at` is its next time.
+export type PlannedReminder = { id: number; at: Date; title: string; body: string; extra: { kind: "catchup" | "card"; cardId?: string }; daily?: { hour: number; minute: number } };
 
 // Device-local: the reminder belongs to this phone, not to the synced ledger.
 const key = "saku-reminder-v1";
-const DAILY_IDS = 1000, CARD_IDS = 2000, DAYS_AHEAD = 7;
+const DAILY_IDS = 1000, CARD_IDS = 2000;
 export const defaultReminder: ReminderSettings = { enabled: false, time: "20:00" };
 export const remindersSupported = () => Capacitor.isNativePlatform();
 const isOurs = (id: number) => id >= DAILY_IDS && id < CARD_IDS + 100;
@@ -23,17 +24,15 @@ export function parseReminder(value: string | null): ReminderSettings {
   } catch { return defaultReminder; }
 }
 
-// One notification per day for the coming week, each worded for the ledger as it stands, so it is
-// rescheduled whenever the ledger changes. Card reminders never include amounts: they show on the lock screen.
+// One plain reminder a day at the chosen time, repeating until reminders are turned off, so it keeps going even
+// if Saku isn't opened for weeks. It names no amounts (it shows on the lock screen) and wakes nothing. Card
+// reminders come 3 days before a due payment.
 export function reminderPlan(data: Data, settings: ReminderSettings, now: Date): PlannedReminder[] {
   if (!settings.enabled) return [];
   const today = localISO(now), plan: PlannedReminder[] = [];
-  for (let offset = 0; offset < DAYS_AHEAD; offset++) {
-    const day = shiftDate(today, offset), when = at(day, settings.time);
-    if (when <= now) continue;
-    const gap = catchUpGap(data, day).length;
-    plan.push({ id: DAILY_IDS + offset, at: when, title: "Saku", body: gap ? t(gap === 1 ? "reminderCatchUpOne" : "reminderCatchUpMany", { count: gap }) : t("reminderAnythingElse"), extra: { kind: "catchup" } });
-  }
+  const todayAt = at(today, settings.time);
+  plan.push({ id: DAILY_IDS, at: todayAt > now ? todayAt : at(shiftDate(today, 1), settings.time), title: "Saku", body: t("reminderAnythingElse"), extra: { kind: "catchup" },
+    daily: { hour: Number(settings.time.slice(0, 2)), minute: Number(settings.time.slice(3, 5)) } });
   data.creditCards.forEach((card, index) => {
     for (let monthOffset = 0; monthOffset < 2; monthOffset++) {
       const month = shiftMonth(today.slice(0, 7), monthOffset);
@@ -71,7 +70,7 @@ export async function scheduleReminders(data: Data, settings: ReminderSettings) 
   if ((await LocalNotifications.checkPermissions()).display !== "granted") return;
   // A named channel lets people quiet reminders in Android settings without muting anything else.
   await LocalNotifications.createChannel({ id: REMINDER_CHANNEL, name: t("reminderChannelName"), importance: 3 }).catch(() => undefined);
-  await LocalNotifications.schedule({ notifications: plan.map((item) => ({ id: item.id, title: item.title, body: item.body, channelId: REMINDER_CHANNEL, schedule: { at: item.at, allowWhileIdle: true }, isExactNotification: false, smallIcon: "ic_stat_saku", extra: item.extra })) });
+  await LocalNotifications.schedule({ notifications: plan.map((item) => ({ id: item.id, title: item.title, body: item.body, channelId: REMINDER_CHANNEL, schedule: item.daily ? { on: item.daily, allowWhileIdle: false } : { at: item.at, allowWhileIdle: true }, isExactNotification: false, smallIcon: "ic_stat_saku", extra: item.extra })) });
 }
 // Schedules and cancellations run in order, so a schedule still in flight can't re-add
 // reminders after the user turned them off: the last requested state always wins.
